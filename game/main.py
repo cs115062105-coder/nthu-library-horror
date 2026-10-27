@@ -15,7 +15,7 @@ import random
 from collections import deque
 from pathlib import Path
 
-from ursina import (Ursina, Audio, Entity, Text, Texture, Vec3, application, camera, color,
+from ursina import (Ursina, Audio, Entity, Text, Texture, Vec2, Vec3, application, camera, color,
                     held_keys, invoke, raycast, scene, time, window)
 from ursina.prefabs.first_person_controller import FirstPersonController
 from PIL import Image
@@ -25,16 +25,26 @@ from menu import DIFFICULTIES, Lobby
 from world import CELL, World, cell_pos
 
 CATCH_DIST = 1.1
-MENU_SPOT = (1, 9)      # 大廳背景：書庫走道的一端
-MENU_MONSTER = (7, 9)   # 走道另一頭站著它
+MENU_SPOT = (1, 13)     # 大廳背景：1F 閘門前的走道
+MENU_MONSTER = (9, 13)  # 走道另一頭站著它
 
 NOTES = {
-    "1": "（字跡潦草）考古題之書在 B1 地下書庫，門鎖是三碼。第一碼我夾在「300 自然科學」那排，一本凸出來的書裡。",
-    "2": "服務台的電腦我還沒登出。查我的借閱紀錄，第二碼在上面。它只在你不看的時候動，別背對它。",
+    "1": "（室友的座位，筆電還開著）便利貼：「我先去找考古題之書了。我用櫃台電腦預約了一個東西，放在自助取書區。」",
+    "2": "（字跡潦草）電腦教室最裡面那台我還沒登出……不對，它要密碼。提示寫在螢幕旁：本校在新竹建校的那一年。它只在你不看的時候動。",
     "3": "又是三點……我已經第幾次回到這裡了？第三碼我寫在討論室 2 的白板上。",
     "4": "（室友的手機，螢幕還亮著）備忘錄：考古題之書 索書號 529.98。在 B 區密集書庫，夾在「520–529」那一櫃和下一櫃之間。轉書架前面的手輪，你站的那道走道就會打開。",
 }
 # 線索 → (密碼第幾碼, 找到時顯示的文字)
+# 樓梯間的門鎖：(樓層, 方向) → (需要的東西, 沒有時的提示)
+LOCKS = {
+    ("1F", "up"): ("keycard", "樓梯間的門要刷館員門卡。"),
+    ("1F", "down"): ("b1", "B1 密集書庫：館員專用，門禁沒有開通。"),
+    ("2F", "up"): ("3f", "往 3F 的樓梯被施工圍籬擋住了。（3F 之後的樓層還在蓋）"),
+}
+READABLE = {
+    "newspaper": "《清華新聞》　日期：明天\n頭條：「資工系學生凌晨於總圖失蹤」\n副標：「同寢室友仍在館內尋找中」",
+    "exhibit": "主題展「總圖的夜」\n閉館後，館員每小時巡館一次。\n02:40 那一班，從來沒有人回來簽到。",
+}
 CLUES = {
     "book": (0, "《物種原始》裡夾著一張便條：\n「第一碼：{d}」\n字跡跟室友的一模一樣。"),
     "computer": (1, "借閱紀錄　陳○○\n《考古題之書》　已歸還（B1 地下書庫）\n歸還時間：03:00　備註：第二碼 {d}"),
@@ -70,6 +80,10 @@ class Game:
     def __init__(self, font_path):
         self.read_notes = set()      # 跨迴圈保留：玩家記得的筆記
         self.found = set()           # 跨迴圈保留：已經找到的密碼位數
+        self.items = set()           # 跨迴圈保留：門卡、門禁權限
+        self.locker_no = 1
+        self.entry = None            # 輸入密碼的畫面
+        self.arrival = None
         self.code = "000"
         self.loop = 1
         self.cfg = DIFFICULTIES["普通"]  # 怪物速度、迴圈秒數、手電筒照多遠
@@ -93,6 +107,10 @@ class Game:
         self.note_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 200),
                               scale=(1.3, 0.4), position=(-0.02, 0.04), z=0.5, enabled=False)
         self.flash = Entity(parent=camera.ui, model="quad", scale=(2, 1), color=color.rgba32(0, 0, 0, 0), z=-1)
+        self.entry_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(10, 20, 30, 235),
+                               scale=(0.8, 0.45), z=0.4, enabled=False)
+        self.entry_title = Text(position=(0, 0.16), origin=(0, 0), scale=1.2, color=color.rgb32(150, 200, 240))
+        self.entry_text = Text(position=(0, -0.03), origin=(0, 0), scale=2.0, color=color.white)
         self.dead = False
         self.cleared = False
         self.bob = 0.0
@@ -101,15 +119,21 @@ class Game:
         self.time_left = 0
 
     # ---------- 樓層 ----------
-    def load_floor(self, name):
-        """拆掉目前的樓層，蓋出新的一層。每層是 world.FLOORS 裡的一張格子圖。"""
+    def load_floor(self, name, came="up"):
+        """拆掉目前的樓層，蓋出新的一層。每層是 world.FLOORS 裡的一張格子圖。
+        came 是玩家怎麼來的：往上走來的就出現在新樓層的「往下」樓梯口，反之亦然。"""
         if self.world:
             self.world.unload()
         self.world = World(self.font_path, name)
         self.world.set_code(self.code)
         self.notes = self.world.notes
-        self.door = self.world.door
         self.solids = self.world.solids
+        stair = self.world.stairs.get("down" if came == "up" else "up")
+        if came == "start" or not stair:
+            self.arrival, self.arrival_rot = self.world.start, 90
+        else:   # 出現在樓梯口，面向室內
+            d = stair["pos"] - stair["door"].position
+            self.arrival, self.arrival_rot = stair["pos"], math.degrees(math.atan2(d.x, d.z))
         self.refresh_paths()
         if hasattr(self, "vignette"):
             self.apply_flashlight()   # 霧的參數要重新套到新蓋的東西上
@@ -117,17 +141,26 @@ class Game:
     def refresh_paths(self):
         self.monster_walkable = self.world.walkable - self.world.spec["safe"]   # 夜讀區：它進不來
 
-    def go_down(self):
-        """1F 的門打開後：畫面全黑、換到 B1。"""
+    def take_stairs(self, direction):
+        """走進樓梯間：畫面全黑、換樓層。"""
+        stair = self.world.stairs[direction]
+        lock = LOCKS.get((self.world.floor, direction))
+        if lock and lock[0] not in self.items:
+            self.show_hint(lock[1], 3)
+            return
+        if not stair["target"]:
+            self.show_hint("這裡沒有路了。", 2)
+            return
         self.dead = True   # 換樓層時暫停怪物和時鐘
         self.flash.color = color.rgba32(0, 0, 0, 255)
         self.goal_text.text = ""
+        self.play("step")
 
         def arrive():
-            self.load_floor("B1")
+            self.load_floor(stair["target"], came=direction)
             self.reset_loop(first=True)
             self.later(self.flash_fade, 0.3)
-        self.later(arrive, 1.6)
+        self.later(arrive, 0.8)
 
     # ---------- 大廳與開局 ----------
     def start(self, cfg, name):
@@ -135,10 +168,12 @@ class Game:
         self.cfg, self.difficulty = cfg, name
         self.read_notes.clear()
         self.found.clear()
+        self.items.clear()
         self.code = "".join(random.choice("0123456789") for _ in range(3))   # 每局密碼都不同
+        self.locker_no = random.randint(1, 6)
         self.loop = 1
         self.cleared = False
-        self.load_floor("1F")   # 重蓋一次，門、書架都回到原狀
+        self.load_floor("1F", came="start")   # 重蓋一次，書架都回到原狀
         self.hide_note()
         self.flash_fade()
         self.state = "play"
@@ -153,8 +188,9 @@ class Game:
             t.text = ""
         self.note_bg.enabled = False
         self.flash_fade()
+        self.close_entry()
         if self.world.floor != "1F":
-            self.load_floor("1F")
+            self.load_floor("1F", came="start")
         self.flashlight_on = True
         self.in_safe_zone = False
         self.apply_flashlight()
@@ -261,18 +297,19 @@ class Game:
     def reset_loop(self, first=False):
         if not first:
             self.loop += 1
-        self.player.position = self.world.start + Vec3(0, 0.1, 0)
-        self.player.rotation_y = 90
+        self.player.position = self.arrival + Vec3(0, 0.1, 0)
+        self.player.rotation_y = self.arrival_rot
         self.monster.position = self.world.monster_start
         self.time_left = self.cfg["seconds"]
         self.dead = False
         self.note_text.text = ""
-        if self.world.floor == "B1":
-            msg = ("身後的門自己鎖上了。這裡比樓上更冷。" if first
-                   else f"……又是 02:40，你還在 B1。第 {self.loop} 次了。")
+        floor = self.world.floor
+        if not first:
+            msg = f"……又是 02:40，你還在 {floor}。第 {self.loop} 次了。你記得找到過的東西。"
         else:
-            msg = ("室友不見了。找到他留下的 3 張筆記，拼出 B1 地下書庫的密碼。" if first
-                   else f"……又是 02:40。第 {self.loop} 次了。你記得讀過的筆記。")
+            msg = {"1F": "夜讀區的燈還亮著。室友的位子空了，筆電還開著。",
+                   "2F": "2F。期刊架之間很安靜，安靜得不太對勁。",
+                   "B1": "身後的門自己鎖上了。這裡比樓上更冷。"}.get(floor, f"{floor}。")
         self.show_hint(wrap(msg, 24), 6)
 
     def show_hint(self, msg, seconds=3):
@@ -427,9 +464,12 @@ class Game:
                 index, text = CLUES[name]
                 self.found.add(index)
                 self.show_note(text.format(d=self.code[index]))
-                if len(self.found) == 3:
-                    self.world.keypad_light.color = color.lime
                 return
+        spots = [(i, (i["pos"] - self.player.position).length()) for i in self.world.interactables]
+        spots = [x for x in spots if self.near(x[0]["pos"], 1.6)]
+        if spots:
+            self.use(min(spots, key=lambda x: x[1])[0])
+            return
         book = self.world.exam_book
         if book and self.near(book.world_position, 2.2):
             self.ending()
@@ -444,13 +484,104 @@ class Game:
                 self.play("rumble")
                 self.show_hint("手輪很重……書架轟隆隆地移開了。", 3)
             return
-        if self.door and self.near(self.door.position, 2.2):
-            if len(self.found) == 3:
-                self.door.animate_position(self.door.position + Vec3(0, -2.3, 0), duration=1.5)
-                self.show_note(f"你輸入了 {self.code}。門開了。\n往下的樓梯傳來翻書的聲音。")
-                self.go_down()
+        for direction, stair in self.world.stairs.items():
+            if self.near(stair["pos"], 1.6):
+                self.take_stairs(direction)
+                return
+
+    def use(self, thing):
+        """各樓層設施的互動：讀東西、查電腦、開取書櫃、登入電腦教室。"""
+        kind, data = thing["kind"], thing.get("data")
+        if kind == "read":
+            text = data.split(":", 1)[1] if data.startswith("history:") else READABLE[data]
+            self.show_note(text)
+        elif kind == "counter_pc":
+            self.items.add("locker_known")
+            self.show_note(f"預約取書通知\n讀者：陳○○　書名：（空白）\n取書櫃：A{self.locker_no:02d}　狀態：待取件")
+        elif kind == "locker":
+            if data != self.locker_no:
+                self.show_hint(f"A{data:02d}：空的。", 2)
+            elif "keycard" in self.items:
+                self.show_hint("櫃子已經空了。", 2)
             else:
-                self.show_hint(f"密碼鎖：三碼。你知道的：{self.code_hint()}", 3)
+                self.items.add("keycard")
+                self.play("page")
+                self.show_note("櫃子裡沒有書，只有一張館員門卡。\n卡套上貼著便利貼：「樓梯間 → 2F 電腦教室」")
+        elif kind == "lab_pc":
+            if "b1" in self.items:
+                self.show_note("已登入。B1 門禁：已開通。")
+            else:
+                self.open_entry("電腦教室　登入", "密碼提示：本校在新竹建校的那一年", 4, self.lab_login)
+
+    def lab_login(self, code):
+        if code != "1956":
+            self.show_hint("密碼錯誤。", 2)
+            return
+        self.items.add("b1")
+        self.show_note("登入成功。最後一筆查詢：\n《考古題之書》索書號 529.98　館藏地：B1 密集書庫\n系統訊息：B1 門禁已開通。")
+
+    # ---------- 輸入密碼的畫面 ----------
+    def open_entry(self, title, hint, length, on_submit):
+        self.entry = dict(buf="", length=length, on_submit=on_submit)
+        self.hide_note()
+        self.entry_bg.enabled = True
+        self.entry_title.text = f"{title}\n{hint}"
+        self.player.mouse_sensitivity = Vec2(0, 0)
+        self.refresh_entry()
+
+    def refresh_entry(self):
+        e = self.entry
+        shown = " ".join(e["buf"].ljust(e["length"], "_"))
+        self.entry_text.text = f"{shown}\n\n數字鍵輸入　Enter 確定　Esc 取消"
+
+    def entry_key(self, key):
+        e = self.entry
+        if key in "0123456789" and len(key) == 1 and len(e["buf"]) < e["length"]:
+            e["buf"] += key
+        elif key == "backspace":
+            e["buf"] = e["buf"][:-1]
+        elif key == "enter":
+            buf, fn = e["buf"], e["on_submit"]
+            self.close_entry()
+            fn(buf)
+            return
+        elif key == "escape":
+            self.close_entry()
+            return
+        self.refresh_entry()
+
+    def close_entry(self):
+        self.entry = None
+        self.entry_bg.enabled = False
+        self.entry_title.text = ""
+        self.entry_text.text = ""
+        self.player.mouse_sensitivity = Vec2(40, 40)
+
+    def goal(self):
+        """左上角的目標：依樓層和已經拿到的東西決定下一步。"""
+        floor, items, notes = self.world.floor, self.items, self.read_notes
+        if floor == "1F":
+            if "b1" in items:
+                return "回到左上角的樓梯間，往下到 B1"
+            if "keycard" in items:
+                return "用門卡打開左上角的樓梯間，上 2F"
+            if "locker_known" in items:
+                return f"到右邊的自助取書區，打開 A{self.locker_no:02d} 櫃"
+            if "1" in notes:
+                return "到借還書櫃台（閘門下方）查電腦上的預約"
+            return "看看室友在夜讀區的座位（桌上有東西）"
+        if floor == "2F":
+            if "b1" in items:
+                return "B1 門禁開了。回到樓梯間下樓，從 1F 往下到 B1"
+            if "2" in notes:
+                return "登入電腦教室最裡面那台電腦（密碼提示在校史展示區）"
+            return "找找室友在 2F 留下的東西"
+        if floor == "B1":
+            return ("在 B 區密集書庫找到《考古題之書》，在書架前按 E 轉手輪"
+                    if "4" in notes else "入口桌上有東西在發光……")
+        if len(self.found) < 3:
+            return f"找室友的筆記，照上面的提示找出密碼　密碼：{self.code_hint()}"
+        return f"密碼是 {self.code}"
 
     def ending(self):
         self.cleared = True
@@ -469,20 +600,13 @@ class Game:
         self.update_dust()
         if self.state != "play" or self.cleared or self.dead:
             return
-        self.player.speed = 6.5 if held_keys["shift"] else 3.5
+        self.player.speed = 0 if self.entry else 6.5 if held_keys["shift"] else 3.5
         self.time_left -= time.dt
         total = self.cfg["seconds"]
         game_min = 40 + (total - self.time_left) / total * 20
         self.clock_text.text = (f"02:{int(game_min):02d}　第 {self.loop} 輪　"
                                 f"{self.difficulty}")
-        if self.world.floor == "B1":
-            self.goal_text.text = ("目標：在 B 區密集書庫找到《考古題之書》　在書架前按 E 轉手輪打開走道"
-                                   if "4" in self.read_notes else "目標：入口桌上有東西在發光……")
-        elif len(self.found) < 3:
-            self.goal_text.text = (f"目標：找室友的筆記，照上面的提示找出密碼　密碼：{self.code_hint()}　"
-                                   f"筆記 {len(self.read_notes & set('123'))}/3")
-        else:
-            self.goal_text.text = f"目標：到密集書庫最裡面的「B1 地下書庫」門，按 E 輸入 {self.code}"
+        self.goal_text.text = "目標：" + self.goal()
         if self.time_left <= 0:
             self.flash.color = color.rgba32(0, 0, 0, 255)
             self.dead = True
@@ -511,6 +635,9 @@ def handle_input(key):
     if game.state == "menu":
         if key == "escape":
             lobby.hide_panel()
+        return
+    if game.entry:
+        game.entry_key(key)
         return
     if key == "escape" or (game.cleared and key == "enter"):
         game.to_lobby()
