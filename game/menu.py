@@ -28,6 +28,20 @@ STORY = """期中考週，傳說總圖地下書庫藏著一本「考古題之書
 凌晨 3:00 一到，一切會重來。
 但你會記得上一輪讀過的筆記。"""
 
+GOAL = """目標：找到室友留下的密碼，打開「B1 地下書庫」的門。
+
+1. 從夜讀區出發，穿過感應閘門進入館藏區
+2. 在書架之間找到 3 張筆記，走近按 E 閱讀
+　 每張筆記寫著門鎖密碼的其中一碼
+3. 走到密集書庫最裡面的「B1 地下書庫」門前，
+　 按 E 輸入三碼密碼，門打開就過關
+
+會讓你重來的事
+・被「它」抓到。它只在你沒看著它的時候移動
+・左上角的時鐘走到 03:00
+
+重來時，讀過的筆記你都記得，不用再找一次。"""
+
 CONTROLS = """WASD　　移動
 滑鼠　　　看
 Shift　　跑
@@ -79,9 +93,10 @@ class Lobby:
                                               x=-0.67 + i * 0.12, width=0.11)
         self.diff_desc = Text(parent=self.root, position=(-0.73, -0.03), scale=0.75,
                               color=color.rgb32(180, 175, 165))
-        _button(self.root, "故事介紹", -0.15, lambda: self.show_panel("故事", STORY))
-        _button(self.root, "操作說明", -0.235, lambda: self.show_panel("操作", CONTROLS))
-        _button(self.root, "離開", -0.32, on_quit)
+        _button(self.root, "怎麼過關", -0.13, lambda: self.show_panel("怎麼過關", GOAL))
+        _button(self.root, "故事介紹", -0.205, lambda: self.show_panel("故事", STORY))
+        _button(self.root, "操作說明", -0.28, lambda: self.show_panel("操作", CONTROLS))
+        _button(self.root, "離開", -0.355, on_quit)
         Text(parent=self.root, text="清大程設 Final Project 原型", position=(-0.55, -0.45), origin=(0, 0),
              scale=0.7, color=color.rgb32(90, 88, 84))
 
@@ -121,6 +136,7 @@ class Lobby:
         self.root.enabled = True
         self.driver.enabled = True
         self.t = 0.0
+        self.show_panel("怎麼過關", GOAL)   # 一進大廳就先看到目標
 
     def hide(self):
         self.root.enabled = False

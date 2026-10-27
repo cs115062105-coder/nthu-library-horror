@@ -83,6 +83,7 @@ class Game:
         self.dust = self.make_dust()
         self.setup_audio()
         self.clock_text = Text(position=(-0.85, 0.47), scale=1.2, color=color.light_gray)
+        self.goal_text = Text(position=(-0.85, 0.425), scale=1.0, color=color.rgb32(230, 200, 120))
         self.hint = Text(position=(-0.3, -0.38), scale=1.1, color=color.white)
         self.note_text = Text(position=(-0.6, 0.1), scale=1.3, color=color.rgb32(240, 230, 200))
         self.note_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 200),
@@ -114,7 +115,7 @@ class Game:
         self.session += 1
         self.state = "menu"
         self.dead = False
-        for t in (self.clock_text, self.hint, self.note_text):
+        for t in (self.clock_text, self.goal_text, self.hint, self.note_text):
             t.text = ""
         self.note_bg.enabled = False
         self.flash_fade()
@@ -228,7 +229,7 @@ class Game:
         self.time_left = self.cfg["seconds"]
         self.dead = False
         self.note_text.text = ""
-        msg = ("夜讀區的燈還亮著。室友不見了，通往館藏區的門卻沒鎖。" if first
+        msg = ("室友不見了。找到他留下的 3 張筆記，拼出 B1 地下書庫的密碼。" if first
                else f"……又是 02:40。第 {self.loop} 次了。你記得讀過的筆記。")
         self.show_hint(wrap(msg, 24), 6)
 
@@ -373,6 +374,7 @@ class Game:
         if (self.door.position - self.player.position).length() < 2.2:
             if len(self.read_notes) == len(NOTES):
                 self.cleared = True
+                self.goal_text.text = ""
                 self.door.animate_position(self.door.position + Vec3(0, -2.3, 0), duration=1.5)
                 self.note_text.text = f"你輸入了 {EXIT_CODE}。門開了。\n往下的樓梯傳來翻書的聲音。\n\n第一章　完\n（{self.difficulty}・迴圈次數：{self.loop}）\n\n按 Enter 回到大廳"
                 self.player.enabled = False
@@ -393,6 +395,10 @@ class Game:
         game_min = 40 + (total - self.time_left) / total * 20
         self.clock_text.text = (f"02:{int(game_min):02d}　第 {self.loop} 輪　"
                                 f"筆記 {len(self.read_notes)}/3　{self.difficulty}")
+        if len(self.read_notes) < len(NOTES):
+            self.goal_text.text = f"目標：在書架間找到室友的筆記（{len(self.read_notes)}/3），走近按 E"
+        else:
+            self.goal_text.text = "目標：到密集書庫最裡面的「B1 地下書庫」門，按 E 輸入密碼"
         if self.time_left <= 0:
             self.flash.color = color.rgba32(0, 0, 0, 255)
             self.dead = True
