@@ -276,6 +276,7 @@ class World:
         self.clues = {}         # 線索名稱 → 玩家要站在附近的位置
         self.shelf_runs = {}    # 第幾排書架 → 格子
         self.walkable = set()
+        self.hides = []         # 可以躲進去的桌子底下（位置）
         self.groups = {}        # 不會動的裝飾依材質分組，最後每組合併成一個 mesh，顯示卡才跑得動
         self.load_textures()
         self.build()
@@ -498,6 +499,7 @@ class World:
         self.box(top + Vec3(0, 0.42, 0.06), (0.18, 0.06, 0.12), col=color.rgb32(230, 220, 170))
 
     def table(self, p):
+        self.hides.append(p)
         top = p + Vec3(0, 0.76, 0)
         self.box(top - Vec3(0, 0.02, 0), (1.7, 0.05, 1.0), self.t["wood"])
         for x in (-0.75, 0.75):
@@ -514,6 +516,7 @@ class World:
         self.collider(p + Vec3(0, 0.4, 0), (1.7, 0.8, 1.0), occludes=False)
 
     def carrel(self, p):
+        self.hides.append(p)
         top = p + Vec3(0, 0.76, 0)
         self.box(top - Vec3(0, 0.02, 0), (1.2, 0.05, 0.7), self.t["wood"])
         for x in (-0.6, 0.6):

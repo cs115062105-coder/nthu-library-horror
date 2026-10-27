@@ -96,10 +96,46 @@ def beep():
     return [0.5 * math.sin(2 * math.pi * 880 * i / RATE) * min(1, i / 200, (n - i) / 400) for i in range(n)]
 
 
+def chime():
+    """閉館廣播前的叮咚。"""
+    out = []
+    for f, start in ((784, 0.0), (622, 0.45)):
+        for i in range(int(RATE * 0.9)):
+            t = i / RATE
+            v = 0.4 * math.sin(2 * math.pi * f * t) * math.exp(-t * 3.5)
+            j = int(start * RATE) + i
+            if j < len(out):
+                out[j] += v
+            else:
+                out.append(v)
+    return out
+
+
+def ring():
+    """遠處手機的鈴聲：兩聲一組。"""
+    out = []
+    for k in range(int(RATE * 1.6)):
+        t = k / RATE
+        on = (t % 0.8) < 0.5 and (t % 0.1) < 0.07
+        out.append(0.3 * math.sin(2 * math.pi * 1400 * t) * math.sin(2 * math.pi * 20 * t) if on else 0.0)
+    return out
+
+
+def thud():
+    """書掉到地上。"""
+    rng = random.Random(8)
+    out, lp = [], 0.0
+    for i in range(int(RATE * 0.5)):
+        t = i / RATE
+        lp += (rng.uniform(-1, 1) - lp) * 0.08
+        out.append((lp * 2.5 + 0.6 * math.sin(2 * math.pi * 55 * t)) * math.exp(-t * 14))
+    return out
+
+
 def generate():
     """只在第一次執行時產生，之後直接用存好的檔案。"""
     paths = {}
-    for name, fn in (("hum", hum), ("heartbeat", heartbeat), ("step", step), ("sting", sting), ("page", page), ("rumble", rumble), ("beep", beep)):
+    for name, fn in (("hum", hum), ("heartbeat", heartbeat), ("step", step), ("sting", sting), ("page", page), ("rumble", rumble), ("beep", beep), ("chime", chime), ("ring", ring), ("thud", thud)):
         p = OUT / f"{name}.wav"
         paths[name] = p if p.exists() else _write(name, fn())
     return paths

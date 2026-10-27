@@ -7,11 +7,11 @@ import math
 from ursina import Button, Entity, Text, camera, color, time
 
 DIFFICULTIES = {
-    "簡單": dict(speed=2.0, seconds=240, sight=13,
+    "簡單": dict(speed=2.0, seconds=240, sight=13, drain=0.7,
                desc="它走得慢，有 4 分鐘，手電筒照得比較遠。\n第一次玩選這個。"),
-    "普通": dict(speed=2.6, seconds=180, sight=10,
+    "普通": dict(speed=2.6, seconds=180, sight=10, drain=1.0,
                desc="原本設計的體驗。\n3 分鐘內找齊筆記。"),
-    "困難": dict(speed=3.5, seconds=150, sight=7,
+    "困難": dict(speed=3.5, seconds=150, sight=7, drain=1.4,
                desc="它很快，只有 2 分半，手電筒照不遠。\n別眨眼。"),
 }
 
@@ -46,16 +46,19 @@ B1　從東南角樓梯間一路往下，轉動密集書架的手輪，找到《
 
 CONTROLS = """WASD　　移動
 滑鼠　　　看
-Shift　　跑
-E　　　　讀筆記／輸入密碼
+Shift　　跑（很吵，會引它過來）
+Ctrl　　 躡手躡腳地走（不會發出聲音）
+C　　　　躲到旁邊的桌子底下／出來
+E　　　　讀筆記、用電腦、開櫃子、上下樓
 F　　　　開關手電筒
 ESC　　　回到大廳
 
 小提示
 ・夜讀區燈是亮的，它進不來
-・手電筒關掉時你看不清它，它就會動
-・心跳聲越快，它越近
-・燈管開始亂閃，代表它就在附近"""
+・左下角的聲音條滿了，它就會聽到你，速度變快
+・手電筒會耗電，沒電就看不清它。地上的電池走過去就會撿起來
+・躲在桌子底下它找不到你，但時間還是在走
+・心跳聲越快，它越近；燈管亂閃，代表它就在附近"""
 
 ACCENT = color.rgb32(150, 30, 30)
 IDLE = color.rgba32(25, 25, 28, 230)

@@ -15,12 +15,13 @@ import random
 from collections import deque
 from pathlib import Path
 
-from ursina import (Ursina, Audio, Entity, Text, Texture, Vec2, Vec3, application, camera, color,
+from ursina import (Ursina, Audio, Entity, Text, Texture, Vec2, Vec3, application, camera, color, destroy,
                     held_keys, invoke, raycast, scene, time, window)
 from ursina.prefabs.first_person_controller import FirstPersonController
 from PIL import Image
 
 import sfx
+from events import Scares
 from menu import DIFFICULTIES, Lobby
 from world import CELL, World, cell_pos
 
@@ -116,6 +117,18 @@ class Game:
         self.dead = False
         self.cleared = False
         self.tape_playing = False
+        self.noise = 0.0             # 聲音條：跑步會累積，滿了它就聽到你
+        self.alert = 0.0             # 它聽到你之後加速的剩餘秒數
+        self.hidden = False          # 躲在桌子底下
+        self.wander = None           # 你躲起來時，它亂晃的目標
+        self.battery = 100.0
+        self.batteries = []          # 地上的電池
+        self.noise_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+                               scale=(0.3, 0.018), color=color.rgba32(255, 255, 255, 40))
+        self.noise_bar = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+                                scale=(0, 0.018), color=color.rgb32(200, 190, 170))
+        self.noise_label = Text(position=(-0.85, -0.41), scale=0.8, color=color.light_gray)
+        self.scares = Scares(self)
         self.bob = 0.0
         self.step_timer = 0.0
         self.beat_timer = 0.0
@@ -181,6 +194,7 @@ class Game:
         self.hide_note()
         self.flash_fade()
         self.state = "play"
+        self.noise_bg.enabled = True
         self.player.enabled = True
         self.reset_loop(first=True)
 
@@ -193,6 +207,13 @@ class Game:
         self.note_bg.enabled = False
         self.flash_fade()
         self.close_entry()
+        self.scares.reset()
+        for b in self.batteries:
+            destroy(b)
+        self.batteries = []
+        self.noise, self.hidden = 0.0, False
+        self.noise_bar.scale_x, self.noise_label.text = 0, ""
+        self.noise_bg.enabled = False
         if self.world.floor != "1F":
             self.load_floor("1F", came="start")
         self.flashlight_on = True
@@ -272,7 +293,7 @@ class Game:
             scene.fog_density = (4.0, 22.0)
         else:
             scene.fog_density = (1.0, 13.0) if self.flashlight_on else (0.5, 4.0)
-        k = 1.15 if self.flashlight_on else 0.85
+        k = 0.7 if getattr(self, "hidden", False) else 1.15 if self.flashlight_on else 0.85   # 躲在桌下視野變窄
         self.vignette.scale = (window.aspect_ratio * k, k)
 
     def setup_audio(self):
@@ -287,6 +308,9 @@ class Game:
                 "page": Audio(paths["page"], autoplay=False, volume=0.6),
                 "rumble": Audio(paths["rumble"], autoplay=False, volume=0.7),
                 "beep": Audio(paths["beep"], autoplay=False, volume=0.6),
+                "chime": Audio(paths["chime"], autoplay=False, volume=0.7),
+                "ring": Audio(paths["ring"], autoplay=False, volume=0.5),
+                "thud": Audio(paths["thud"], autoplay=False, volume=0.8),
             }
         except Exception as e:   # 沒有音效卡也能玩
             print("音效載入失敗：", e)
@@ -307,6 +331,9 @@ class Game:
         self.monster.position = self.world.monster_start
         self.time_left = self.cfg["seconds"]
         self.dead = False
+        self.battery, self.noise, self.alert, self.hidden, self.wander = 100.0, 0.0, 0.0, False, None
+        self.spawn_batteries()
+        self.scares.reset()
         self.note_text.text = ""
         floor = self.world.floor
         if not first:
@@ -321,7 +348,11 @@ class Game:
 
     def show_hint(self, msg, seconds=3):
         self.hint.text = msg
-        invoke(setattr, self.hint, "text", "", delay=seconds)
+
+        def clear():
+            if self.hint.text == msg:   # 只清掉自己這則，後來的提示不要被提早清掉
+                self.hint.text = ""
+        invoke(clear, delay=seconds)
 
     # ---------- 怪物 ----------
     def player_sees(self, target):
@@ -343,20 +374,26 @@ class Game:
     def update_monster(self):
         if self.player_sees(self.monster.world_position):
             return False
-        to = self.player.position - self.monster.position
-        to.y = 0
-        if to.length() < CATCH_DIST:
-            self.caught()
-            return False
-        target = self.next_step_toward(self.monster.position, self.player.position)
+        goal = self.player.position
+        if self.hidden:   # 找不到你，就在這層樓亂晃
+            if self.wander is None or (self.wander - self.monster.position).length() < 0.5:
+                self.wander = cell_pos(*random.choice(sorted(self.monster_walkable)))
+            goal = self.wander
+        else:
+            to = self.player.position - self.monster.position
+            to.y = 0
+            if to.length() < CATCH_DIST:
+                self.caught()
+                return False
+        target = self.next_step_toward(self.monster.position, goal)
         move = target - self.monster.position
         move.y = 0
-        step = self.cfg["speed"] * time.dt
+        step = self.cfg["speed"] * (1.8 if self.alert > 0 else 1.0) * time.dt
         if move.length() <= step:
             self.monster.position = Vec3(target.x, 0, target.z)
         else:
             self.monster.position += move.normalized() * step
-        self.monster.look_at_2d(self.player.position, "y")
+        self.monster.look_at_2d(goal, "y")
         # 沒被看著的時候會抽搐，被看到就定格在奇怪的姿勢
         self.monster_head.rotation_z = random.uniform(-25, 25)
         for arm in self.monster_arms:
@@ -429,15 +466,17 @@ class Game:
                 d.y = 3
 
     def update_body(self):
-        moving = any(held_keys[k] for k in "wasd")
+        sneaking = held_keys["control"] or held_keys["left control"]
+        moving = any(held_keys[k] for k in "wasd") and not self.hidden
         if moving:
             speed = 1.6 if held_keys["shift"] else 1.0
             self.bob += time.dt * 9 * speed
             self.step_timer -= time.dt * speed
             if self.step_timer <= 0:
                 self.step_timer = 0.48
-                self.play("step")
-        self.player.camera_pivot.y = 1.7 + math.sin(self.bob) * 0.04
+                self.play("step", volume=0.08 if sneaking else 0.6 if held_keys["shift"] else 0.35)
+        eye = 0.6 if self.hidden else 1.2 if sneaking else 1.7
+        self.player.camera_pivot.y += (eye + math.sin(self.bob) * 0.04 - self.player.camera_pivot.y) * min(1, time.dt * 10)
 
         dist = (self.monster.position - self.player.position).length()
         self.beat_timer -= time.dt
@@ -648,12 +687,14 @@ class Game:
         self.update_dust()
         if self.state != "play" or self.cleared or self.dead:
             return
-        self.player.speed = 0 if self.entry else 6.5 if held_keys["shift"] else 3.5
+        sneaking = held_keys["control"] or held_keys["left control"]
+        self.player.speed = (0 if self.entry or self.hidden else 6.5 if held_keys["shift"]
+                             else 1.8 if sneaking else 3.5)
         self.time_left -= time.dt
         total = self.cfg["seconds"]
         game_min = 40 + (total - self.time_left) / total * 20
         self.clock_text.text = (f"02:{int(game_min):02d}　第 {self.loop} 輪　"
-                                f"{self.difficulty}")
+                                f"{self.difficulty}　電池 {int(self.battery)}%")
         self.goal_text.text = "目標：" + self.goal()
         if self.time_left <= 0:
             self.flash.color = color.rgba32(0, 0, 0, 255)
@@ -666,8 +707,73 @@ class Game:
         if safe != self.in_safe_zone:
             self.in_safe_zone = safe
             self.apply_flashlight()
-        self.update_lights(self.update_monster())
+        self.update_noise(sneaking)
+        self.update_battery()
+        moving = self.update_monster()
+        if self.scares.blackout <= 0:
+            self.update_lights(moving)
+        self.scares.update()
         self.update_body()
+
+    # ---------- 聲音、躲藏、電池 ----------
+    def update_noise(self, sneaking):
+        walking = any(held_keys[k] for k in "wasd") and not self.hidden and not self.entry
+        rate = (0.0 if sneaking else 0.55 if held_keys["shift"] else 0.05) if walking else -0.3
+        self.noise = min(1.0, max(0.0, self.noise + rate * time.dt))
+        self.alert = max(0.0, self.alert - time.dt)
+        if self.noise >= 1 and self.alert <= 0 and not self.in_safe_zone:
+            self.alert, self.noise = 6.0, 0.5
+            self.play("sting", volume=0.25)
+            self.show_hint("它聽到你了。", 2)
+        self.noise_bar.scale_x = 0.3 * self.noise
+        self.noise_bar.color = color.rgb32(200, 40, 40) if self.alert > 0 else color.rgb32(200, 190, 170)
+        self.noise_label.text = "它聽到了！" if self.alert > 0 else "躲起來中" if self.hidden else "聲音"
+
+    def update_battery(self):
+        if self.flashlight_on and not self.in_safe_zone:
+            self.battery = max(0.0, self.battery - self.cfg["drain"] * time.dt)
+            if self.battery <= 0:
+                self.flashlight_on = False
+                self.apply_flashlight()
+                self.show_hint("手電筒沒電了。找找地上有沒有電池。", 3)
+        for b in list(self.batteries):
+            if self.near(b.position, 1.2):
+                self.batteries.remove(b)
+                destroy(b)
+                self.battery = min(100.0, self.battery + 45)
+                self.play("page")
+                self.show_hint(f"撿到電池。電量 {int(self.battery)}%", 2)
+
+    def spawn_batteries(self):
+        for b in self.batteries:
+            destroy(b)
+        self.batteries = []
+        cells = sorted(self.world.walkable - self.world.spec["safe"])
+        stairs = [s["pos"] for s in self.world.stairs.values()]
+        cells = [c for c in cells if all((cell_pos(*c) - p).length() > 6 for p in stairs)]
+        for c in random.sample(cells, min(3, len(cells))):
+            b = Entity(position=cell_pos(*c) + Vec3(random.uniform(-0.5, 0.5), 0, random.uniform(-0.5, 0.5)))
+            Entity(parent=b, model="cube", position=(0, 0.06, 0), scale=(0.12, 0.12, 0.3), color=color.rgb32(40, 40, 40))
+            Entity(parent=b, model="cube", position=(0, 0.06, 0.12), scale=(0.125, 0.125, 0.08),
+                   color=color.rgb32(220, 160, 40))
+            Entity(parent=b, model="quad", rotation_x=90, position=(0, 0.01, 0), scale=0.8, texture=self.world.t["glow"],
+                   color=color.rgba32(255, 200, 90, 70))
+            self.batteries.append(b)
+
+    def toggle_hide(self):
+        if self.hidden:
+            self.hidden = False
+            self.apply_flashlight()
+            self.show_hint("你從桌子底下爬出來。", 2)
+            return
+        spot = min(self.world.hides, key=lambda p: (p - self.player.position).length(), default=None)
+        if spot is None or not self.near(spot, 1.9):
+            self.show_hint("附近沒有可以躲的桌子。", 2)
+            return
+        self.hidden = True
+        self.wander = None
+        self.apply_flashlight()
+        self.show_hint("你縮到桌子底下。它找不到你，但時間還在走。（C 出來）", 3)
 
 
 app = Ursina(title="總圖不打烊 原型", borderless=False, development_mode=False)
@@ -692,8 +798,13 @@ def handle_input(key):
     elif key == "e" and not game.cleared:
         game.interact()
     elif key == "f":
+        if game.battery <= 0 and not game.flashlight_on:
+            game.show_hint("手電筒沒電了。", 2)
+            return
         game.flashlight_on = not game.flashlight_on
         game.apply_flashlight()
+    elif key == "c" and not game.cleared:
+        game.toggle_hide()
 
 
 # 用一個空 Entity 掛每幀更新與按鍵處理，不依賴 __main__ 裡的全域函式
