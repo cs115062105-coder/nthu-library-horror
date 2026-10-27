@@ -77,10 +77,29 @@ def page():
     return out
 
 
+def rumble():
+    """密集書架滑動的低沉轟隆聲。"""
+    rng = random.Random(6)
+    out, lp = [], 0.0
+    n = int(RATE * 1.3)
+    for i in range(n):
+        t = i / RATE
+        lp += (rng.uniform(-1, 1) - lp) * 0.02
+        env = min(1, t * 6) * min(1, (1.3 - t) * 4)
+        out.append(env * (lp * 3 + 0.25 * math.sin(2 * math.pi * 38 * t)))
+    return out
+
+
+def beep():
+    """錄音帶裡的嗶聲。"""
+    n = int(RATE * 0.22)
+    return [0.5 * math.sin(2 * math.pi * 880 * i / RATE) * min(1, i / 200, (n - i) / 400) for i in range(n)]
+
+
 def generate():
     """只在第一次執行時產生，之後直接用存好的檔案。"""
     paths = {}
-    for name, fn in (("hum", hum), ("heartbeat", heartbeat), ("step", step), ("sting", sting), ("page", page)):
+    for name, fn in (("hum", hum), ("heartbeat", heartbeat), ("step", step), ("sting", sting), ("page", page), ("rumble", rumble), ("beep", beep)):
         p = OUT / f"{name}.wav"
         paths[name] = p if p.exists() else _write(name, fn())
     return paths
