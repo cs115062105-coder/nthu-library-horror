@@ -5,7 +5,7 @@
 """
 import random
 
-from ursina import Entity, Texture, Vec3, color
+from ursina import Entity, Texture, Vec3, color, destroy, scene
 from ursina.models.procedural.cylinder import Cylinder
 
 import textures as tx
@@ -17,8 +17,9 @@ SHADE = 0.62    # 整體調暗：半夜的圖書館只剩部分燈亮著
 # #  牆          W  窗（看得到外面的月光）  B  開架書架    K  密集書庫
 # T  閱覽桌      C  自習座位               S  總服務台    O  柱子
 # G  玻璃隔間    R  感應閘門（可通過）      ,  大廳磨石子  .  地毯
-# P  起點        M  怪物                   1/2/3 筆記     D  地下書庫的門
-LEVEL = [
+# P  起點        M  怪物                   1–4 筆記       D  往下的門（要密碼）
+# U  往上的樓梯門  k  可移動的密集書架（由 banks 決定哪一道走道是開的）
+LEVEL_1F = [
     "###D###WWWWWWWWWWWWWWWWWW#######",
     "#.....#..................G..T..#",
     "#K.K.K#.T..T..T..T..T..T....T..#",
@@ -41,10 +42,36 @@ LEVEL = [
     "#........#,,,,,,#C.C.C.C.C.C.C.#",
     "#WWWWWWWW#GGGGGG################",
 ]
-BLOCKED = set("#WBKTCSOGD")
+BLOCKED = set("#WBKTCSOGDUk")
+
+# B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
+LEVEL_B1 = [
+    "#U########################",
+    "#P.......................#",
+    "#..T4..O.......O.....T...#",
+    "#........................#",
+    "#........................#",
+    "#..kkkkkkkk...kkkkkkkk...#",
+    "#..kkkkkkkk...kkkkkkkk...#",
+    "#..kkkkkkkk...kkkkkkkk...#",
+    "#..kkkkkkkk...kkkkkkkk...#",
+    "#..kkkkkkkk...kkkkkkkk...#",
+    "#..kkkkkkkk...kkkkkkkk...#",
+    "#........................#",
+    "#.BBBBBB..BBBBBB..BBBBB..#",
+    "#...........M............#",
+    "##########################",
+]
+BANKS_B1 = [
+    dict(name="A", col=3, row=5, length=6, aisle=0,
+         labels=["000–099", "100–199", "200–299", "300–399", "400–449", "450–499", "500–509"]),
+    dict(name="B", col=14, row=5, length=6, aisle=7,
+         labels=["510–519", "520–529", "530–539", "540–549", "550–559", "560–569", "570–579"]),
+]
+EXAM_BOOK = ("B", 1)   # 考古題之書：B 區「520–529」那一櫃的右手邊
 
 # 吊牌：格子 → (中文, 英文)
-HANGING = {
+HANGING_1F = {
     (4, 16): ("夜讀區 24H", "Moonlight Study Area"),
     (13, 16): ("總服務台", "Circulation Desk"),
     (12, 13): ("館藏區", "Stacks  ↑"),
@@ -55,7 +82,7 @@ HANGING = {
     (24, 15): ("自習座位", "Study Carrels"),
 }
 # 牆上的海報：(牆的格子, 朝哪一格的方向, 種類)
-POSTERS = [
+POSTERS_1F = [
     ((0, 17), (1, 0), "missing"),
     ((9, 15), (-1, 0), "notice"),
     ((16, 18), (-1, 0), "missing"),
@@ -67,8 +94,17 @@ CALL_NUMBERS = ["000 總類", "100 哲學", "200 宗教", "300 自然科學", "4
                 "900 藝術", "529 考試用書", "R 參考書"]
 
 # 一直閃的壞燈管（格子）
-FLICKER = {(9, 9), (21, 11), (5, 13), (28, 7), (13, 4), (25, 18)}
-DEAD = {(3, 7), (17, 9), (11, 13), (29, 13), (2, 9)}
+FLICKER_1F = {(9, 9), (21, 11), (5, 13), (28, 7), (13, 4), (25, 18)}
+DEAD_1F = {(3, 7), (17, 9), (11, 13), (29, 13), (2, 9)}
+
+FLOORS = {
+    "1F": dict(level=LEVEL_1F, hanging=HANGING_1F, posters=POSTERS_1F, flicker=FLICKER_1F, dead=DEAD_1F,
+               floor="carpet", banks=[], safe={(c, r) for c in range(1, 9) for r in range(15, 20)}),
+    "B1": dict(level=LEVEL_B1, banks=BANKS_B1, floor="stone", safe=set(), dead_ratio=0.45, flicker_ratio=0.2,
+               hanging={(8, 3): ("密集書庫 A 區", "Compact Shelving A"), (17, 3): ("密集書庫 B 區", "Compact Shelving B"),
+                        (2, 3): ("B1 地下書庫", "Basement Stacks")},
+               posters=[((0, 2), (1, 0), "missing")]),
+}
 
 
 def cell_pos(c, r):
@@ -81,12 +117,21 @@ def facing_y(d):
 
 
 class World:
-    def __init__(self, font_path):
+    _textures = None   # 材質只產生一次，換樓層時沿用
+
+    def __init__(self, font_path, floor="1F"):
+        first_entity = len(scene.entities)
         self.font_path = font_path
-        self.rows, self.cols = len(LEVEL), len(LEVEL[0])
-        for r, row in enumerate(LEVEL):
-            assert len(row) == self.cols, f"LEVEL 第 {r} 行長度 {len(row)}，應該是 {self.cols}"
+        self.floor = floor
+        self.spec = FLOORS[floor]
+        self.level = self.spec["level"]
+        self.rows, self.cols = len(self.level), len(self.level[0])
+        for r, row in enumerate(self.level):
+            assert len(row) == self.cols, f"{floor} 第 {r} 行長度 {len(row)}，應該是 {self.cols}"
         self.rng = random.Random(42)
+        self.door = None
+        self.whiteboard = None
+        self.banks = []
         self.solids = []        # 擋視線的東西（牆、書架）
         self.lights = []        # [panel, pool, 狀態]
         self.notes = {}
@@ -100,10 +145,24 @@ class World:
             g.combine()
             g.texture = tex
             g.color = color.rgb(SHADE, SHADE, SHADE)
-        self.place_clues()
+        if floor == "1F":
+            self.place_clues()
+        self.build_banks()
+        self.owned = [e for e in scene.entities[first_entity:]]   # 換樓層時要拆掉的東西
+
+    def unload(self):
+        for e in self.owned:
+            try:
+                destroy(e)
+            except Exception:
+                pass
 
     # ---------- 小工具 ----------
     def load_textures(self):
+        if World._textures:
+            self.t, self.book_tex = World._textures
+            return
+
         def t(img, filtering=None):
             return Texture(img, filtering=filtering)
         self.t = {
@@ -115,10 +174,11 @@ class World:
             "notice": t(tx.poster_notice(self.font_path), "bilinear"),
         }
         self.book_tex = [t(tx.books(i)) for i in range(6)]
+        World._textures = (self.t, self.book_tex)
 
     def char(self, c, r):
         if 0 <= r < self.rows and 0 <= c < self.cols:
-            return LEVEL[r][c]
+            return self.level[r][c]
         return "#"
 
     def group(self, tex):
@@ -148,14 +208,14 @@ class World:
     def build(self):
         w, d = self.cols * CELL, self.rows * CELL
         center = Vec3((self.cols - 1) * CELL / 2, 0, -(self.rows - 1) * CELL / 2)
-        Entity(model="quad", position=center, scale=(w, d), rotation_x=90, texture=self.t["carpet"],
+        Entity(model="quad", position=center, scale=(w, d), rotation_x=90, texture=self.t[self.spec["floor"]],
                texture_scale=(self.cols, self.rows), color=color.rgb(SHADE, SHADE, SHADE))
         Entity(model="quad", position=center + Vec3(0, WALL_H, 0), scale=(w, d), rotation_x=-90,
                texture=self.t["ceiling"], texture_scale=(self.cols * 3, self.rows * 3), color=color.rgb(0.4, 0.4, 0.4))
         Entity(model="plane", scale=(w, 1, d), position=center, collider="box", visible=False)
 
         shelf_run = 0
-        for r, row in enumerate(LEVEL):
+        for r, row in enumerate(self.level):
             for c, ch in enumerate(row):
                 p = cell_pos(c, r)
                 if ch not in BLOCKED:
@@ -188,13 +248,15 @@ class World:
                     self.start = p
                 elif ch == "M":
                     self.monster_start = p
-                elif ch in "123":
+                elif ch in "1234":
                     self.note(ch, p)
                 elif ch == "D":
                     self.make_door(c, r, p)
-        for (c, r), lines in HANGING.items():
+                elif ch == "U":
+                    self.make_door(c, r, p, up=True)
+        for (c, r), lines in self.spec["hanging"].items():
             self.hanging_sign(cell_pos(c, r), lines)
-        for (c, r), (dc, dr), kind in POSTERS:
+        for (c, r), (dc, dr), kind in self.spec["posters"]:
             dvec = Vec3(dc, 0, -dr)
             self.quad(cell_pos(c, r) + dvec * (CELL / 2 + 0.01) + Vec3(self.rng.uniform(-0.4, 0.4), 1.55, 0),
                       (0.6, 0.85), self.t[kind], rot=(0, facing_y(dvec), self.rng.uniform(-4, 4)))
@@ -356,7 +418,7 @@ class World:
                color=color.rgb32(240, 235, 210))   # 書頁間露出的紙條
         self.clues["book"] = cell_pos(c, r + 1)
         # 2. 總服務台還沒登出的電腦（螢幕比較亮）
-        c, r = next((c, r) for r, row in enumerate(LEVEL) for c, ch in enumerate(row) if ch == "S")
+        c, r = next((c, r) for r, row in enumerate(self.level) for c, ch in enumerate(row) if ch == "S")
         p = cell_pos(c, r)
         Entity(model="quad", position=p + Vec3(0.135, 1.35, 0.3), scale=(0.5, 0.32), rotation=(0, -90, 0),
                texture=self.t["screen"], color=color.rgb(1.4, 1.4, 1.4))
@@ -368,18 +430,22 @@ class World:
         self.clues["whiteboard"] = cell_pos(wall[0] - 1, wall[1])
 
     def set_code(self, code):
-        self.whiteboard.texture = Texture(tx.whiteboard(code[2], self.font_path), filtering="bilinear")
+        if self.whiteboard:
+            self.whiteboard.texture = Texture(tx.whiteboard(code[2], self.font_path), filtering="bilinear")
 
-    def make_door(self, c, r, p):
+    def make_door(self, c, r, p, up=False):
         side = next(self.open_sides(c, r))
         self.wall(c, r, p)
-        self.door = Entity(model="cube", position=p + side * (CELL / 2 + 0.03) + Vec3(0, 1.1, 0),
-                           scale=(1.2 if side.z else 0.06, 2.2, 0.06 if side.z else 1.2),
-                           color=color.rgb32(48, 70, 60))
-        self.door_side = side
+        door = Entity(model="cube", position=p + side * (CELL / 2 + 0.03) + Vec3(0, 1.1, 0),
+                      scale=(1.2 if side.z else 0.06, 2.2, 0.06 if side.z else 1.2),
+                      color=color.rgb32(48, 70, 60))
+        lines = ["↑ 1F", "門從另一邊鎖上了"] if up else ["↓ B1 地下書庫", "閉館期間禁止進入"]
         self.quad(p + side * (CELL / 2 + 0.07) + Vec3(0, 2.55, 0), (1.1, 0.34),
-                  self.text_tex(["↓ B1 地下書庫", "閉館期間禁止進入"], w=256, h=80, bg=(20, 110, 60)),
-                  rot=(0, facing_y(side), 0))
+                  self.text_tex(lines, w=256, h=80, bg=(20, 110, 60)), rot=(0, facing_y(side), 0))
+        if up:
+            return   # 上樓的門只是裝飾：下來了就回不去
+        self.door = door
+        self.door_side = side
         keypad = p + side * (CELL / 2 + 0.07) + Vec3(0, 1.2, 0) + Vec3(side.z, 0, -side.x) * 0.8
         self.box(keypad, (0.18, 0.26, 0.18), col=color.rgb32(30, 30, 30))
         self.keypad_light = Entity(model="cube", position=keypad + Vec3(0, 0.09, 0) + side * 0.1,
@@ -393,12 +459,17 @@ class World:
             self.box(p + Vec3(x, 2.95, 0), (0.015, 0.3, 0.015), col=color.rgb32(60, 60, 60))
 
     def ceiling_lights(self):
-        for (c, r) in sorted(self.walkable):
-            if (c + r) % 2 or LEVEL[r][c] == "R":
+        for (c, r) in sorted(self.walkable | self.bank_cells()):
+            if (c + r) % 2 or self.level[r][c] == "R":
                 continue
             p = cell_pos(c, r)
-            safe = 1 <= c <= 8 and 15 <= r <= 19     # 夜讀區 24 小時都亮著，比較暖
-            state = "dead" if (c, r) in DEAD else "flicker" if (c, r) in FLICKER else "on"
+            safe = (c, r) in self.spec["safe"]     # 夜讀區 24 小時都亮著，比較暖
+            if "dead_ratio" in self.spec:
+                roll = self.rng.random()
+                state = ("dead" if roll < self.spec["dead_ratio"]
+                         else "flicker" if roll < self.spec["dead_ratio"] + self.spec["flicker_ratio"] else "on")
+            else:
+                state = "dead" if (c, r) in self.spec["dead"] else "flicker" if (c, r) in self.spec["flicker"] else "on"
             panel = Entity(model="quad", position=p + Vec3(0, WALL_H - 0.01, 0), scale=(0.6, 1.2),
                            rotation=(-90, 0, 0), texture=self.t["panel"])
             pool = Entity(model="quad", position=p + Vec3(0, 0.02, 0), scale=4.2 if safe else 3.2,
@@ -414,3 +485,69 @@ class World:
         panel.color = color.white if on else color.rgb32(70, 70, 70)
         pool.enabled = on
 
+
+    # ---------- 可移動的密集書架 ----------
+    def bank_cells(self):
+        return {(c, r) for r, row in enumerate(self.level) for c, ch in enumerate(row) if ch == "k"}
+
+    def build_banks(self):
+        self.exam_book = None
+        for spec in self.spec["banks"]:
+            bank = dict(spec, units=[])
+            z_mid = -(spec["row"] + (spec["length"] - 1) / 2) * CELL
+            for i, label in enumerate(spec["labels"]):
+                unit = Entity(position=(self.bank_x(bank, i, spec["aisle"]), 0, z_mid))
+                length = spec["length"] * CELL - 0.1
+                Entity(parent=unit, model="cube", position=(0, 1.3, 0), scale=(CELL * 0.92, 2.6, length),
+                       texture=self.t["metal"], color=color.rgb(0.5, 0.55, 0.5))
+                for side in (1, -1):
+                    Entity(parent=unit, model="quad", position=(side * CELL * 0.465, 1.25, 0),
+                           scale=(length, 2.4), rotation=(0, -90 * side, 0),
+                           texture=self.book_tex[(i + side) % 6], texture_scale=(spec["length"], 1),
+                           color=color.rgb(SHADE, SHADE, SHADE))
+                front = length / 2 + 0.02
+                Entity(parent=unit, model="quad", position=(0, 2.2, front), scale=(0.9, 0.3), rotation=(0, 180, 0),
+                       texture=self.text_tex([f"{spec['name']}-{i + 1}", label], w=200, h=80,
+                                             bg=(240, 240, 230), fg=(30, 30, 30), sizes=[30, 24]))
+                Entity(parent=unit, model=Cylinder(resolution=10, radius=0.25, height=0.06, direction=(0, 0, 1)),
+                       position=(0, 1.1, front), color=color.rgb32(70, 70, 72))
+                Entity(parent=unit, model="cube", position=(0, 1.1, front + 0.07), scale=(0.04, 0.4, 0.04),
+                       color=color.rgb32(70, 70, 72))
+                hit = Entity(parent=unit, model="cube", position=(0, 1.3, 0), scale=(CELL * 0.92, 2.6, length),
+                             collider="box", visible=False)
+                self.solids.append(hit)
+                if (spec["name"], i) == EXAM_BOOK:
+                    self.exam_book = Entity(parent=unit, model="cube", position=(CELL * 0.48, 1.3, -1.2),
+                                            scale=(0.1, 0.32, 0.24), color=color.rgb32(200, 160, 60))
+                bank["units"].append(unit)
+            self.banks.append(bank)
+            self.open_aisle(bank, spec["aisle"], animate=False)
+
+    @staticmethod
+    def bank_x(bank, i, aisle):
+        return (bank["col"] + i + (1 if i >= aisle else 0)) * CELL
+
+    def bank_at(self, pos):
+        """玩家站在哪一區書架的正前方，回傳 (區, 走道編號)。"""
+        c, r = round(pos.x / CELL), round(-pos.z / CELL)
+        for bank in self.banks:
+            n = len(bank["units"])
+            if r == bank["row"] - 1 and bank["col"] <= c <= bank["col"] + n:
+                return bank, c - bank["col"]
+        return None, None
+
+    def open_aisle(self, bank, aisle, animate=True):
+        bank["aisle"] = aisle
+        for i, unit in enumerate(bank["units"]):
+            x = self.bank_x(bank, i, aisle)
+            if animate:
+                unit.animate_x(x, duration=1.2)
+            else:
+                unit.x = x
+        cols = range(bank["col"], bank["col"] + len(bank["units"]) + 1)
+        rows = range(bank["row"], bank["row"] + bank["length"])
+        for c in cols:
+            for r in rows:
+                self.walkable.discard((c, r))
+        for r in rows:
+            self.walkable.add((bank["col"] + aisle, r))
