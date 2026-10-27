@@ -25,8 +25,8 @@ from menu import DIFFICULTIES, Lobby
 from world import CELL, World, cell_pos
 
 CATCH_DIST = 1.1
-MENU_SPOT = (1, 13)     # 大廳背景：1F 閘門前的走道
-MENU_MONSTER = (9, 13)  # 走道另一頭站著它
+MENU_SPOT = (5, 15)     # 大廳背景：1F 入口旁，望向圓形展區
+MENU_MONSTER = (17, 15) # 展區正中間站著它
 
 NOTES = {
     "1": "（室友的座位，筆電還開著）便利貼：「我先去找考古題之書了。我用櫃台電腦預約了一個東西，放在自助取書區。」",
@@ -599,15 +599,15 @@ class Game:
         """左上角的目標：依樓層和已經拿到的東西決定下一步。"""
         floor, items, notes = self.world.floor, self.items, self.read_notes
         if "b1" in items and floor != "B1":
-            return "B1 門禁開了。從左上角的樓梯間一路往下到 B1"
+            return "B1 門禁開了。從右下角的樓梯間一路往下到 B1"
         if floor == "1F":
             if "keycard" in items:
-                return "用門卡打開左上角的樓梯間，上 2F"
+                return "用門卡打開右下角的樓梯間，上 2F"
             if "locker_known" in items:
-                return f"到右邊的自助取書區，打開 A{self.locker_no:02d} 櫃"
+                return f"到最裡面（北邊）的自助取書區，打開 A{self.locker_no:02d} 櫃"
             if "1" in notes:
-                return "到借還書櫃台（閘門下方）查電腦上的預約"
-            return "看看室友在夜讀區的座位（桌上有東西）"
+                return "到左邊的聯合櫃臺，查電腦上的預約"
+            return "看看室友在夜讀區的座位（書車上有東西）"
         if floor == "2F":
             if "3f" in items:
                 return "門禁開了。從樓梯間上 3F"
