@@ -5,7 +5,7 @@
 
 玩法：
   期中考週的凌晨，你在總圖 24 小時夜讀區醒來，室友不見了。
-  通往館藏區的門沒鎖。在書架間找出筆記，拼出地下書庫的密碼。
+  照真實的總圖一層一層往上找室友留下的線索，最後下到 B1 地下書庫。
   書架間有「東西」——你看著它，它就不動；你一轉頭，它就靠近。
   凌晨 3:00 一到（或被它抓到），一切重來，但你會記得已經讀過的筆記。
 """
@@ -30,8 +30,10 @@ MENU_MONSTER = (9, 13)  # 走道另一頭站著它
 
 NOTES = {
     "1": "（室友的座位，筆電還開著）便利貼：「我先去找考古題之書了。我用櫃台電腦預約了一個東西，放在自助取書區。」",
-    "2": "（字跡潦草）電腦教室最裡面那台我還沒登出……不對，它要密碼。提示寫在螢幕旁：本校在新竹建校的那一年。它只在你不看的時候動。",
+    "2": "（字跡潦草）電腦教室最裡面那台我還沒登出……不對，它要密碼。提示寫在螢幕旁：本校在新竹建校的那一年。登入之後樓梯間的門禁就會開。它只在你不看的時候動。",
     "3": "又是三點……我已經第幾次回到這裡了？第三碼我寫在討論室 2 的白板上。",
+    "5": "（語言學習區的桌上）「視聽區最裡面那台還在播錄音帶。數清楚嗶了幾聲，那是第一碼。別在它附近戴耳機。」",
+    "6": "（被撕下來的筆記本內頁）「清華書房的展示櫃有三碼密碼鎖。第一碼在 3F 的錄音帶裡，第二碼夾在『300 科學類』的書裡，第三碼寫在討論室的白板上。」",
     "4": "（室友的手機，螢幕還亮著）備忘錄：考古題之書 索書號 529.98。在 B 區密集書庫，夾在「520–529」那一櫃和下一櫃之間。轉書架前面的手輪，你站的那道走道就會打開。",
 }
 # 線索 → (密碼第幾碼, 找到時顯示的文字)
@@ -39,15 +41,15 @@ NOTES = {
 LOCKS = {
     ("1F", "up"): ("keycard", "樓梯間的門要刷館員門卡。"),
     ("1F", "down"): ("b1", "B1 密集書庫：館員專用，門禁沒有開通。"),
-    ("2F", "up"): ("3f", "往 3F 的樓梯被施工圍籬擋住了。（3F 之後的樓層還在蓋）"),
+    ("2F", "up"): ("3f", "往 3F 的門禁沒有開。要先登入電腦教室的系統。"),
+    ("4F", "up"): ("5f", "往 5F 的樓梯被施工圍籬擋住了。（5F 之後的樓層還在蓋）"),
 }
 READABLE = {
     "newspaper": "《清華新聞》　日期：明天\n頭條：「資工系學生凌晨於總圖失蹤」\n副標：「同寢室友仍在館內尋找中」",
     "exhibit": "主題展「總圖的夜」\n閉館後，館員每小時巡館一次。\n02:40 那一班，從來沒有人回來簽到。",
 }
 CLUES = {
-    "book": (0, "《物種原始》裡夾著一張便條：\n「第一碼：{d}」\n字跡跟室友的一模一樣。"),
-    "computer": (1, "借閱紀錄　陳○○\n《考古題之書》　已歸還（B1 地下書庫）\n歸還時間：03:00　備註：第二碼 {d}"),
+    "book": (1, "《物種原始》裡夾著一張便條：\n「第二碼：{d}」\n字跡跟室友的一模一樣。"),
     "whiteboard": (2, "白板角落圈著一個數字：{d}\n旁邊用紅筆寫著：「別回頭。」"),
 }
 
@@ -113,6 +115,7 @@ class Game:
         self.entry_text = Text(position=(0, -0.03), origin=(0, 0), scale=2.0, color=color.white)
         self.dead = False
         self.cleared = False
+        self.tape_playing = False
         self.bob = 0.0
         self.step_timer = 0.0
         self.beat_timer = 0.0
@@ -169,10 +172,11 @@ class Game:
         self.read_notes.clear()
         self.found.clear()
         self.items.clear()
-        self.code = "".join(random.choice("0123456789") for _ in range(3))   # 每局密碼都不同
+        self.code = "".join(random.choice("123456789") for _ in range(3))   # 每局密碼都不同
         self.locker_no = random.randint(1, 6)
         self.loop = 1
         self.cleared = False
+        self.tape_playing = False
         self.load_floor("1F", came="start")   # 重蓋一次，書架都回到原狀
         self.hide_note()
         self.flash_fade()
@@ -282,6 +286,7 @@ class Game:
                 "sting": Audio(paths["sting"], autoplay=False, volume=0.8),
                 "page": Audio(paths["page"], autoplay=False, volume=0.6),
                 "rumble": Audio(paths["rumble"], autoplay=False, volume=0.7),
+                "beep": Audio(paths["beep"], autoplay=False, volume=0.6),
             }
         except Exception as e:   # 沒有音效卡也能玩
             print("音效載入失敗：", e)
@@ -309,6 +314,8 @@ class Game:
         else:
             msg = {"1F": "夜讀區的燈還亮著。室友的位子空了，筆電還開著。",
                    "2F": "2F。期刊架之間很安靜，安靜得不太對勁。",
+                   "3F": "3F。小舞台上的鋼琴蓋是開的。剛剛好像有人在彈。",
+                   "4F": "4F。一整層的中文書。故事牆上的老照片都在看你。",
                    "B1": "身後的門自己鎖上了。這裡比樓上更冷。"}.get(floor, f"{floor}。")
         self.show_hint(wrap(msg, 24), 6)
 
@@ -508,17 +515,48 @@ class Game:
                 self.play("page")
                 self.show_note("櫃子裡沒有書，只有一張館員門卡。\n卡套上貼著便利貼：「樓梯間 → 2F 電腦教室」")
         elif kind == "lab_pc":
-            if "b1" in self.items:
-                self.show_note("已登入。B1 門禁：已開通。")
+            if "3f" in self.items:
+                self.show_note("已登入。樓梯間門禁：已開通。")
             else:
                 self.open_entry("電腦教室　登入", "密碼提示：本校在新竹建校的那一年", 4, self.lab_login)
+        elif kind == "tape":
+            self.play_tape()
+        elif kind == "case":
+            if "b1" in self.items:
+                self.show_note("展示櫃已經開了。")
+            else:
+                self.open_entry("清華書房　展示櫃", f"三碼密碼鎖　你記得的：{self.code_hint()}", 3, self.case_open)
 
     def lab_login(self, code):
         if code != "1956":
             self.show_hint("密碼錯誤。", 2)
             return
+        self.items.add("3f")
+        self.show_note("登入成功。最後一筆查詢：\n《考古題之書》索書號 529.98　館藏地：B1 密集書庫\n系統訊息：樓梯間 3F 門禁已開通。")
+
+    def play_tape(self):
+        """3F 視聽座位的錄音帶：嗶幾聲就是第一碼。"""
+        if self.tape_playing:
+            return
+        self.tape_playing = True
+        n = int(self.code[0])
+        self.show_hint("（喀。錄音帶開始轉）", 1.2)
+        for i in range(n):
+            self.later(lambda k=i + 1: (self.play("beep"), self.show_hint("嗶 " * k, 1.5)), 1.5 + i * 0.6)
+
+        def done():
+            self.tape_playing = False
+            self.found.add(0)
+            self.show_note("錄音帶最後是室友的聲音，很小聲：\n「……數到幾了？那就是第一碼。\n上 4F，清華書房。」")
+        self.later(done, 2.5 + n * 0.6)
+
+    def case_open(self, code):
+        if code != self.code:
+            self.show_hint("鎖沒有開。", 2)
+            return
         self.items.add("b1")
-        self.show_note("登入成功。最後一筆查詢：\n《考古題之書》索書號 529.98　館藏地：B1 密集書庫\n系統訊息：B1 門禁已開通。")
+        self.play("page")
+        self.show_note("展示櫃裡的推薦書全被翻到同一頁：\n「B1 密集書庫　館員通行證」\n通行證就夾在書裡。B1 門禁開了。")
 
     # ---------- 輸入密碼的畫面 ----------
     def open_entry(self, title, hint, length, on_submit):
@@ -560,9 +598,9 @@ class Game:
     def goal(self):
         """左上角的目標：依樓層和已經拿到的東西決定下一步。"""
         floor, items, notes = self.world.floor, self.items, self.read_notes
+        if "b1" in items and floor != "B1":
+            return "B1 門禁開了。從左上角的樓梯間一路往下到 B1"
         if floor == "1F":
-            if "b1" in items:
-                return "回到左上角的樓梯間，往下到 B1"
             if "keycard" in items:
                 return "用門卡打開左上角的樓梯間，上 2F"
             if "locker_known" in items:
@@ -571,11 +609,21 @@ class Game:
                 return "到借還書櫃台（閘門下方）查電腦上的預約"
             return "看看室友在夜讀區的座位（桌上有東西）"
         if floor == "2F":
-            if "b1" in items:
-                return "B1 門禁開了。回到樓梯間下樓，從 1F 往下到 B1"
+            if "3f" in items:
+                return "門禁開了。從樓梯間上 3F"
             if "2" in notes:
                 return "登入電腦教室最裡面那台電腦（密碼提示在校史展示區）"
             return "找找室友在 2F 留下的東西"
+        if floor == "3F":
+            if 0 in self.found:
+                return "記住錄音帶的嗶聲數，上 4F 找清華書房"
+            if "5" in notes:
+                return "到視聽區找還在播的那台（螢幕亮著），按 E 聽錄音帶"
+            return "找找室友在 3F 留下的東西（語言學習區）"
+        if floor == "4F":
+            if "6" not in notes:
+                return "找找室友在 4F 留下的東西"
+            return f"湊齊三碼，打開清華書房的展示櫃　密碼：{self.code_hint()}"
         if floor == "B1":
             return ("在 B 區密集書庫找到《考古題之書》，在書架前按 E 轉手輪"
                     if "4" in notes else "入口桌上有東西在發光……")

@@ -90,10 +90,16 @@ def rumble():
     return out
 
 
+def beep():
+    """錄音帶裡的嗶聲。"""
+    n = int(RATE * 0.22)
+    return [0.5 * math.sin(2 * math.pi * 880 * i / RATE) * min(1, i / 200, (n - i) / 400) for i in range(n)]
+
+
 def generate():
     """只在第一次執行時產生，之後直接用存好的檔案。"""
     paths = {}
-    for name, fn in (("hum", hum), ("heartbeat", heartbeat), ("step", step), ("sting", sting), ("page", page), ("rumble", rumble)):
+    for name, fn in (("hum", hum), ("heartbeat", heartbeat), ("step", step), ("sting", sting), ("page", page), ("rumble", rumble), ("beep", beep)):
         p = OUT / f"{name}.wav"
         paths[name] = p if p.exists() else _write(name, fn())
     return paths
