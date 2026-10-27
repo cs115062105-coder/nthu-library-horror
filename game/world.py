@@ -1,0 +1,384 @@
+"""把格子地圖蓋成 3D 的清大總圖。
+
+地圖參考旺宏館的總圖：24 小時開放的夜讀區、總服務台和感應閘門、
+依《中國圖書分類法》排的開架書庫、靠窗的閱覽區、玻璃討論室、密集書庫。
+"""
+import random
+
+from ursina import Entity, Texture, Vec3, color
+from ursina.models.procedural.cylinder import Cylinder
+
+import textures as tx
+
+CELL = 2.0
+WALL_H = 3.2
+SHADE = 0.62    # 整體調暗：半夜的圖書館只剩部分燈亮著
+
+# #  牆          W  窗（看得到外面的月光）  B  開架書架    K  密集書庫
+# T  閱覽桌      C  自習座位               S  總服務台    O  柱子
+# G  玻璃隔間    R  感應閘門（可通過）      ,  大廳磨石子  .  地毯
+# P  起點        M  怪物                   1/2/3 筆記     D  地下書庫的門
+LEVEL = [
+    "###D###WWWWWWWWWWWWWWWWWW#######",
+    "#.....#..................G..T..#",
+    "#K.K.K#.T..T..T..T..T..T....T..#",
+    "#K.K.K#..................GGGGGG#",
+    "#K.K.K#.......1..........G..T..#",
+    "#...........................T..#",
+    "#######..................GGGGGG#",
+    "#..............................#",
+    "#.BBBBBB.BBBBBB..O..BBBBBB.BBB.#",
+    "#..............................#",
+    "#.BBBBBB.BBBBBB..O..BBBBBB.BBB.#",
+    "#..............M...............#",
+    "#.BBBBBB.BBBBBB..O..BBBBBB.BBB.#",
+    "#2.............................#",
+    "###########R,R,R#######..#######",
+    "#........#,,,,,,#C.C.C.C.C.C.C.#",
+    "#.T..T....,,,,,,...............#",
+    "#........#,S,,,,#C.C.C.C.C.C.3.#",
+    "#P.T..T..#,S,,,,#..............#",
+    "#........#,,,,,,#C.C.C.C.C.C.C.#",
+    "#WWWWWWWW#GGGGGG################",
+]
+BLOCKED = set("#WBKTCSOGD")
+
+# 吊牌：格子 → (中文, 英文)
+HANGING = {
+    (4, 16): ("夜讀區 24H", "Moonlight Study Area"),
+    (13, 16): ("總服務台", "Circulation Desk"),
+    (12, 13): ("館藏區", "Stacks  ↑"),
+    (15, 1): ("閱覽區　請保持安靜", "Reading Area · Quiet Please"),
+    (7, 5): ("密集書庫", "Compact Shelving"),
+    (23, 2): ("討論室 1", "Discussion Room 1"),
+    (23, 5): ("討論室 2", "Discussion Room 2"),
+    (24, 15): ("自習座位", "Study Carrels"),
+}
+# 牆上的海報：(牆的格子, 朝哪一格的方向, 種類)
+POSTERS = [
+    ((0, 17), (1, 0), "missing"),
+    ((9, 15), (-1, 0), "notice"),
+    ((16, 18), (-1, 0), "missing"),
+    ((6, 4), (1, 0), "notice"),
+]
+# 書架端板上的分類號（中國圖書分類法）
+CALL_NUMBERS = ["000 總類", "100 哲學", "200 宗教", "300 自然科學", "400 應用科學",
+                "500 社會科學", "600 中國史地", "700 世界史地", "800 語言文學",
+                "900 藝術", "529 考試用書", "R 參考書"]
+
+# 一直閃的壞燈管（格子）
+FLICKER = {(9, 9), (21, 11), (5, 13), (28, 7), (13, 4), (25, 18)}
+DEAD = {(3, 7), (17, 9), (11, 13), (29, 13), (2, 9)}
+
+
+def cell_pos(c, r):
+    return Vec3(c * CELL, 0, -r * CELL)
+
+
+def facing_y(d):
+    """quad 的正面是 -z。回傳讓正面朝向世界方向 d 的 rotation_y。"""
+    return {(0, -1): 0, (0, 1): 180, (1, 0): -90, (-1, 0): 90}[(round(d.x), round(d.z))]
+
+
+class World:
+    def __init__(self, font_path):
+        self.font_path = font_path
+        self.rows, self.cols = len(LEVEL), len(LEVEL[0])
+        for r, row in enumerate(LEVEL):
+            assert len(row) == self.cols, f"LEVEL 第 {r} 行長度 {len(row)}，應該是 {self.cols}"
+        self.rng = random.Random(42)
+        self.solids = []        # 擋視線的東西（牆、書架）
+        self.lights = []        # [panel, pool, 狀態]
+        self.notes = {}
+        self.walkable = set()
+        self.groups = {}        # 不會動的裝飾依材質分組，最後每組合併成一個 mesh，顯示卡才跑得動
+        self.load_textures()
+        self.build()
+        for tex, g in self.groups.values():
+            g.combine()
+            g.texture = tex
+            g.color = color.rgb(SHADE, SHADE, SHADE)
+
+    # ---------- 小工具 ----------
+    def load_textures(self):
+        def t(img, filtering=None):
+            return Texture(img, filtering=filtering)
+        self.t = {
+            "carpet": t(tx.carpet()), "stone": t(tx.stone()), "ceiling": t(tx.ceiling()),
+            "wall": t(tx.wall()), "wood": t(tx.wood()), "metal": t(tx.metal()),
+            "window": t(tx.window()), "panel": t(tx.light_panel()), "glow": t(tx.glow(), "bilinear"),
+            "note": t(tx.note_paper()), "screen": t(tx.screen()),
+            "missing": t(tx.poster_missing(self.font_path), "bilinear"),
+            "notice": t(tx.poster_notice(self.font_path), "bilinear"),
+        }
+        self.book_tex = [t(tx.books(i)) for i in range(6)]
+
+    def char(self, c, r):
+        if 0 <= r < self.rows and 0 <= c < self.cols:
+            return LEVEL[r][c]
+        return "#"
+
+    def group(self, tex):
+        key = id(tex)
+        if key not in self.groups:
+            self.groups[key] = (tex, Entity())
+        return self.groups[key][1]
+
+    def box(self, pos, scale, tex=None, col=color.white, tscale=(1, 1), parent=None):
+        return Entity(parent=parent or self.group(tex), model="cube", position=pos, scale=scale,
+                      texture=tex, color=col, texture_scale=tscale)
+
+    def quad(self, pos, scale, tex=None, col=color.white, rot=(0, 0, 0), parent=None, double=False):
+        return Entity(parent=parent or self.group(tex), model="quad", position=pos, scale=scale,
+                      texture=tex, color=col, rotation=rot, double_sided=double)
+
+    def collider(self, pos, scale, occludes=True):
+        e = Entity(model="cube", position=pos, scale=scale, collider="box", visible=False)
+        if occludes:
+            self.solids.append(e)
+        return e
+
+    def text_tex(self, lines, **kw):
+        return Texture(tx.sign(lines, self.font_path, **kw), filtering="bilinear")
+
+    # ---------- 建造 ----------
+    def build(self):
+        w, d = self.cols * CELL, self.rows * CELL
+        center = Vec3((self.cols - 1) * CELL / 2, 0, -(self.rows - 1) * CELL / 2)
+        Entity(model="quad", position=center, scale=(w, d), rotation_x=90, texture=self.t["carpet"],
+               texture_scale=(self.cols, self.rows), color=color.rgb(SHADE, SHADE, SHADE))
+        Entity(model="quad", position=center + Vec3(0, WALL_H, 0), scale=(w, d), rotation_x=-90,
+               texture=self.t["ceiling"], texture_scale=(self.cols * 3, self.rows * 3), color=color.rgb(0.4, 0.4, 0.4))
+        Entity(model="plane", scale=(w, 1, d), position=center, collider="box", visible=False)
+
+        shelf_run = 0
+        for r, row in enumerate(LEVEL):
+            for c, ch in enumerate(row):
+                p = cell_pos(c, r)
+                if ch not in BLOCKED:
+                    self.walkable.add((c, r))
+                if ch == "#":
+                    self.wall(c, r, p)
+                elif ch == "W":
+                    self.window(c, r, p)
+                elif ch == "B":
+                    if self.char(c - 1, r) != "B":
+                        shelf_run += 1
+                    self.shelf(c, r, p, shelf_run)
+                elif ch == "K":
+                    self.compact(c, r, p)
+                elif ch == "T":
+                    self.table(p)
+                elif ch == "C":
+                    self.carrel(p)
+                elif ch == "S":
+                    self.counter(c, r, p)
+                elif ch == "O":
+                    self.pillar(p)
+                elif ch == "G":
+                    self.glass(c, r, p)
+                elif ch == "R":
+                    self.gate(p)
+                elif ch == ",":
+                    self.quad(p + Vec3(0, 0.005, 0), (CELL, CELL), self.t["stone"], rot=(90, 0, 0))
+                elif ch == "P":
+                    self.start = p
+                elif ch == "M":
+                    self.monster_start = p
+                elif ch in "123":
+                    self.note(ch, p)
+                elif ch == "D":
+                    self.make_door(c, r, p)
+        for (c, r), lines in HANGING.items():
+            self.hanging_sign(cell_pos(c, r), lines)
+        for (c, r), (dc, dr), kind in POSTERS:
+            dvec = Vec3(dc, 0, -dr)
+            self.quad(cell_pos(c, r) + dvec * (CELL / 2 + 0.01) + Vec3(self.rng.uniform(-0.4, 0.4), 1.55, 0),
+                      (0.6, 0.85), self.t[kind], rot=(0, facing_y(dvec), self.rng.uniform(-4, 4)))
+        self.ceiling_lights()
+
+    def open_sides(self, c, r):
+        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if self.char(c + dc, r + dr) not in "#W":
+                yield Vec3(dc, 0, -dr)
+
+    def wall(self, c, r, p):
+        if not any(True for _ in self.open_sides(c, r)):
+            return   # 被牆包住的格子看不到，不用蓋
+        self.box(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), self.t["wall"])
+        self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
+
+    def window(self, c, r, p):
+        self.box(p + Vec3(0, 0.45, 0), (CELL, 0.9, CELL), self.t["wall"], tscale=(1, 0.3))
+        self.box(p + Vec3(0, WALL_H - 0.15, 0), (CELL, 0.3, CELL), self.t["wall"], tscale=(1, 0.1))
+        self.box(p + Vec3(0, 1.85, 0), (CELL, 1.9, CELL * 0.6), self.t["window"])
+        for side in self.open_sides(c, r):
+            self.box(p + side * (CELL / 2) + Vec3(0, 0.92, 0), (CELL if side.z else 0.3, 0.05, 0.3 if side.z else CELL),
+                     col=color.rgb32(170, 165, 150))
+            pool = self.quad(p + side * (CELL * 0.9) + Vec3(0, 0.015, 0), (CELL * 1.4, CELL * 1.1),
+                             self.t["glow"], col=color.rgba32(120, 150, 210, 70), rot=(90, 0, 0))
+        self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
+
+    def shelf(self, c, r, p, run):
+        tex = self.book_tex[(c * 7 + r * 3) % len(self.book_tex)]
+        self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62), self.t["metal"])
+        for side in (1, -1):
+            self.quad(p + Vec3(0, 1.08, side * 0.315), (CELL * 0.98, 2.1), tex,
+                      rot=(0, 0 if side < 0 else 180, 0))
+        for dc in (-1, 1):
+            if self.char(c + dc, r) != "B":
+                end = Vec3(dc, 0, 0)
+                self.box(p + end * (CELL / 2) + Vec3(0, 1.1, 0), (0.06, 2.24, 0.66), col=color.rgb32(90, 96, 100))
+                label = CALL_NUMBERS[(run - 1) % len(CALL_NUMBERS)]
+                code, name = label.split(" ")
+                self.quad(p + end * (CELL / 2 + 0.035) + Vec3(0, 1.75, 0), (0.5, 0.26),
+                          self.text_tex([code, name], w=160, h=80, bg=(30, 34, 40), sizes=[30, 20]),
+                          rot=(0, facing_y(end), 0))
+        self.collider(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62))
+
+    def compact(self, c, r, p):
+        self.box(p + Vec3(0, 1.3, 0), (CELL * 0.9, 2.6, CELL * 0.98), self.t["metal"], col=color.rgb32(150, 160, 150))
+        for side in (1, -1):
+            self.quad(p + Vec3(side * (CELL * 0.45 + 0.005), 1.25, 0), (CELL * 0.95, 2.4),
+                      self.book_tex[(r + side) % 6], rot=(0, -90 * side, 0))
+        if self.char(c, r + 1) not in "K":   # 走道那一端有手搖輪
+            front = p + Vec3(0, 0, -CELL / 2 - 0.02)
+            self.quad(front + Vec3(0, 1.3, 0), (CELL * 0.9, 2.6), col=color.rgb32(120, 130, 120), rot=(0, 180, 0))
+            Entity(parent=self.group(None), model=Cylinder(resolution=10, radius=0.22, height=0.05, direction=(0, 0, -1)),
+                   position=front + Vec3(0, 1.1, -0.02), color=color.rgb32(60, 60, 62))
+            self.quad(front + Vec3(0, 2.2, -0.01), (0.5, 0.2),
+                      self.text_tex([f"K-{c:02d}"], w=128, h=48, bg=(240, 240, 230), fg=(30, 30, 30), sizes=[30]),
+                      rot=(0, 180, 0))
+        self.collider(p + Vec3(0, 1.3, 0), (CELL * 0.9, 2.6, CELL * 0.98))
+
+    def chair(self, pos, rot):
+        ch = Entity(parent=self.group(None), position=pos, rotation_y=rot)
+        dark = color.rgb32(45, 45, 50)
+        self.box((0, 0.45, 0), (0.45, 0.05, 0.45), col=color.rgb32(70, 80, 110), parent=ch)
+        self.box((0, 0.75, 0.21), (0.45, 0.55, 0.04), col=color.rgb32(70, 80, 110), parent=ch)
+        for x in (-0.2, 0.2):
+            for z in (-0.2, 0.2):
+                self.box((x, 0.22, z), (0.03, 0.45, 0.03), col=dark, parent=ch)
+
+    def clutter(self, top, spread):
+        """桌上的書、講義、喝一半的飲料。"""
+        for _ in range(self.rng.randint(1, 3)):
+            off = Vec3(self.rng.uniform(-spread, spread), 0, self.rng.uniform(-0.25, 0.25))
+            h = self.rng.uniform(0.03, 0.12)
+            self.box(top + off + Vec3(0, h / 2, 0), (0.22, h, 0.3), col=color.rgb32(*self.rng.choice(tx.BOOK_COLORS)))
+        if self.rng.random() < 0.5:
+            self.box(top + Vec3(self.rng.uniform(-spread, spread), 0.08, 0.1), (0.07, 0.16, 0.07),
+                     col=color.rgb32(200, 190, 160))
+
+    def lamp(self, top):
+        self.box(top + Vec3(0, 0.2, 0), (0.03, 0.4, 0.03), col=color.rgb32(40, 40, 40))
+        self.box(top + Vec3(0, 0.42, 0.06), (0.18, 0.06, 0.12), col=color.rgb32(230, 220, 170))
+
+    def table(self, p):
+        top = p + Vec3(0, 0.76, 0)
+        self.box(top - Vec3(0, 0.02, 0), (1.7, 0.05, 1.0), self.t["wood"])
+        for x in (-0.75, 0.75):
+            for z in (-0.4, 0.4):
+                self.box(p + Vec3(x, 0.37, z), (0.05, 0.74, 0.05), col=color.rgb32(50, 50, 54))
+        for x in (-0.45, 0.45):
+            for z, rot in ((-0.75, 0), (0.75, 180)):
+                if self.rng.random() < 0.85:
+                    jitter = self.rng.uniform(-15, 15)
+                    self.chair(p + Vec3(x + self.rng.uniform(-0.1, 0.1), 0, z), rot + jitter)
+        if self.rng.random() < 0.5:
+            self.lamp(top + Vec3(0, 0, 0))
+        self.clutter(top, 0.6)
+        self.collider(p + Vec3(0, 0.4, 0), (1.7, 0.8, 1.0), occludes=False)
+
+    def carrel(self, p):
+        top = p + Vec3(0, 0.76, 0)
+        self.box(top - Vec3(0, 0.02, 0), (1.2, 0.05, 0.7), self.t["wood"])
+        for x in (-0.6, 0.6):
+            self.box(p + Vec3(x, 0.65, 0), (0.04, 1.3, 0.75), col=color.rgb32(120, 110, 95))
+        self.box(p + Vec3(0, 1.0, -0.36), (1.2, 0.5, 0.04), col=color.rgb32(120, 110, 95))
+        self.chair(p + Vec3(0, 0, 0.6), 180 + self.rng.uniform(-20, 20))
+        self.lamp(top + Vec3(0.35, 0, -0.2))
+        self.clutter(top, 0.3)
+        self.collider(p + Vec3(0, 0.65, 0), (1.25, 1.3, 0.75), occludes=False)
+
+    def counter(self, c, r, p):
+        self.box(p + Vec3(0, 0.55, 0), (1.0, 1.1, CELL), self.t["wood"], tscale=(1, 2))
+        self.box(p + Vec3(0, 1.12, 0), (1.15, 0.05, CELL * 1.02), col=color.rgb32(210, 205, 195))
+        self.box(p + Vec3(0.1, 1.35, 0.3), (0.05, 0.38, 0.55), col=color.rgb32(30, 30, 32))
+        self.quad(p + Vec3(0.13, 1.35, 0.3), (0.5, 0.32), self.t["screen"], rot=(0, -90, 0))
+        self.collider(p + Vec3(0, 0.55, 0), (1.0, 1.1, CELL), occludes=False)
+
+    def pillar(self, p):
+        Entity(parent=self.group(self.t["wall"]), model=Cylinder(resolution=14, radius=0.5, height=WALL_H),
+               position=p, texture=self.t["wall"], texture_scale=(3, 1))
+        self.collider(p + Vec3(0, WALL_H / 2, 0), (0.9, WALL_H, 0.9))
+
+    def glass(self, c, r, p):
+        along_x = self.char(c - 1, r) == "G" or self.char(c + 1, r) == "G"
+        size = (CELL, WALL_H - 0.1, 0.06) if along_x else (0.06, WALL_H - 0.1, CELL)
+        frame = color.rgb32(70, 74, 78)
+        self.box(p + Vec3(0, WALL_H / 2, 0), size, col=color.rgba32(150, 190, 200, 45))
+        self.box(p + Vec3(0, 0.05, 0), (size[0] + 0.02, 0.1, size[2] + 0.04), col=frame)
+        self.box(p + Vec3(0, WALL_H - 0.05, 0), (size[0] + 0.02, 0.1, size[2] + 0.04), col=frame)
+        self.collider(p + Vec3(0, WALL_H / 2, 0), size, occludes=False)
+
+    def gate(self, p):
+        for x in (-0.9, 0.9):
+            self.box(p + Vec3(x, 0.5, 0), (0.18, 1.0, 0.7), col=color.rgb32(170, 172, 175))
+            self.box(p + Vec3(x, 1.0, 0), (0.2, 0.03, 0.72), col=color.rgb32(40, 160, 90))
+            self.collider(p + Vec3(x, 0.5, 0), (0.18, 1.0, 0.7), occludes=False)
+
+    def note(self, key, p):
+        self.box(p + Vec3(0, 0.45, 0), (0.8, 0.05, 0.5), self.t["metal"])
+        self.box(p + Vec3(0, 0.85, 0), (0.8, 0.05, 0.5), self.t["metal"])
+        for x in (-0.38, 0.38):
+            self.box(p + Vec3(x, 0.45, 0), (0.04, 0.9, 0.5), col=color.rgb32(110, 112, 115))
+        for i in range(5):
+            self.box(p + Vec3(-0.3 + i * 0.13, 0.6, 0), (0.08, 0.26, 0.3), col=color.rgb32(*tx.BOOK_COLORS[i * 2]))
+        self.notes[key] = Entity(model="quad", position=p + Vec3(0, 0.885, 0), scale=(0.3, 0.38),
+                                 rotation=(90, 20, 0), texture=self.t["note"], double_sided=True)
+
+    def make_door(self, c, r, p):
+        side = next(self.open_sides(c, r))
+        self.wall(c, r, p)
+        self.door = Entity(model="cube", position=p + side * (CELL / 2 + 0.03) + Vec3(0, 1.1, 0),
+                           scale=(1.2 if side.z else 0.06, 2.2, 0.06 if side.z else 1.2),
+                           color=color.rgb32(48, 70, 60))
+        self.door_side = side
+        self.quad(p + side * (CELL / 2 + 0.07) + Vec3(0, 2.55, 0), (1.1, 0.34),
+                  self.text_tex(["↓ B1 地下書庫", "閉館期間禁止進入"], w=256, h=80, bg=(20, 110, 60)),
+                  rot=(0, facing_y(side), 0))
+        keypad = p + side * (CELL / 2 + 0.07) + Vec3(0, 1.2, 0) + Vec3(side.z, 0, -side.x) * 0.8
+        self.box(keypad, (0.18, 0.26, 0.18), col=color.rgb32(30, 30, 30))
+        self.keypad_light = Entity(model="cube", position=keypad + Vec3(0, 0.09, 0) + side * 0.1,
+                                   scale=(0.05, 0.03, 0.03), color=color.red)
+
+    def hanging_sign(self, p, lines):
+        tex = self.text_tex(list(lines))
+        for rot in (0, 180):
+            self.quad(p + Vec3(0, 2.6, 0.02 if rot else -0.02), (1.3, 0.4), tex, rot=(0, rot, 0))
+        for x in (-0.5, 0.5):
+            self.box(p + Vec3(x, 2.95, 0), (0.015, 0.3, 0.015), col=color.rgb32(60, 60, 60))
+
+    def ceiling_lights(self):
+        for (c, r) in sorted(self.walkable):
+            if (c + r) % 2 or LEVEL[r][c] == "R":
+                continue
+            p = cell_pos(c, r)
+            safe = 1 <= c <= 8 and 15 <= r <= 19     # 夜讀區 24 小時都亮著，比較暖
+            state = "dead" if (c, r) in DEAD else "flicker" if (c, r) in FLICKER else "on"
+            panel = Entity(model="quad", position=p + Vec3(0, WALL_H - 0.01, 0), scale=(0.6, 1.2),
+                           rotation=(-90, 0, 0), texture=self.t["panel"])
+            pool = Entity(model="quad", position=p + Vec3(0, 0.02, 0), scale=4.2 if safe else 3.2,
+                          rotation=(90, 0, 0), texture=self.t["glow"],
+                          color=color.rgba32(255, 230, 180, 90) if safe else color.rgba32(220, 235, 255, 50))
+            light = [panel, pool, state]
+            self.set_light(light, state != "dead")
+            self.lights.append(light)
+
+    @staticmethod
+    def set_light(light, on):
+        panel, pool, _ = light
+        panel.color = color.white if on else color.rgb32(70, 70, 70)
+        pool.enabled = on
+
