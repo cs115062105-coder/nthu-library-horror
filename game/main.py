@@ -1,7 +1,7 @@
 """總圖不打烊 原型：第一人稱 3D 恐怖解謎。
 
 操作：
-  WASD 移動、滑鼠看、Shift 跑、E 互動（讀筆記、開門）、F 開關手電筒、ESC 離開
+  WASD 移動、滑鼠看、Shift 跑、E 互動（讀筆記、開門）、F 開關手電筒、ESC 回大廳
 
 玩法：
   期中考週的凌晨，你在總圖 24 小時夜讀區醒來，室友不見了。
@@ -21,11 +21,12 @@ from ursina.prefabs.first_person_controller import FirstPersonController
 from PIL import Image
 
 import sfx
+from menu import DIFFICULTIES, Lobby
 from world import CELL, World, cell_pos
 
-LOOP_SECONDS = 180          # 現實 3 分鐘 = 遊戲時間 02:40 → 03:00
-MONSTER_SPEED = 2.6
 CATCH_DIST = 1.1
+MENU_SPOT = (1, 9)      # 大廳背景：書庫走道的一端
+MENU_MONSTER = (7, 9)   # 走道另一頭站著它
 SAFE_ZONE = {(c, r) for c in range(1, 9) for r in range(15, 20)}   # 夜讀區：它進不來
 
 NOTES = {
@@ -64,9 +65,14 @@ class Game:
     def __init__(self, font_path):
         self.read_notes = set()      # 跨迴圈保留：玩家記得的線索
         self.loop = 1
+        self.cfg = DIFFICULTIES["普通"]  # 怪物速度、迴圈秒數、手電筒照多遠
+        self.difficulty = "普通"
+        self.state = "menu"
+        self.session = 0             # 每開一局加一，舊的延遲事件（例如被抓後重來）就不會跑到新的一局
         self.world = World(font_path)
         self.notes = self.world.notes
         self.door = self.world.door
+        self.door_home = Vec3(self.door.position)
         self.solids = self.world.solids
         self.monster_walkable = self.world.walkable - SAFE_ZONE
         self.player = FirstPersonController(position=self.world.start + Vec3(0, 0.1, 0), speed=4)
@@ -87,7 +93,48 @@ class Game:
         self.bob = 0.0
         self.step_timer = 0.0
         self.beat_timer = 0.0
+        self.time_left = 0
+
+    # ---------- 大廳與開局 ----------
+    def start(self, cfg, name):
+        self.session += 1
+        self.cfg, self.difficulty = cfg, name
+        self.read_notes.clear()
+        self.loop = 1
+        self.cleared = False
+        self.door.position = self.door_home
+        self.world.keypad_light.color = color.red
+        self.hide_note()
+        self.flash_fade()
+        self.state = "play"
+        self.player.enabled = True
         self.reset_loop(first=True)
+
+    def to_lobby(self):
+        self.session += 1
+        self.state = "menu"
+        self.dead = False
+        for t in (self.clock_text, self.hint, self.note_text):
+            t.text = ""
+        self.note_bg.enabled = False
+        self.flash_fade()
+        self.flashlight_on = True
+        self.in_safe_zone = False
+        self.apply_flashlight()
+        self.player.position = cell_pos(*MENU_SPOT)
+        self.player.enabled = False      # 停用時 Ursina 會把鏡頭交還給場景，滑鼠也會解鎖
+        self.monster.position = cell_pos(*MENU_MONSTER)
+        self.monster.look_at_2d(self.player.position, "y")
+        lobby.show()
+
+    def aim_menu_camera(self, forward, sway):
+        camera.position = cell_pos(*MENU_SPOT) + Vec3(forward, 1.6, 0)
+        camera.rotation = (4, 90 + sway, 0)
+
+    def later(self, fn, delay):
+        """延遲執行，但如果玩家已經回大廳或重開一局就取消。"""
+        session = self.session
+        invoke(lambda: fn() if session == self.session else None, delay=delay)
 
     # ---------- 場景 ----------
     def make_monster(self):
@@ -178,7 +225,7 @@ class Game:
         self.player.position = self.world.start + Vec3(0, 0.1, 0)
         self.player.rotation_y = 90
         self.monster.position = self.world.monster_start
-        self.time_left = LOOP_SECONDS
+        self.time_left = self.cfg["seconds"]
         self.dead = False
         self.note_text.text = ""
         msg = ("夜讀區的燈還亮著。室友不見了，通往館藏區的門卻沒鎖。" if first
@@ -197,7 +244,7 @@ class Game:
         dist = to.length()
         if dist < 0.01:
             return True
-        if dist > (10 if self.flashlight_on else 3):   # 在黑暗裡看不到它，它就會動
+        if dist > (self.cfg["sight"] if self.flashlight_on else 3):   # 在黑暗裡看不到它，它就會動
             return False
         fwd = camera.forward
         cos_angle = (to.x * fwd.x + to.y * fwd.y + to.z * fwd.z) / dist
@@ -217,7 +264,7 @@ class Game:
         target = self.next_step_toward(self.monster.position, self.player.position)
         move = target - self.monster.position
         move.y = 0
-        step = MONSTER_SPEED * time.dt
+        step = self.cfg["speed"] * time.dt
         if move.length() <= step:
             self.monster.position = Vec3(target.x, 0, target.z)
         else:
@@ -264,8 +311,8 @@ class Game:
         self.play("sting")
         self.flash.color = color.rgba32(150, 0, 0, 220)
         self.show_hint("它抓到你了。", 2)
-        invoke(self.flash_fade, delay=1.5)
-        invoke(self.reset_loop, delay=1.5)
+        self.later(self.flash_fade, 1.5)
+        self.later(self.reset_loop, 1.5)
 
     def flash_fade(self):
         self.flash.color = color.rgba32(0, 0, 0, 0)
@@ -319,7 +366,7 @@ class Game:
                 self.play("page")
                 self.note_text.text = wrap(NOTES[key])
                 self.note_bg.enabled = True
-                invoke(self.hide_note, delay=6)
+                self.later(self.hide_note, 6)
                 if len(self.read_notes) == len(NOTES):
                     self.world.keypad_light.color = color.lime
                 return
@@ -327,7 +374,7 @@ class Game:
             if len(self.read_notes) == len(NOTES):
                 self.cleared = True
                 self.door.animate_position(self.door.position + Vec3(0, -2.3, 0), duration=1.5)
-                self.note_text.text = f"你輸入了 {EXIT_CODE}。門開了。\n往下的樓梯傳來翻書的聲音。\n\n第一章　完\n（迴圈次數：{self.loop}）"
+                self.note_text.text = f"你輸入了 {EXIT_CODE}。門開了。\n往下的樓梯傳來翻書的聲音。\n\n第一章　完\n（{self.difficulty}・迴圈次數：{self.loop}）\n\n按 Enter 回到大廳"
                 self.player.enabled = False
             else:
                 self.show_hint(f"密碼鎖：三位數。你只知道 {len(self.read_notes)} 碼。", 3)
@@ -338,18 +385,20 @@ class Game:
 
     def update(self):
         self.update_dust()
-        if self.cleared or self.dead:
+        if self.state != "play" or self.cleared or self.dead:
             return
         self.player.speed = 6.5 if held_keys["shift"] else 3.5
         self.time_left -= time.dt
-        game_min = 40 + (LOOP_SECONDS - self.time_left) / LOOP_SECONDS * 20
-        self.clock_text.text = f"02:{int(game_min):02d}　第 {self.loop} 輪　筆記 {len(self.read_notes)}/3"
+        total = self.cfg["seconds"]
+        game_min = 40 + (total - self.time_left) / total * 20
+        self.clock_text.text = (f"02:{int(game_min):02d}　第 {self.loop} 輪　"
+                                f"筆記 {len(self.read_notes)}/3　{self.difficulty}")
         if self.time_left <= 0:
             self.flash.color = color.rgba32(0, 0, 0, 255)
             self.dead = True
             self.show_hint("03:00", 2)
-            invoke(self.flash_fade, delay=1.5)
-            invoke(self.reset_loop, delay=1.5)
+            self.later(self.flash_fade, 1.5)
+            self.later(self.reset_loop, 1.5)
             return
         safe = self.to_cell(self.player.position) in SAFE_ZONE
         if safe != self.in_safe_zone:
@@ -364,12 +413,18 @@ font_path = find_font()
 setup_font(font_path)
 window.color = color.black
 game = Game(font_path)
+lobby = Lobby(on_start=game.start, on_quit=application.quit, aim_camera=game.aim_menu_camera)
+game.to_lobby()
 
 
 def handle_input(key):
-    if key == "escape":
-        application.quit()
-    elif key == "e":
+    if game.state == "menu":
+        if key == "escape":
+            lobby.hide_panel()
+        return
+    if key == "escape" or (game.cleared and key == "enter"):
+        game.to_lobby()
+    elif key == "e" and not game.cleared:
         game.interact()
     elif key == "f":
         game.flashlight_on = not game.flashlight_on

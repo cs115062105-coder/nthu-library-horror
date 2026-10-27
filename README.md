@@ -19,7 +19,7 @@ python game/main.py
 - WASD 移動、滑鼠看、Shift 跑
 - E 互動（讀筆記、開門）
 - F 開關手電筒
-- ESC 離開
+- ESC 回到大廳（大廳可選難度、看故事介紹與操作說明）
 
 ## 目前的原型
 
@@ -38,6 +38,7 @@ python game/main.py
 - `game/world.py`：`LEVEL` 格子地圖與 3D 場景生成
 - `game/textures.py`：材質產生
 - `game/sfx.py`：音效合成
+- `game/menu.py`：開始大廳與難度設定（`DIFFICULTIES`）
 
 `LEVEL` 圖例：`#` 牆、`W` 窗、`B` 書架、`K` 密集書庫、`T` 閱覽桌、`C` 自習座位、`S` 服務台、
 `O` 柱子、`G` 玻璃隔間、`R` 感應閘門、`,` 磨石子地板、`.` 地毯、`P` 起點、`M` 怪物、`1`–`3` 筆記、`D` 出口。
