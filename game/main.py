@@ -30,11 +30,16 @@ MENU_MONSTER = (7, 9)   # 走道另一頭站著它
 SAFE_ZONE = {(c, r) for c in range(1, 9) for r in range(15, 20)}   # 夜讀區：它進不來
 
 NOTES = {
-    "1": "（字跡潦草）考古題之書在地下書庫……門的密碼第一碼是 0。",
-    "2": "它只在你不看的時候動。別背對它。第二碼是 3。",
-    "3": "又是三點……我已經第幾次回到這裡了？最後一碼是 7。",
+    "1": "（字跡潦草）考古題之書在 B1 地下書庫，門鎖是三碼。第一碼我夾在「300 自然科學」那排，一本凸出來的書裡。",
+    "2": "服務台的電腦我還沒登出。查我的借閱紀錄，第二碼在上面。它只在你不看的時候動，別背對它。",
+    "3": "又是三點……我已經第幾次回到這裡了？第三碼我寫在討論室 2 的白板上。",
 }
-EXIT_CODE = "037"
+# 線索 → (密碼第幾碼, 找到時顯示的文字)
+CLUES = {
+    "book": (0, "《物種原始》裡夾著一張便條：\n「第一碼：{d}」\n字跡跟室友的一模一樣。"),
+    "computer": (1, "借閱紀錄　陳○○\n《考古題之書》　已歸還（B1 地下書庫）\n歸還時間：03:00　備註：第二碼 {d}"),
+    "whiteboard": (2, "白板角落圈著一個數字：{d}\n旁邊用紅筆寫著：「別回頭。」"),
+}
 
 FONT_CANDIDATES = [
     "C:/Windows/Fonts/msjh.ttc", "C:/Windows/Fonts/msjhbd.ttc", "C:/Windows/Fonts/mingliu.ttc",
@@ -63,7 +68,9 @@ def setup_font(path):
 
 class Game:
     def __init__(self, font_path):
-        self.read_notes = set()      # 跨迴圈保留：玩家記得的線索
+        self.read_notes = set()      # 跨迴圈保留：玩家記得的筆記
+        self.found = set()           # 跨迴圈保留：已經找到的密碼位數
+        self.code = "000"
         self.loop = 1
         self.cfg = DIFFICULTIES["普通"]  # 怪物速度、迴圈秒數、手電筒照多遠
         self.difficulty = "普通"
@@ -87,7 +94,7 @@ class Game:
         self.hint = Text(position=(-0.3, -0.38), scale=1.1, color=color.white)
         self.note_text = Text(position=(-0.6, 0.1), scale=1.3, color=color.rgb32(240, 230, 200))
         self.note_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 200),
-                              scale=(1.25, 0.32), position=(-0.02, 0.06), z=0.5, enabled=False)
+                              scale=(1.3, 0.4), position=(-0.02, 0.04), z=0.5, enabled=False)
         self.flash = Entity(parent=camera.ui, model="quad", scale=(2, 1), color=color.rgba32(0, 0, 0, 0), z=-1)
         self.dead = False
         self.cleared = False
@@ -101,6 +108,9 @@ class Game:
         self.session += 1
         self.cfg, self.difficulty = cfg, name
         self.read_notes.clear()
+        self.found.clear()
+        self.code = "".join(random.choice("0123456789") for _ in range(3))   # 每局密碼都不同
+        self.world.set_code(self.code)
         self.loop = 1
         self.cleared = False
         self.door.position = self.door_home
@@ -360,26 +370,44 @@ class Game:
             self.play("heartbeat", volume=max(0.15, 1 - dist / 12))
 
     # ---------- 互動 ----------
+    def show_note(self, text):
+        self.play("page")
+        self.note_text.text = text
+        self.note_bg.enabled = True
+        self.later(self.hide_note, 7)
+
+    def near(self, pos, dist):
+        d = pos - self.player.position
+        d.y = 0
+        return d.length() < dist
+
+    def code_hint(self):
+        return " ".join(self.code[i] if i in self.found else "_" for i in range(3))
+
     def interact(self):
         for key, note in self.notes.items():
-            if (note.position - self.player.position).length() < 1.8:
+            if self.near(note.position, 1.8):
                 self.read_notes.add(key)
-                self.play("page")
-                self.note_text.text = wrap(NOTES[key])
-                self.note_bg.enabled = True
-                self.later(self.hide_note, 6)
-                if len(self.read_notes) == len(NOTES):
+                self.show_note(wrap(NOTES[key]))
+                return
+        for name, pos in self.world.clues.items():
+            if self.near(pos, 1.6):
+                index, text = CLUES[name]
+                self.found.add(index)
+                self.show_note(text.format(d=self.code[index]))
+                if len(self.found) == 3:
                     self.world.keypad_light.color = color.lime
                 return
-        if (self.door.position - self.player.position).length() < 2.2:
-            if len(self.read_notes) == len(NOTES):
+        if self.near(self.door.position, 2.2):
+            if len(self.found) == 3:
                 self.cleared = True
                 self.goal_text.text = ""
                 self.door.animate_position(self.door.position + Vec3(0, -2.3, 0), duration=1.5)
-                self.note_text.text = f"你輸入了 {EXIT_CODE}。門開了。\n往下的樓梯傳來翻書的聲音。\n\n第一章　完\n（{self.difficulty}・迴圈次數：{self.loop}）\n\n按 Enter 回到大廳"
+                self.note_text.text = (f"你輸入了 {self.code}。門開了。\n往下的樓梯傳來翻書的聲音。\n\n第一章　完\n"
+                                       f"（{self.difficulty}・迴圈次數：{self.loop}）\n\n按 Enter 回到大廳")
                 self.player.enabled = False
             else:
-                self.show_hint(f"密碼鎖：三位數。你只知道 {len(self.read_notes)} 碼。", 3)
+                self.show_hint(f"密碼鎖：三碼。你知道的：{self.code_hint()}", 3)
 
     def hide_note(self):
         self.note_text.text = ""
@@ -394,11 +422,12 @@ class Game:
         total = self.cfg["seconds"]
         game_min = 40 + (total - self.time_left) / total * 20
         self.clock_text.text = (f"02:{int(game_min):02d}　第 {self.loop} 輪　"
-                                f"筆記 {len(self.read_notes)}/3　{self.difficulty}")
-        if len(self.read_notes) < len(NOTES):
-            self.goal_text.text = f"目標：在書架間找到室友的筆記（{len(self.read_notes)}/3），走近按 E"
+                                f"{self.difficulty}")
+        if len(self.found) < 3:
+            self.goal_text.text = (f"目標：找室友的筆記，照上面的提示找出密碼　密碼：{self.code_hint()}　"
+                                   f"筆記 {len(self.read_notes)}/3")
         else:
-            self.goal_text.text = "目標：到密集書庫最裡面的「B1 地下書庫」門，按 E 輸入密碼"
+            self.goal_text.text = f"目標：到密集書庫最裡面的「B1 地下書庫」門，按 E 輸入 {self.code}"
         if self.time_left <= 0:
             self.flash.color = color.rgba32(0, 0, 0, 255)
             self.dead = True

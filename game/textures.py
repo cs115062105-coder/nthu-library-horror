@@ -248,3 +248,23 @@ def screen():
     for y in range(8, 22, 3):
         d.line([(3, y), (24, y)], fill=(90, 140, 180))
     return img
+
+
+def whiteboard(digit, font_path):
+    """討論室的白板：期中考範圍、亂畫的公式，角落圈著一個數字。"""
+    rng = random.Random(12)
+    w, h = 300, 190
+    img = Image.new("RGB", (w, h), (232, 234, 230))
+    d = ImageDraw.Draw(img)
+    for _ in range(6):   # 沒擦乾淨的痕跡
+        x, y = rng.randrange(w), rng.randrange(h)
+        d.ellipse([x, y, x + rng.randint(30, 80), y + rng.randint(8, 20)], fill=(215, 218, 214))
+    f = _font(font_path, 16)
+    blue, red = (30, 50, 140), (170, 30, 30)
+    for i, t in enumerate(["期中考範圍 Ch.1 – Ch.7", "∫ x² dx = x³/3 + C", "BFS → queue", "DP 記得 base case"]):
+        d.text((14, 12 + i * 26), t, font=f, fill=blue)
+    d.text((14, 130), "別回頭。", font=_font(font_path, 22), fill=red)
+    d.ellipse([200, 95, 280, 175], outline=red, width=4)
+    d.text((222, 100), str(digit), font=_font(font_path, 56), fill=red)
+    d.rectangle([0, 0, w - 1, h - 1], outline=(150, 150, 150), width=4)
+    return img

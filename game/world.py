@@ -90,6 +90,8 @@ class World:
         self.solids = []        # 擋視線的東西（牆、書架）
         self.lights = []        # [panel, pool, 狀態]
         self.notes = {}
+        self.clues = {}         # 線索名稱 → 玩家要站在附近的位置
+        self.shelf_runs = {}    # 第幾排書架 → 格子
         self.walkable = set()
         self.groups = {}        # 不會動的裝飾依材質分組，最後每組合併成一個 mesh，顯示卡才跑得動
         self.load_textures()
@@ -98,6 +100,7 @@ class World:
             g.combine()
             g.texture = tex
             g.color = color.rgb(SHADE, SHADE, SHADE)
+        self.place_clues()
 
     # ---------- 小工具 ----------
     def load_textures(self):
@@ -220,6 +223,7 @@ class World:
         self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
 
     def shelf(self, c, r, p, run):
+        self.shelf_runs.setdefault(run, []).append((c, r))
         tex = self.book_tex[(c * 7 + r * 3) % len(self.book_tex)]
         self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62), self.t["metal"])
         for side in (1, -1):
@@ -337,6 +341,34 @@ class World:
             self.box(p + Vec3(-0.3 + i * 0.13, 0.6, 0), (0.08, 0.26, 0.3), col=color.rgb32(*tx.BOOK_COLORS[i * 2]))
         self.notes[key] = Entity(model="quad", position=p + Vec3(0, 0.885, 0), scale=(0.3, 0.38),
                                  rotation=(90, 20, 0), texture=self.t["note"], double_sided=True)
+
+    # ---------- 解謎線索 ----------
+    def place_clues(self):
+        """三個線索各自藏在總圖的設施裡，筆記只告訴你去哪找。"""
+        # 1. 「300 自然科學」那排書架上，一本凸出來的書
+        run = next(i for i in self.shelf_runs if CALL_NUMBERS[(i - 1) % len(CALL_NUMBERS)].startswith("300"))
+        cells = self.shelf_runs[run]
+        c, r = cells[len(cells) // 2]
+        p = cell_pos(c, r)
+        Entity(model="cube", position=p + Vec3(0.3, 1.32, -0.36), scale=(0.07, 0.3, 0.22),
+               color=color.rgb32(150, 40, 35))
+        Entity(model="quad", position=p + Vec3(0.3, 1.52, -0.36), scale=(0.05, 0.06), rotation=(0, 0, 0),
+               color=color.rgb32(240, 235, 210))   # 書頁間露出的紙條
+        self.clues["book"] = cell_pos(c, r + 1)
+        # 2. 總服務台還沒登出的電腦（螢幕比較亮）
+        c, r = next((c, r) for r, row in enumerate(LEVEL) for c, ch in enumerate(row) if ch == "S")
+        p = cell_pos(c, r)
+        Entity(model="quad", position=p + Vec3(0.135, 1.35, 0.3), scale=(0.5, 0.32), rotation=(0, -90, 0),
+               texture=self.t["screen"], color=color.rgb(1.4, 1.4, 1.4))
+        self.clues["computer"] = p + Vec3(CELL * 0.6, 0, 0)
+        # 3. 討論室 2 的白板（數字每局不同，開局時才畫上去）
+        wall = (31, 4)
+        p = cell_pos(*wall) + Vec3(-CELL / 2 - 0.02, 1.5, 0)
+        self.whiteboard = Entity(model="quad", position=p, scale=(1.5, 0.95), rotation=(0, 90, 0))
+        self.clues["whiteboard"] = cell_pos(wall[0] - 1, wall[1])
+
+    def set_code(self, code):
+        self.whiteboard.texture = Texture(tx.whiteboard(code[2], self.font_path), filtering="bilinear")
 
     def make_door(self, c, r, p):
         side = next(self.open_sides(c, r))
