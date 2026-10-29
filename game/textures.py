@@ -376,16 +376,44 @@ def grid():
     return img
 
 
-def stripes():
-    """2F 的灰色地毯：淺灰底，一條條深灰的細條紋，偶爾一條比較寬的深色帶。"""
-    rng = random.Random(16)
-    img = Image.new("RGB", (64, 64), (128, 130, 134))
+def stripes(base=(128, 130, 134), band=(78, 80, 86), seed=16):
+    """條紋地毯：底色上一條條細條紋，偶爾一條比較寬的帶。2F 是淺灰配深灰，3F 深咖啡配淺色，4F 灰褐配深咖啡。"""
+    rng = random.Random(seed)
+    img = Image.new("RGB", (64, 64), base)
     d = ImageDraw.Draw(img)
     for y in range(0, 64, 4):
-        g = rng.randint(104, 120)
-        d.line([(0, y), (63, y)], fill=(g, g, g + 3))
-    d.rectangle([0, 40, 63, 45], fill=(78, 80, 86))
+        k = rng.randint(-24, -8)
+        d.line([(0, y), (63, y)], fill=tuple(max(0, v + k) for v in base))
+    d.rectangle([0, 40, 63, 45], fill=band)
     return _noise(img, 4, rng)
+
+
+def slats():
+    """4F 的深色木條天花板：一條條深咖啡木條，縫裡看得到上面黑黑的管線。"""
+    rng = random.Random(17)
+    img = Image.new("RGB", (64, 64), (28, 26, 26))
+    d = ImageDraw.Draw(img)
+    for x in range(0, 64, 8):
+        c = rng.randint(92, 118)
+        d.rectangle([x, 0, x + 5, 63], fill=(c, c * 6 // 10, c * 4 // 10))
+        d.line([(x + 1, 0), (x + 1, 63)], fill=(c + 25, (c + 25) * 6 // 10, (c + 25) * 4 // 10))
+    return _noise(img, 5, rng)
+
+
+def nthu_letters(font_path):
+    """4F 清華書房的玻璃牆：銀色格子書架做成的 N T H U 四個大字，背景透明。"""
+    w, h = 512, 160
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    for x in range(0, w, 64):     # 書架的直隔板
+        d.rectangle([x, 0, x + 3, h], fill=(205, 208, 212, 255))
+    for y in (6, 52, 98, 150):    # 層板
+        d.rectangle([0, y, w, y + 3], fill=(205, 208, 212, 255))
+    f = _font(font_path, 150)
+    for i, ch in enumerate("NTHU"):
+        tw = d.textlength(ch, font=f)
+        d.text((i * 128 + (128 - tw) / 2, -18), ch, font=f, fill=(225, 232, 234, 235))
+    return img
 
 
 def magazines(seed):
