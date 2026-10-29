@@ -2,13 +2,13 @@
 
 內建的版本有兩個問題：
 1. 撞牆時只要前進方向被擋住就整個不動，斜著貼牆走會卡住。這裡改成 x、z 分開檢查，可以沿著牆滑過去。
-2. macOS 上滑鼠鎖定靠「每幀把游標拉回中間」，系統常常回報拉回前的位置，視角會突然往反方向跳。
-   這裡在 macOS 用 Panda3D 的 relative 滑鼠模式，直接讀滑鼠的移動量，不用把游標拉回去。
+2. 滑鼠鎖定靠「每幀把游標拉回中間」。macOS 拉回去的位置常常差一截，滑鼠不動視角也會一直往下轉。
+   這裡在 macOS 用 Panda3D 的 relative 滑鼠模式；不支援時就只在游標快到邊緣才拉回中間，平常只看前後兩幀的位置差。
 """
 import sys
 
 from panda3d.core import WindowProperties
-from ursina import Vec3, application, clamp, held_keys, mouse, raycast, scene, time
+from ursina import Vec3, application, clamp, held_keys, mouse, raycast, scene, time, window
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 RADIUS = 0.35          # 玩家的「身體半徑」：離牆這麼近就不能再往前
@@ -40,23 +40,26 @@ class Player(FirstPersonController):
         win = application.base.win if application.base else None
         if not win:
             return
-        props = WindowProperties()
-        props.setCursorHidden(True)
-        props.setMouseMode(WindowProperties.M_relative if sys.platform == "darwin" else WindowProperties.M_confined)
-        win.requestProperties(props)
+        # Ursina 自己的 window 也是一份 WindowProperties，它之後每次更新視窗都會整份重新送出去。
+        # 所以滑鼠模式要寫在它身上，不然會被蓋回 M_confined。
+        window.set_cursor_hidden(True)
+        window.set_mouse_mode(WindowProperties.M_relative if sys.platform == "darwin" else WindowProperties.M_confined)
+        win.requestProperties(window)
         self.relative = sys.platform == "darwin"
         self.last = None
         self.skip = 2
 
     def mouse_delta(self):
-        """這一幀滑鼠移動了多少。一律用「這次的位置減上次的位置」：
-        就算系統沒把游標拉回中間（macOS 常常這樣），游標停著不動時也是 0，視角不會自己一直往下飄。"""
+        """這一幀滑鼠移動了多少：一律用「這次讀到的位置減上次讀到的位置」。
+        以前每幀都把游標拉回中間、再看它離中間多遠；可是 Mac 拉回去的位置常常差了一截（例如標題列的高度），
+        滑鼠沒動也每幀算成往下移，視角就一直往下轉。現在只有游標快碰到視窗邊緣才拉回中間，
+        而且拉回後下一幀重新取參考點，不假設它真的停在正中間。"""
         win = application.base.win
         if not win or not win.getProperties().getForeground():
             self.last = None
             return 0, 0
         if self.relative and win.getProperties().getMouseMode() != WindowProperties.M_relative:
-            self.relative = False     # 系統不支援 relative 模式就改成拉回中間的做法
+            self.relative = False     # 系統不支援 relative 模式，改用「碰到邊緣才拉回中間」
         p = win.getPointer(0)
         x, y = p.getX(), p.getY()
         if self.last is None:
@@ -64,10 +67,11 @@ class Player(FirstPersonController):
         else:
             dx, dy = x - self.last[0], y - self.last[1]
         self.last = (x, y)
-        if not self.relative:     # 試著把游標拉回中間，免得碰到螢幕邊緣轉不動；拉成功才把「上次的位置」改成中間
-            cx, cy = win.getXSize() // 2, win.getYSize() // 2
-            if (x, y) != (cx, cy) and win.movePointer(0, cx, cy):
-                self.last = (cx, cy)
+        if not self.relative:
+            w, h = win.getXSize(), win.getYSize()
+            if abs(x - w / 2) > w / 4 or abs(y - h / 2) > h / 4:
+                win.movePointer(0, w // 2, h // 2)
+                self.last = None      # 拉回去之後實際停在哪裡，下一幀讀了才算數
         if self.skip > 0:          # 剛鎖定滑鼠的前幾幀位置還不準
             self.skip -= 1
             return 0, 0
