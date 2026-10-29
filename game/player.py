@@ -49,24 +49,25 @@ class Player(FirstPersonController):
         self.skip = 2
 
     def mouse_delta(self):
+        """這一幀滑鼠移動了多少。一律用「這次的位置減上次的位置」：
+        就算系統沒把游標拉回中間（macOS 常常這樣），游標停著不動時也是 0，視角不會自己一直往下飄。"""
         win = application.base.win
         if not win or not win.getProperties().getForeground():
             self.last = None
             return 0, 0
+        if self.relative and win.getProperties().getMouseMode() != WindowProperties.M_relative:
+            self.relative = False     # 系統不支援 relative 模式就改成拉回中間的做法
         p = win.getPointer(0)
         x, y = p.getX(), p.getY()
-        if self.relative and win.getProperties().getMouseMode() != WindowProperties.M_relative:
-            self.relative = False     # 系統不支援 relative 模式就改回拉回中間的做法
-        if self.relative:
-            if self.last is None:
-                self.last = (x, y)
-                return 0, 0
-            dx, dy = x - self.last[0], y - self.last[1]
-            self.last = (x, y)
+        if self.last is None:
+            dx = dy = 0
         else:
+            dx, dy = x - self.last[0], y - self.last[1]
+        self.last = (x, y)
+        if not self.relative:     # 試著把游標拉回中間，免得碰到螢幕邊緣轉不動；拉成功才把「上次的位置」改成中間
             cx, cy = win.getXSize() // 2, win.getYSize() // 2
-            dx, dy = x - cx, y - cy
-            win.movePointer(0, cx, cy)
+            if (x, y) != (cx, cy) and win.movePointer(0, cx, cy):
+                self.last = (cx, cy)
         if self.skip > 0:          # 剛鎖定滑鼠的前幾幀位置還不準
             self.skip -= 1
             return 0, 0
