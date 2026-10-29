@@ -5,15 +5,52 @@
 2. 滑鼠鎖定靠「每幀把游標拉回中間」。macOS 拉回去的位置常常差一截，滑鼠不動視角也會一直往下轉。
    這裡在 macOS 用 Panda3D 的 relative 滑鼠模式；不支援時就只在游標快到邊緣才拉回中間，平常只看前後兩幀的位置差。
 """
+import math
 import sys
 
-from panda3d.core import WindowProperties
-from ursina import Vec3, application, clamp, held_keys, mouse, raycast, scene, time, window
+import builtins
+
+from panda3d.core import CollisionHandlerQueue, CollisionNode, CollisionSegment, CollisionTraverser, WindowProperties
+from ursina import Vec3, application, clamp, held_keys, mouse, scene, time, window
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 RADIUS = 0.35          # 玩家的「身體半徑」：離牆這麼近就不能再往前
 DEG_PER_PIXEL = 0.12   # 滑鼠靈敏度（mouse_sensitivity 是 40 時）
 MAX_PIXELS = 150       # 一幀超過這麼多像素的移動當成雜訊丟掉
+
+
+class Ray:
+    """自己的射線檢查。Ursina 內建的 raycast 會先把一個隱形物件「轉向」要打的方向，
+    可是連續兩次方向剛好相反時（例如先往右、再往左）它轉不過去，射線還是往右打：
+    明明左邊是空的卻說撞到東西，人就卡住。這裡改用線段，從起點直接畫到終點，不用轉向。"""
+
+    def __init__(self):
+        self.segment = CollisionSegment()
+        node = CollisionNode("player_ray")
+        node.set_into_collide_mask(0)
+        node.add_solid(self.segment)
+        self.np = builtins.render.attach_new_node(node)
+        self.queue = CollisionHandlerQueue()
+        self.trav = CollisionTraverser()
+        self.trav.add_collider(self.np, self.queue)
+
+    def cast(self, origin, direction, distance, ignore=()):
+        """回傳最近碰到的距離；沒碰到回傳 None。"""
+        self.segment.set_point_a(origin)
+        self.segment.set_point_b(origin + direction * distance)
+        self.trav.traverse(scene)
+        if not self.queue.get_num_entries():
+            return None
+        self.queue.sort_entries()
+        for e in self.queue.get_entries():
+            ent = e.get_into_node_path().parent.getPythonTag("Entity")
+            if ent in ignore:
+                continue
+            return (Vec3(*e.get_surface_point(builtins.render)) - origin).length()
+        return None
+
+
+RADIAL = [Vec3(math.cos(k * math.pi / 4), 0, math.sin(k * math.pi / 4)) for k in range(8)]
 
 
 class Player(FirstPersonController):
@@ -23,6 +60,7 @@ class Player(FirstPersonController):
         self.skip = 2
         self.stuck_time = 0.0
         self.unstick = None      # 卡在東西裡面時要回到的位置（由遊戲設定）
+        self.ray = Ray()
         super().__init__(**kwargs)
 
     # ---------- 滑鼠 ----------
@@ -94,14 +132,27 @@ class Player(FirstPersonController):
         self.check_stuck(before)
 
     def blocked(self, along, dist):
-        """往 along 方向走 dist 會不會撞到東西：在腳、腰、頭三個高度，各從身體左右兩側打射線。"""
+        """往 along 方向走 dist 會不會撞到東西。
+        1. 在腳、腰、頭三個高度，從身體中間和左右兩側往前打射線。
+        2. 斜的牆（落地窗、玻璃房、弧形矮櫃）會從身體斜前方擠進來，前方的射線看不到，
+           所以再看走過去之後身體四周八個方向有沒有東西貼得比現在更近；只准越走越鬆，不准越走越擠。"""
         side = Vec3(along.z, 0, -along.x) * (RADIUS * 0.8)
         for h in (0.3, 1.0, 1.7):
             for off in (side, -side, Vec3(0, 0, 0)):
-                if raycast(self.position + Vec3(0, h, 0) + off, along, distance=dist + RADIUS,
-                           traverse_target=scene, ignore=self.ignore_list).hit:
+                if self.ray.cast(self.position + Vec3(0, h, 0) + off, along, dist + RADIUS, self.ignore_list) is not None:
                     return True
-        return False
+        after = self.clearance(self.position + along * dist)
+        return after < RADIUS * 0.95 and after < self.clearance(self.position) - 1e-3
+
+    def clearance(self, pos):
+        """從 pos 往八個方向看，最近的東西有多遠（最多看到 RADIUS）。"""
+        best = RADIUS
+        for h in (0.3, 1.0):
+            for k in range(8):
+                hit = self.ray.cast(pos + Vec3(0, h, 0), RADIAL[k], RADIUS, self.ignore_list)
+                if hit is not None:
+                    best = min(best, hit)
+        return best
 
     def slide(self, move):
         for axis in (Vec3(1, 0, 0), Vec3(0, 0, 1)):
