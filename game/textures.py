@@ -364,3 +364,13 @@ def covers(seed):
             d.rectangle([x, y, x + 12, y + 17], fill=c)
             d.rectangle([x + 2, y + 3, x + 10, y + 6], fill=(250, 250, 250))
     return _noise(img, 3, rng)
+
+
+def grid():
+    """深色鋁格柵天花板：一格一格的方框，透出上面更暗的管線層。"""
+    img = Image.new("RGB", (32, 32), (52, 52, 55))
+    d = ImageDraw.Draw(img)
+    for i in range(0, 32, 4):
+        d.line([(i, 0), (i, 31)], fill=(118, 118, 122))
+        d.line([(0, i), (31, i)], fill=(118, 118, 122))
+    return img
