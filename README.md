@@ -45,6 +45,7 @@ python game/main.py
 
 - `game/main.py`：遊戲流程、線索、每天的循環、痛扁小遊戲
 - `game/npc.py`：館員與室友
+- `game/minigames.py`：質因數分解牆（2F）、揪團選門（3F）兩個小遊戲
 - `game/player.py`：玩家移動（貼牆滑動）與滑鼠視角（macOS 用 relative 模式）
 - `game/world.py`：`LEVEL` 格子地圖與 3D 場景生成
 - `game/textures.py`：材質產生
