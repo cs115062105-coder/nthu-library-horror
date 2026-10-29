@@ -1,57 +1,56 @@
-"""總圖不打烊 原型：第一人稱 3D 恐怖解謎。
+"""偷卷仔，給我站住！—— 第一人稱 3D 搞笑潛行解謎。
 
 操作：
-  WASD 移動、滑鼠看、Shift 跑、E 互動（讀筆記、開門）、F 開關手電筒、ESC 回大廳
+  WASD 移動、滑鼠看、Shift 跑、Ctrl 躡手躡腳、E 互動／抓人／痛扁、C 躲到桌子底下、ESC 回大廳
 
 玩法：
-  期中考週的凌晨，你在總圖 24 小時夜讀區醒來，室友不見了。
-  照真實的總圖一層一層往上找室友留下的線索，最後下到 B1 地下書庫。
-  書架間有「東西」——你看著它，它就不動；你一轉頭，它就靠近。
-  凌晨 3:00 一到（或被它抓到），一切重來，但你會記得已經讀過的筆記。
+  說好期中考一起擺爛的室友，被你發現偷偷跑來總圖讀書。
+  從 1F 開始照著他留下的線索一層一層往上找，躲開會「噓」你的館員，
+  在 4F 找到正在偷卷的他，抓住他、痛扁他。
+  22:00 閉館（或被館員警告三次請出去）就是隔天重來，但你會記得找到過的線索。
 """
 import math
 import os
 import random
-from collections import deque
 from pathlib import Path
 
-from ursina import (Ursina, Audio, Entity, Text, Texture, Vec2, Vec3, application, camera, color,
+from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera, color, destroy,
                     held_keys, invoke, raycast, scene, time, window)
 from ursina.prefabs.first_person_controller import FirstPersonController
-from PIL import Image
 
 import sfx
+from events import Scares
 from menu import DIFFICULTIES, Lobby
-from world import CELL, World, cell_pos
+from npc import Librarian, Roommate, to_cell
+from world import World, cell_pos
 
-CATCH_DIST = 1.1
 MENU_SPOT = (5, 15)     # 大廳背景：1F 入口旁，望向圓形展區
-MENU_MONSTER = (17, 15) # 展區正中間站著它
+MENU_LIBRARIAN = (17, 15)
+SKY = color.rgb32(226, 226, 218)   # 白天的霧：遠處淡淡的米白色
 
 NOTES = {
-    "1": "（室友的座位，筆電還開著）便利貼：「我先去找考古題之書了。我用櫃台電腦預約了一個東西，放在自助取書區。」",
-    "2": "（字跡潦草）電腦教室最裡面那台我還沒登出……不對，它要密碼。提示寫在螢幕旁：本校在新竹建校的那一年。登入之後樓梯間的門禁就會開。它只在你不看的時候動。",
-    "3": "又是三點……我已經第幾次回到這裡了？第三碼我寫在討論室 2 的白板上。",
-    "5": "（語言學習區的桌上）「視聽區最裡面那台還在播錄音帶。數清楚嗶了幾聲，那是第一碼。別在它附近戴耳機。」",
-    "6": "（被撕下來的筆記本內頁）「清華書房的展示櫃有三碼密碼鎖。第一碼在 3F 的錄音帶裡，第二碼夾在『300 科學類』的書裡，第三碼寫在討論室的白板上。」",
-    "4": "（室友的手機，螢幕還亮著）備忘錄：考古題之書 索書號 529.98。在 B 區密集書庫，夾在「520–529」那一櫃和下一櫃之間。轉書架前面的手輪，你站的那道走道就會打開。",
+    "1": "（夜讀區，室友常坐的位子）桌上刻著：「擺爛聯盟　永不讀書」。\n旁邊卻壓著一張今天的「預約取書」收據……\n去聯合櫃臺的電腦查查看他預約了什麼。",
+    "2": "（2F 桌上的便條，室友的字）「電腦教室最裡面那台，密碼是學校在新竹建校那年。」\n下面又補一行：「……我為什麼要寫下來？」",
+    "3": "一張計算紙，寫滿了微積分。最下面寫著：「不能讓他知道。」",
+    "5": "（語言學習區，耳機還是熱的）隨手寫的紙條：\n「線代錄音 → 視聽區最裡面那台（螢幕亮著）」",
+    "6": "（被撕下來的筆記本內頁）「清華書房展示櫃：三碼。\n第一碼＝錄音帶的嗶聲數，第二碼夾在『300 科學類』的書裡，\n第三碼在討論室白板上。裡面放的是……要給他的東西。」",
+    "4": "（B1 入口桌上）你到底怎麼進來的？館員看到會哭。",
 }
-# 線索 → (密碼第幾碼, 找到時顯示的文字)
-# 樓梯間的門鎖：(樓層, 方向) → (需要的東西, 沒有時的提示)
+# 樓梯間的門鎖：(樓層, 方向) → (需要的東西, 沒有時的提示)。白天的樓梯大家都能走，只有這兩扇不行
 LOCKS = {
-    ("1F", "up"): ("keycard", "樓梯間的門要刷館員門卡。"),
-    ("1F", "down"): ("b1", "B1 密集書庫：館員專用，門禁沒有開通。"),
-    ("2F", "up"): ("3f", "往 3F 的門禁沒有開。要先登入電腦教室的系統。"),
+    ("1F", "down"): ("b1", "B1 密集書庫：館員專用。（室友不可能在這裡）"),
     ("4F", "up"): ("5f", "往 5F 的樓梯被施工圍籬擋住了。（5F 之後的樓層還在蓋）"),
 }
 READABLE = {
-    "newspaper": "《清華新聞》　日期：明天\n頭條：「資工系學生凌晨於總圖失蹤」\n副標：「同寢室友仍在館內尋找中」",
-    "exhibit": "主題展「總圖的夜」\n閉館後，館員每小時巡館一次。\n02:40 那一班，從來沒有人回來簽到。",
+    "newspaper": "《清華新聞》頭條：「期中考週，總圖座位一位難求」\n副標：「有學生自稱『完全沒讀』，卻被拍到在 4F 讀到閉館」",
+    "exhibit": "主題展「總圖的一天」\n18:00 晚餐人潮離開，是館內最安靜的四小時。\n館員提醒：館內請勿奔跑。",
 }
 CLUES = {
-    "book": (1, "《物種原始》裡夾著一張便條：\n「第二碼：{d}」\n字跡跟室友的一模一樣。"),
-    "whiteboard": (2, "白板角落圈著一個數字：{d}\n旁邊用紅筆寫著：「別回頭。」"),
+    "book": (1, "《物種原始》裡夾著一張便條：\n「第二碼：{d}」\n下面還寫著：「他一定想不到我在這裡。」"),
+    "whiteboard": (2, "白板寫滿了微積分算式，角落圈著一個數字：{d}\n旁邊寫著：「讀書會成員：只有我。」"),
 }
+FIGHT_LINES = ["我只是剛好路過！", "我真的沒讀啦！", "這本是幫你借的！", "不要打臉！明天要考試！",
+               "我錯了我錯了！", "是書自己跳到我手上的！", "你小聲點！館員會來！"]
 
 FONT_CANDIDATES = [
     "C:/Windows/Fonts/msjh.ttc", "C:/Windows/Fonts/msjhbd.ttc", "C:/Windows/Fonts/mingliu.ttc",
@@ -63,8 +62,8 @@ FONT_CANDIDATES = [
 
 
 def wrap(s, width=20):
-    """中文沒有空白可以斷行，固定每幾個字換一行。"""
-    return "\n".join(s[i:i + width] for i in range(0, len(s), width))
+    """中文沒有空白可以斷行，固定每幾個字換一行（原本的換行保留）。"""
+    return "\n".join(line[i:i + width] for line in s.split("\n") for i in range(0, max(len(line), 1), width))
 
 
 def find_font():
@@ -80,46 +79,70 @@ def setup_font(path):
 
 class Game:
     def __init__(self, font_path):
-        self.read_notes = set()      # 跨迴圈保留：玩家記得的筆記
-        self.found = set()           # 跨迴圈保留：已經找到的密碼位數
-        self.items = set()           # 跨迴圈保留：門卡、門禁權限
+        self.read_notes = set()      # 跨天保留：讀過的筆記
+        self.found = set()           # 跨天保留：已經找到的密碼位數
+        self.items = set()           # 跨天保留：查到的線索
         self.locker_no = 1
         self.entry = None            # 輸入密碼的畫面
+        self.fight = None            # 痛扁小遊戲
         self.arrival = None
         self.code = "000"
-        self.loop = 1
-        self.cfg = DIFFICULTIES["普通"]  # 怪物速度、迴圈秒數、手電筒照多遠
+        self.day = 1
+        self.cfg = DIFFICULTIES["普通"]
         self.difficulty = "普通"
         self.state = "menu"
-        self.session = 0             # 每開一局加一，舊的延遲事件（例如被抓後重來）就不會跑到新的一局
+        self.session = 0             # 每開一局加一，舊的延遲事件就不會跑到新的一局
         self.font_path = font_path
         self.world = None
+        self.in_safe_zone = False
+        self.hidden = False
         self.load_floor("1F")
         self.player = FirstPersonController(position=self.world.start + Vec3(0, 0.1, 0), speed=4)
         self.player.cursor.visible = False
         self.player.gravity = 1
-        self.monster = self.make_monster()
-        self.setup_lights()
-        self.dust = self.make_dust()
+        self.player.jump_height = 0
+        self.librarian = Librarian(self)
+        self.roommate = Roommate(self)
         self.setup_audio()
-        self.clock_text = Text(position=(-0.85, 0.47), scale=1.2, color=color.light_gray)
-        self.goal_text = Text(position=(-0.85, 0.425), scale=1.0, color=color.rgb32(230, 200, 120))
-        self.hint = Text(position=(-0.3, -0.38), scale=1.1, color=color.white)
-        self.note_text = Text(position=(-0.6, 0.1), scale=1.3, color=color.rgb32(240, 230, 200))
-        self.note_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 200),
-                              scale=(1.3, 0.4), position=(-0.02, 0.04), z=0.5, enabled=False)
+        self.hud_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0.5), position=(-0.87, 0.49),
+                             scale=(1.25, 0.09), color=color.rgba32(255, 255, 255, 150), z=0.6)
+        self.clock_text = Text(position=(-0.85, 0.47), scale=1.2, color=color.rgb32(40, 40, 50))
+        self.goal_text = Text(position=(-0.85, 0.425), scale=1.0, color=color.rgb32(150, 70, 20))
+        self.hint = Text(position=(-0.3, -0.33), scale=1.1, color=color.white)
+        self.hint_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 140), origin=(-0.5, 0.5),
+                              position=(-0.31, -0.32), z=0.6, enabled=False)
+        self.note_text = Text(position=(-0.6, 0.12), scale=1.3, color=color.rgb32(240, 230, 200))
+        self.note_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 210),
+                              scale=(1.3, 0.45), position=(-0.02, 0.04), z=0.5, enabled=False)
         self.flash = Entity(parent=camera.ui, model="quad", scale=(2, 1), color=color.rgba32(0, 0, 0, 0), z=-1)
         self.entry_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(10, 20, 30, 235),
                                scale=(0.8, 0.45), z=0.4, enabled=False)
         self.entry_title = Text(position=(0, 0.16), origin=(0, 0), scale=1.2, color=color.rgb32(150, 200, 240))
         self.entry_text = Text(position=(0, -0.03), origin=(0, 0), scale=2.0, color=color.white)
+        self.fight_title = Text(position=(0, 0.38), origin=(0, 0), scale=1.8, color=color.rgb32(220, 40, 30))
+        self.fight_line = Text(position=(0, 0.25), origin=(0, 0), scale=1.4, color=color.white)
+        self.hp_bg = Entity(parent=camera.ui, model="quad", position=(0, 0.31), scale=(0.6, 0.03),
+                            color=color.rgba32(0, 0, 0, 160), enabled=False)
+        self.hp_bar = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.3, 0.31), z=-0.01,
+                             scale=(0.6, 0.026), color=color.rgb32(230, 60, 40), enabled=False)
         self.dead = False
         self.cleared = False
         self.tape_playing = False
+        self.noise = 0.0             # 聲音條：跑步會累積，滿了館員會聽到
+        self.warnings = 0            # 今天被館員警告幾次，三次就被請出去
+        self.total_warnings = 0
+        self.spotted = 0             # 被室友發現（逃跑）幾次
+        self.moving = self.running = self.sneaking = False
+        self.noise_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+                               scale=(0.3, 0.018), color=color.rgba32(0, 0, 0, 60))
+        self.noise_bar = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+                                scale=(0, 0.018), color=color.rgb32(90, 90, 100))
+        self.noise_label = Text(position=(-0.85, -0.405), scale=0.8, color=color.rgb32(30, 30, 40))
+        self.scares = Scares(self)
         self.bob = 0.0
         self.step_timer = 0.0
-        self.beat_timer = 0.0
         self.time_left = 0
+        self.apply_view()
 
     # ---------- 樓層 ----------
     def load_floor(self, name, came="up"):
@@ -138,11 +161,10 @@ class Game:
             d = stair["pos"] - stair["door"].position
             self.arrival, self.arrival_rot = stair["pos"], math.degrees(math.atan2(d.x, d.z))
         self.refresh_paths()
-        if hasattr(self, "vignette"):
-            self.apply_flashlight()   # 霧的參數要重新套到新蓋的東西上
+        self.apply_view()   # 霧的參數要重新套到新蓋的東西上
 
     def refresh_paths(self):
-        self.monster_walkable = self.world.walkable - self.world.spec["safe"]   # 夜讀區：它進不來
+        self.librarian_walkable = self.world.walkable - self.world.spec["safe"]   # 館員不巡夜讀區
 
     def take_stairs(self, direction):
         """走進樓梯間：畫面全黑、換樓層。"""
@@ -154,14 +176,14 @@ class Game:
         if not stair["target"]:
             self.show_hint("這裡沒有路了。", 2)
             return
-        self.dead = True   # 換樓層時暫停怪物和時鐘
+        self.dead = True   # 換樓層時暫停館員和時鐘
         self.flash.color = color.rgba32(0, 0, 0, 255)
         self.goal_text.text = ""
         self.play("step")
 
         def arrive():
             self.load_floor(stair["target"], came=direction)
-            self.reset_loop(first=True)
+            self.enter_floor()
             self.later(self.flash_fade, 0.3)
         self.later(arrive, 0.8)
 
@@ -174,15 +196,17 @@ class Game:
         self.items.clear()
         self.code = "".join(random.choice("123456789") for _ in range(3))   # 每局密碼都不同
         self.locker_no = random.randint(1, 6)
-        self.loop = 1
+        self.day = 1
+        self.total_warnings = self.spotted = 0
         self.cleared = False
         self.tape_playing = False
-        self.load_floor("1F", came="start")   # 重蓋一次，書架都回到原狀
+        self.load_floor("1F", came="start")   # 重蓋一次，東西都回到原狀
         self.hide_note()
         self.flash_fade()
         self.state = "play"
+        self.noise_bg.enabled = self.hud_bg.enabled = True
         self.player.enabled = True
-        self.reset_loop(first=True)
+        self.new_day(first=True)
 
     def to_lobby(self):
         self.session += 1
@@ -190,18 +214,23 @@ class Game:
         self.dead = False
         for t in (self.clock_text, self.goal_text, self.hint, self.note_text):
             t.text = ""
+        self.hint_bg.enabled = False
         self.note_bg.enabled = False
         self.flash_fade()
         self.close_entry()
+        self.end_fight_ui()
+        self.scares.reset()
+        self.noise, self.hidden = 0.0, False
+        self.noise_bar.scale_x, self.noise_label.text = 0, ""
+        self.noise_bg.enabled = self.hud_bg.enabled = False
         if self.world.floor != "1F":
             self.load_floor("1F", came="start")
-        self.flashlight_on = True
         self.in_safe_zone = False
-        self.apply_flashlight()
+        self.roommate.hide()
         self.player.position = cell_pos(*MENU_SPOT)
         self.player.enabled = False      # 停用時 Ursina 會把鏡頭交還給場景，滑鼠也會解鎖
-        self.monster.position = cell_pos(*MENU_MONSTER)
-        self.monster.look_at_2d(self.player.position, "y")
+        self.librarian.reset(cell_pos(*MENU_LIBRARIAN))
+        self.librarian.root.look_at_2d(self.player.position, "y")
         lobby.show()
 
     def aim_menu_camera(self, forward, sway):
@@ -214,80 +243,19 @@ class Game:
         invoke(lambda: fn() if session == self.session else None, delay=delay)
 
     # ---------- 場景 ----------
-    def make_monster(self):
-        """又高又瘦、駝背、長髮蓋住臉的「東西」。"""
-        m = Entity(position=self.world.monster_start)
-        skin, cloth, hair = color.rgb32(200, 196, 186), color.rgb32(18, 18, 22), color.rgb32(8, 8, 10)
-        body = Entity(parent=m, rotation_x=12)
-        Entity(parent=body, model="cube", position=(0, 1.55, 0), scale=(0.42, 1.0, 0.24), color=cloth)
-        for x in (-0.12, 0.12):
-            Entity(parent=m, model="cube", position=(x, 0.55, 0), scale=(0.1, 1.1, 0.1), color=cloth)
-        self.monster_arms = []
-        for x in (-0.28, 0.28):
-            arm = Entity(parent=body, position=(x, 2.0, 0))
-            Entity(parent=arm, model="cube", position=(0, -0.65, 0), scale=(0.07, 1.3, 0.07), color=skin)
-            for f in (-0.03, 0.0, 0.03):   # 細長的手指
-                Entity(parent=arm, model="cube", position=(f, -1.42, 0.02), scale=(0.015, 0.22, 0.015), color=skin)
-            self.monster_arms.append(arm)
-        self.monster_head = Entity(parent=body, position=(0, 2.25, 0.05))
-        Entity(parent=self.monster_head, model="sphere", scale=(0.3, 0.36, 0.3), color=skin)
-        Entity(parent=self.monster_head, model="cube", position=(0, -0.15, -0.06), scale=(0.34, 0.75, 0.3), color=hair)
-        Entity(parent=self.monster_head, model="cube", position=(0.05, -0.25, 0.15), scale=(0.24, 0.6, 0.03), color=hair)
-        for x in (-0.06, 0.06):   # 頭髮縫隙裡的眼睛
-            Entity(parent=self.monster_head, model="sphere", position=(x, 0.03, 0.16), scale=0.035,
-                   color=color.rgb32(255, 250, 230))
-        return m
-
-    def make_dust(self):
-        """手電筒光裡飄的灰塵。"""
-        rng = random.Random(7)
-        root = Entity()
-        for _ in range(70):
-            Entity(parent=root, model="quad", billboard=True, scale=rng.uniform(0.006, 0.014),
-                   position=(rng.uniform(-4, 4), rng.uniform(0.3, 3), rng.uniform(-4, 4)),
-                   color=color.rgba32(230, 225, 210, rng.randint(30, 80)))
-        return root
-
-    def setup_lights(self):
-        """手電筒效果：黑色濃霧當作黑暗，再疊一張中間透明、四周全黑的暈影。
-        不用即時光源，任何顯示卡都跑得動。"""
-        scene.fog_color = color.black
-        size = 512
-        img = Image.new("RGBA", (size, size))
-        px = img.load()
-        for y in range(size):
-            for x in range(size):
-                d = math.hypot(x - size / 2, y - size / 2) / (size / 2)
-                a = min(1.0, max(0.0, (d - 0.3) / 0.45))
-                px[x, y] = (0, 0, 0, int(255 * a ** 1.4))
-        self.vignette = Entity(parent=camera.ui, model="quad", texture=Texture(img),
-                               scale=(window.aspect_ratio * 1.15, 1.15), z=1)
-        self.flashlight_on = True
-        self.in_safe_zone = True
-        self.apply_flashlight()
-
-    def apply_flashlight(self):
-        scene.fog_color = color.black   # 新蓋的樓層也要拿到霧的顏色
-        if self.in_safe_zone:          # 夜讀區燈火通明，看得比較遠
-            scene.fog_density = (4.0, 22.0)
-        else:
-            scene.fog_density = (1.0, 13.0) if self.flashlight_on else (0.5, 4.0)
-        k = 1.15 if self.flashlight_on else 0.85
-        self.vignette.scale = (window.aspect_ratio * k, k)
+    def apply_view(self):
+        """白天：燈全亮，只留一層很淡的霧讓遠處柔和一點。"""
+        scene.fog_color = SKY
+        scene.fog_density = (20.0, 75.0)
 
     def setup_audio(self):
         self.sounds = {}
         try:
             paths = sfx.generate()
-            self.sounds = {
-                "hum": Audio(paths["hum"], loop=True, autoplay=True, volume=0.25),
-                "heartbeat": Audio(paths["heartbeat"], autoplay=False),
-                "step": Audio(paths["step"], autoplay=False, volume=0.35),
-                "sting": Audio(paths["sting"], autoplay=False, volume=0.8),
-                "page": Audio(paths["page"], autoplay=False, volume=0.6),
-                "rumble": Audio(paths["rumble"], autoplay=False, volume=0.7),
-                "beep": Audio(paths["beep"], autoplay=False, volume=0.6),
-            }
+            volumes = dict(step=0.35, sting=0.5, page=0.6, rumble=0.7, beep=0.6, chime=0.7, ring=0.5,
+                           thud=0.8, shh=0.8, punch=0.9)
+            self.sounds = {name: Audio(paths[name], autoplay=False, volume=v) for name, v in volumes.items()}
+            self.sounds["hum"] = Audio(paths["hum"], loop=True, autoplay=True, volume=0.06)   # 冷氣和日光燈
         except Exception as e:   # 沒有音效卡也能玩
             print("音效載入失敗：", e)
 
@@ -298,159 +266,179 @@ class Game:
                 s.volume = volume
             s.play()
 
-    # ---------- 迴圈 ----------
-    def reset_loop(self, first=False):
+    # ---------- 一天 ----------
+    def enter_floor(self):
+        """走進一層樓：時間繼續走，只是重設這層的館員和室友。"""
+        self.place_player()
+        self.librarian.reset(self.world.monster_start)
+        self.spawn_roommate()
+        self.scares.reset()
+        self.dead = False
+        msg = {"1F": "1F。入館閘門旁人來人往，櫃臺的館員抬頭看了你一眼。",
+               "2F": "2F。期刊區很安靜，大家都在假裝自己很認真。",
+               "3F": "3F。視聽區傳來線性代數的錄音……這聲音好熟。",
+               "4F": "4F。一整層的中文書。空氣裡有一股「偷卷」的味道。",
+               "B1": "B1。你怎麼進來的？"}.get(self.world.floor, f"{self.world.floor}。")
+        if self.world.floor == "4F" and self.roommate.active:
+            msg += "\n他就在這層某張桌子。趁他低頭時靠近，他抬頭時躲好！"
+        self.show_hint(wrap(msg, 26), 5)
+
+    def new_day(self, first=False, why=""):
         if not first:
-            self.loop += 1
-        self.player.position = self.arrival + Vec3(0, 0.1, 0)
-        self.player.rotation_y = self.arrival_rot
-        self.monster.position = self.world.monster_start
+            self.day += 1
+        self.place_player()
+        self.librarian.reset(self.world.monster_start)
         self.time_left = self.cfg["seconds"]
         self.dead = False
+        self.warnings = 0
+        self.noise, self.hidden = 0.0, False
+        self.spawn_roommate()
+        self.scares.reset()
         self.note_text.text = ""
-        floor = self.world.floor
-        if not first:
-            msg = f"……又是 02:40，你還在 {floor}。第 {self.loop} 次了。你記得找到過的東西。"
+        if first:
+            msg = ("18:00。室友說今天要在宿舍睡一整天，IG 限動卻拍到總圖的窗戶。\n"
+                   "說好一起擺爛，結果你偷卷？今天一定要抓到你。")
         else:
-            msg = {"1F": "夜讀區的燈還亮著。室友的位子空了，筆電還開著。",
-                   "2F": "2F。期刊架之間很安靜，安靜得不太對勁。",
-                   "3F": "3F。小舞台上的鋼琴蓋是開的。剛剛好像有人在彈。",
-                   "4F": "4F。一整層的中文書。故事牆上的老照片都在看你。",
-                   "B1": "身後的門自己鎖上了。這裡比樓上更冷。"}.get(floor, f"{floor}。")
-        self.show_hint(wrap(msg, 24), 6)
+            msg = f"{why}\n第 {self.day} 天 18:00，你又來到總圖 {self.world.floor}。查到的線索都還記得。"
+        self.show_hint(wrap(msg, 26), 6)
+
+    def place_player(self):
+        self.player.position = self.arrival + Vec3(0, 0.1, 0)
+        self.player.rotation_y = self.arrival_rot
+        self.player.camera_pivot.rotation_x = 0
+
+    def spawn_roommate(self):
+        if self.world.floor == "4F" and "trail4" in self.items:
+            self.roommate.spawn(self.world, self.player.position)
+        else:
+            self.roommate.hide()
+
+    def end_day(self, why, tint):
+        if self.dead:
+            return
+        self.dead = True
+        self.hidden = False
+        self.flash.color = tint
+        self.later(self.flash_fade, 1.8)
+        self.later(lambda: self.new_day(why=why), 1.8)
 
     def show_hint(self, msg, seconds=3):
         self.hint.text = msg
-        invoke(setattr, self.hint, "text", "", delay=seconds)
+        self.hint_bg.enabled = bool(msg)
+        lines = msg.count("\n") + 1
+        self.hint_bg.scale = (min(1.2, max(len(l) for l in msg.split("\n")) * 0.026 + 0.04), lines * 0.042 + 0.02)
 
-    # ---------- 怪物 ----------
+        def clear():
+            if self.hint.text == msg:   # 只清掉自己這則，後來的提示不要被提早清掉
+                self.hint.text = ""
+                self.hint_bg.enabled = False
+        invoke(clear, delay=seconds)
+
+    def flash_fade(self):
+        self.flash.color = color.rgba32(0, 0, 0, 0)
+
     def player_sees(self, target):
-        """目標在視野內、而且中間沒有牆或書架擋住，就算『被看著』。"""
+        """目標在玩家視野內、而且中間沒有牆或書架擋住。"""
         eye = camera.world_position
         to = target + Vec3(0, 1.6, 0) - eye
         dist = to.length()
         if dist < 0.01:
             return True
-        if dist > (self.cfg["sight"] if self.flashlight_on else 3):   # 在黑暗裡看不到它，它就會動
-            return False
         fwd = camera.forward
-        cos_angle = (to.x * fwd.x + to.y * fwd.y + to.z * fwd.z) / dist
-        if cos_angle < math.cos(math.radians(42)):
+        if (to.x * fwd.x + to.y * fwd.y + to.z * fwd.z) / dist < math.cos(math.radians(42)):
             return False
         hit = raycast(eye, to.normalized(), distance=dist, ignore=(self.player,), traverse_target=scene)
         return not (hit.hit and hit.entity in self.solids)
 
-    def update_monster(self):
-        if self.player_sees(self.monster.world_position):
-            return False
-        to = self.player.position - self.monster.position
-        to.y = 0
-        if to.length() < CATCH_DIST:
-            self.caught()
-            return False
-        target = self.next_step_toward(self.monster.position, self.player.position)
-        move = target - self.monster.position
-        move.y = 0
-        step = self.cfg["speed"] * time.dt
-        if move.length() <= step:
-            self.monster.position = Vec3(target.x, 0, target.z)
-        else:
-            self.monster.position += move.normalized() * step
-        self.monster.look_at_2d(self.player.position, "y")
-        # 沒被看著的時候會抽搐，被看到就定格在奇怪的姿勢
-        self.monster_head.rotation_z = random.uniform(-25, 25)
-        for arm in self.monster_arms:
-            arm.rotation_x = random.uniform(-20, 20)
-        return True
-
-    def to_cell(self, pos):
-        return (round(pos.x / CELL), round(-pos.z / CELL))
-
-    def next_step_toward(self, start, goal):
-        """在走道格子上做 BFS，回傳往玩家方向的下一格中心點。"""
-        s, g = self.to_cell(start), self.to_cell(goal)
-        if g not in self.monster_walkable:
-            return Vec3(start)
-        if s == g:
-            return Vec3(goal.x, 0, goal.z)
-        prev = {s: None}
-        queue = deque([s])
-        while queue:
-            cur = queue.popleft()
-            if cur == g:
-                break
-            c, r = cur
-            for nxt in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)):
-                if nxt in self.monster_walkable and nxt not in prev:
-                    prev[nxt] = cur
-                    queue.append(nxt)
-        if g not in prev:
-            return Vec3(start)
-        cell = g
-        while prev[cell] != s and prev[cell] is not None:
-            cell = prev[cell]
-        return cell_pos(*cell)
-
-    def caught(self):
-        if self.dead:
+    # ---------- 館員 ----------
+    def warn(self):
+        self.warnings += 1
+        self.total_warnings += 1
+        self.play("shh")
+        if self.warnings >= 3:
+            self.show_hint("館員：「同學，你已經被警告三次了。請你出去。」", 3)
+            self.end_day("你被館員請出了圖書館……", color.rgba32(0, 0, 0, 255))
             return
-        self.dead = True
-        self.play("sting")
-        self.flash.color = color.rgba32(150, 0, 0, 220)
-        self.show_hint("它抓到你了。", 2)
-        self.later(self.flash_fade, 1.5)
-        self.later(self.reset_loop, 1.5)
+        line = "館內請勿奔跑！" if self.running else "請保持安靜！"
+        self.show_hint(f"館員：「噓——同學，{line}」（警告 {self.warnings}/3）", 3)
 
-    def flash_fade(self):
-        self.flash.color = color.rgba32(0, 0, 0, 0)
+    # ---------- 室友 ----------
+    def roommate_spotted(self):
+        self.spotted += 1
+        self.play("sting", volume=0.35)
+        self.show_hint(random.choice(["室友：「！？你怎麼在這？」（抱著書逃走了）",
+                                      "室友：「我、我只是來還書的！」（拔腿就跑）",
+                                      "室友：「被發現了！」（把書塞進書包逃走）"]), 3)
+        self.roommate.flee()
 
-    # ---------- 氣氛 ----------
-    def update_lights(self, monster_moving):
-        for light in self.world.lights:
-            panel, pool, state = light
-            if state == "dead":
-                continue
-            near = monster_moving and (panel.position - self.monster.position).length() < 7
-            if state == "flicker" or near:
-                World.set_light(light, random.random() > (0.5 if near else 0.25))
-            elif not pool.enabled:
-                World.set_light(light, True)
+    def catch_roommate(self):
+        """抓到了！進入痛扁小遊戲。"""
+        if self.fight or self.cleared:
+            return
+        r = self.roommate
+        r.state = "caught"
+        r.alarm.enabled = False
+        r.stand()
+        away = self.player.position - r.position
+        away.y = 0
+        if away.length() < 1.6:   # 退一點，整個人入鏡
+            self.player.position = r.position + (away.normalized() if away.length() > 0.01 else Vec3(0, 0, 1)) * 1.6
+        r.root.look_at_2d(self.player.position, "y")
+        self.player.look_at_2d(r.position, "y")
+        self.player.camera_pivot.rotation_x = 8
+        self.player.speed = 0
+        self.player.mouse_sensitivity = Vec2(0, 0)
+        self.hidden = False
+        self.fight = dict(hp=self.cfg["hits"], time=self.cfg["fight_time"], shake=0.0, hits=0)
+        self.fight_title.text = "抓到了！狂按 E 或滑鼠左鍵痛扁他！"
+        self.fight_line.text = "室友：「等、等一下！我可以解釋！」"
+        self.hp_bg.enabled = self.hp_bar.enabled = True
+        self.hp_bar.scale_x = 0.6
+        self.play("sting", volume=0.4)
 
-    def update_dust(self):
-        p = self.player.position
-        for d in self.dust.children:
-            d.y += math.sin(time.time() * 0.7 + d.x) * 0.002 - 0.001
-            d.x += 0.002
-            for axis in ("x", "z"):   # 灰塵跟著玩家，超出範圍就從另一邊繞回來
-                off = getattr(d, axis) - getattr(p, axis)
-                if abs(off) > 4:
-                    setattr(d, axis, getattr(p, axis) + (off + 4) % 8 - 4)
-            if d.y < 0.2:
-                d.y = 3
+    def hit(self):
+        f = self.fight
+        f["hp"] -= 1
+        f["hits"] += 1
+        f["shake"] = 0.15
+        self.play("punch")
+        self.hp_bar.scale_x = 0.6 * max(0, f["hp"]) / self.cfg["hits"]
+        if f["hits"] % 4 == 1:
+            self.fight_line.text = "室友：「" + random.choice(FIGHT_LINES) + "」"
+        if f["hp"] <= 0:
+            self.end_fight_ui()
+            self.ending()
 
-    def update_body(self):
-        moving = any(held_keys[k] for k in "wasd")
-        if moving:
-            speed = 1.6 if held_keys["shift"] else 1.0
-            self.bob += time.dt * 9 * speed
-            self.step_timer -= time.dt * speed
-            if self.step_timer <= 0:
-                self.step_timer = 0.48
-                self.play("step")
-        self.player.camera_pivot.y = 1.7 + math.sin(self.bob) * 0.04
+    def update_fight(self):
+        f = self.fight
+        f["time"] -= time.dt
+        r = self.roommate
+        if f["shake"] > 0:
+            f["shake"] -= time.dt
+            r.torso.rotation_x = -25 * f["shake"] / 0.15
+            r.head.rotation_z = random.uniform(-25, 25)
+        else:
+            r.torso.rotation_x = 0
+            r.head.rotation_z = 0
+        self.fight_title.text = f"狂按 E 或滑鼠左鍵痛扁他！　{max(0, f['time']):.1f} 秒"
+        if f["time"] <= 0:   # 打不夠，他掙脫逃走
+            self.end_fight_ui()
+            self.show_hint("室友掙脫了！「下次再說！」……他又跑了。", 3)
+            self.spotted += 1
+            self.roommate.flee()
 
-        dist = (self.monster.position - self.player.position).length()
-        self.beat_timer -= time.dt
-        if dist < 12 and self.beat_timer <= 0:
-            self.beat_timer = 0.45 + dist / 12 * 0.8
-            self.play("heartbeat", volume=max(0.15, 1 - dist / 12))
+    def end_fight_ui(self):
+        self.fight = None
+        self.fight_title.text = self.fight_line.text = ""
+        self.hp_bg.enabled = self.hp_bar.enabled = False
+        self.player.mouse_sensitivity = Vec2(40, 40)
 
     # ---------- 互動 ----------
     def show_note(self, text):
         self.play("page")
         self.note_text.text = text
         self.note_bg.enabled = True
-        self.later(self.hide_note, 7)
+        self.later(self.hide_note, 8)
 
     def near(self, pos, dist):
         d = pos - self.player.position
@@ -461,10 +449,13 @@ class Game:
         return " ".join(self.code[i] if i in self.found else "_" for i in range(3))
 
     def interact(self):
+        if self.roommate.active and self.roommate.state in ("study", "look") and self.near(self.roommate.position, 1.9):
+            self.catch_roommate()
+            return
         for key, note in self.notes.items():
             if self.near(note.position, 1.8):
                 self.read_notes.add(key)
-                self.show_note(wrap(NOTES[key]))
+                self.show_note(wrap(NOTES[key], 24))
                 return
         for name, pos in self.world.clues.items():
             if self.near(pos, 1.6):
@@ -477,19 +468,12 @@ class Game:
         if spots:
             self.use(min(spots, key=lambda x: x[1])[0])
             return
-        book = self.world.exam_book
-        if book and self.near(book.world_position, 2.2):
-            self.ending()
-            return
         bank, aisle = self.world.bank_at(self.player.position)
         if bank:
-            if bank["aisle"] == aisle:
-                self.show_hint("這道走道已經是開的。", 2)
-            else:
+            if bank["aisle"] != aisle:
                 self.world.open_aisle(bank, aisle)
                 self.refresh_paths()
                 self.play("rumble")
-                self.show_hint("手輪很重……書架轟隆隆地移開了。", 3)
             return
         for direction, stair in self.world.stairs.items():
             if self.near(stair["pos"], 1.6):
@@ -497,33 +481,40 @@ class Game:
                 return
 
     def use(self, thing):
-        """各樓層設施的互動：讀東西、查電腦、開取書櫃、登入電腦教室。"""
+        """各樓層設施的互動：讀東西、查電腦、開取書櫃、登入電腦教室、聽錄音帶、開展示櫃。"""
         kind, data = thing["kind"], thing.get("data")
         if kind == "read":
             text = data.split(":", 1)[1] if data.startswith("history:") else READABLE[data]
             self.show_note(text)
         elif kind == "counter_pc":
             self.items.add("locker_known")
-            self.show_note(f"預約取書通知\n讀者：陳○○　書名：（空白）\n取書櫃：A{self.locker_no:02d}　狀態：待取件")
+            self.show_note(f"預約取書紀錄\n讀者：陳○○（你的室友）\n書名：《微積分　精選 500 題》等 3 本\n"
+                           f"取書櫃：A{self.locker_no:02d}　狀態：待取件\n……說好的擺爛呢？")
         elif kind == "locker":
             if data != self.locker_no:
-                self.show_hint(f"A{data:02d}：空的。", 2)
-            elif "keycard" in self.items:
-                self.show_hint("櫃子已經空了。", 2)
+                self.show_hint(f"A{data:02d}：別人的書，不要亂開。", 2)
+            elif "trail2" in self.items:
+                self.show_hint("你已經翻過這個櫃子了。", 2)
             else:
-                self.items.add("keycard")
+                self.items.add("trail2")
                 self.play("page")
-                self.show_note("櫃子裡沒有書，只有一張館員門卡。\n卡套上貼著便利貼：「樓梯間 → 2F 電腦教室」")
+                self.show_note("櫃子裡：《微積分 精選 500 題》《線性代數 一次搞懂》《期中考 必勝寶典》\n"
+                               "還夾著一張「2F 電腦教室」的座位預約單，時間就是今天。")
         elif kind == "lab_pc":
-            if "3f" in self.items:
-                self.show_note("已登入。樓梯間門禁：已開通。")
+            if "trail3" in self.items:
+                self.show_note("瀏覽紀錄還開著：「3F 視聽區 線代錄音」")
+            elif "trail2" not in self.items:
+                self.show_hint("一台上鎖的電腦。（先去 1F 查查室友今天預約了什麼）", 3)
             else:
                 self.open_entry("電腦教室　登入", "密碼提示：本校在新竹建校的那一年", 4, self.lab_login)
         elif kind == "tape":
-            self.play_tape()
+            if "trail3" not in self.items:
+                self.show_hint("一台還在播的錄音機。這是誰的？", 2)
+            else:
+                self.play_tape()
         elif kind == "case":
-            if "b1" in self.items:
-                self.show_note("展示櫃已經開了。")
+            if "notes" in self.items:
+                self.show_note("展示櫃已經空了。筆記在你書包裡。")
             else:
                 self.open_entry("清華書房　展示櫃", f"三碼密碼鎖　你記得的：{self.code_hint()}", 3, self.case_open)
 
@@ -531,8 +522,8 @@ class Game:
         if code != "1956":
             self.show_hint("密碼錯誤。", 2)
             return
-        self.items.add("3f")
-        self.show_note("登入成功。最後一筆查詢：\n《考古題之書》索書號 529.98　館藏地：B1 密集書庫\n系統訊息：樓梯間 3F 門禁已開通。")
+        self.items.add("trail3")
+        self.show_note("登入成功。室友的搜尋紀錄：\n「怎麼偷讀書不被室友發現」\n「偷卷 被抓到 怎麼辦」\n「3F 視聽區 線代錄音」")
 
     def play_tape(self):
         """3F 視聽座位的錄音帶：嗶幾聲就是第一碼。"""
@@ -547,16 +538,17 @@ class Game:
         def done():
             self.tape_playing = False
             self.found.add(0)
-            self.show_note("錄音帶最後是室友的聲音，很小聲：\n「……數到幾了？那就是第一碼。\n上 4F，清華書房。」")
+            self.items.add("trail4")
+            self.show_note("錄音帶是室友自己錄的線代重點，最後他小聲說：\n「……錄到這裡，我上 4F 中文書區繼續讀，讀到閉館。\n絕對不能讓他知道。」\n（剛剛嗶了幾聲？記下來）")
         self.later(done, 2.5 + n * 0.6)
 
     def case_open(self, code):
         if code != self.code:
             self.show_hint("鎖沒有開。", 2)
             return
-        self.items.add("b1")
+        self.items.add("notes")
         self.play("page")
-        self.show_note("展示櫃裡的推薦書全被翻到同一頁：\n「B1 密集書庫　館員通行證」\n通行證就夾在書裡。B1 門禁開了。")
+        self.show_note("展示櫃裡是一本手寫筆記，封面寫著：\n「給那個說要擺爛的傢伙　期中考重點」\n……你默默把它收進書包。")
 
     # ---------- 輸入密碼的畫面 ----------
     def open_entry(self, title, hint, length, on_submit):
@@ -596,84 +588,113 @@ class Game:
         self.player.mouse_sensitivity = Vec2(40, 40)
 
     def goal(self):
-        """左上角的目標：依樓層和已經拿到的東西決定下一步。"""
-        floor, items, notes = self.world.floor, self.items, self.read_notes
-        if "b1" in items and floor != "B1":
-            return "B1 門禁開了。從右下角的樓梯間一路往下到 B1"
-        if floor == "1F":
-            if "keycard" in items:
-                return "用門卡打開右下角的樓梯間，上 2F"
-            if "locker_known" in items:
-                return f"到最裡面（北邊）的自助取書區，打開 A{self.locker_no:02d} 櫃"
-            if "1" in notes:
-                return "到左邊的聯合櫃臺，查電腦上的預約"
-            return "看看室友在夜讀區的座位（書車上有東西）"
-        if floor == "2F":
-            if "3f" in items:
-                return "門禁開了。從樓梯間上 3F"
-            if "2" in notes:
-                return "登入電腦教室最裡面那台電腦（密碼提示在校史展示區）"
-            return "找找室友在 2F 留下的東西"
-        if floor == "3F":
-            if 0 in self.found:
-                return "記住錄音帶的嗶聲數，上 4F 找清華書房"
-            if "5" in notes:
-                return "到視聽區找還在播的那台（螢幕亮著），按 E 聽錄音帶"
-            return "找找室友在 3F 留下的東西（語言學習區）"
-        if floor == "4F":
-            if "6" not in notes:
-                return "找找室友在 4F 留下的東西"
-            return f"湊齊三碼，打開清華書房的展示櫃　密碼：{self.code_hint()}"
-        if floor == "B1":
-            return ("在 B 區密集書庫找到《考古題之書》，在書架前按 E 轉手輪"
-                    if "4" in notes else "入口桌上有東西在發光……")
-        if len(self.found) < 3:
-            return f"找室友的筆記，照上面的提示找出密碼　密碼：{self.code_hint()}"
-        return f"密碼是 {self.code}"
+        """左上角的目標：依樓層和已經查到的線索決定下一步。"""
+        floor, items = self.world.floor, self.items
+        if "trail4" in items:
+            if floor != "4F":
+                return "室友在 4F 中文書區！從樓梯間上去"
+            extra = "" if "notes" in items else "（清華書房的展示櫃好像藏著什麼）"
+            return f"趁室友低頭讀書，按住 Ctrl 靠近，按 E 抓住他{extra}"
+        if "trail3" in items:
+            return "到 3F 視聽區最裡面那台（螢幕亮著）聽錄音帶" if floor == "3F" else "上 3F，找視聽區還在播的那台錄音機"
+        if "trail2" in items:
+            return ("登入電腦教室最裡面那台電腦（密碼提示在校史展示區）" if floor == "2F"
+                    else "上 2F，去室友預約的電腦教室")
+        if floor != "1F":
+            return "線索在 1F：回去查室友今天預約了什麼"
+        if "locker_known" in items:
+            return f"到最裡面（北邊）的自助取書區，打開 A{self.locker_no:02d} 櫃"
+        return "到左邊的聯合櫃臺，用電腦查室友的預約"
 
     def ending(self):
         self.cleared = True
         self.goal_text.text = ""
+        self.roommate.hide()
         self.player.enabled = False
         self.play("page")
         self.note_bg.enabled = True
-        self.note_text.text = (f"《考古題之書》\n扉頁的借閱紀錄只有兩行：陳○○，還有……你的名字。\n"
-                               f"借閱日期是明天。\n\n第一章　完（{self.difficulty}・迴圈 {self.loop} 次）\n按 Enter 回到大廳")
+        if "notes" in self.items:
+            story = ("你把他打到求饒。他從書包拿出另一本筆記：\n「這……本來要考前一天給你的。我怕你被當，才偷偷讀。」\n"
+                     "你的拳頭停在半空中。\n\n—— 真結局：偷卷是為了你 ——")
+        else:
+            story = ("他鼻青臉腫地承認：「我只是想偷偷考 100 分……」\n隔週成績公布：他 100 分，你 38 分。\n"
+                     "你默默決定明天也來總圖。\n\n—— 結局：擺爛聯盟解散 ——")
+        self.note_text.text = (f"{story}\n{self.difficulty}・第 {self.day} 天・被室友發現 {self.spotted} 次・"
+                               f"館員警告 {self.total_warnings} 次\n按 Enter 回到大廳")
 
     def hide_note(self):
         self.note_text.text = ""
         self.note_bg.enabled = False
 
     def update(self):
-        self.update_dust()
         if self.state != "play" or self.cleared or self.dead:
             return
-        self.player.speed = 0 if self.entry else 6.5 if held_keys["shift"] else 3.5
+        if self.fight:
+            self.update_fight()
+            return
+        self.sneaking = bool(held_keys["control"] or held_keys["left control"])
+        self.moving = any(held_keys[k] for k in "wasd") and not self.hidden and not self.entry
+        self.running = self.moving and bool(held_keys["shift"]) and not self.sneaking
+        self.player.speed = (0 if self.entry or self.hidden else 6.5 if self.running
+                             else 1.8 if self.sneaking else 3.5)
         self.time_left -= time.dt
         total = self.cfg["seconds"]
-        game_min = 40 + (total - self.time_left) / total * 20
-        self.clock_text.text = (f"02:{int(game_min):02d}　第 {self.loop} 輪　"
-                                f"{self.difficulty}")
+        minutes = 18 * 60 + int((total - max(0, self.time_left)) / total * 240)
+        self.clock_text.text = (f"{minutes // 60:02d}:{minutes % 60:02d}　第 {self.day} 天　{self.world.floor}　"
+                                f"館員警告 {self.warnings}/3")
         self.goal_text.text = "目標：" + self.goal()
         if self.time_left <= 0:
-            self.flash.color = color.rgba32(0, 0, 0, 255)
-            self.dead = True
-            self.show_hint("03:00", 2)
-            self.later(self.flash_fade, 1.5)
-            self.later(self.reset_loop, 1.5)
+            self.play("chime")
+            self.show_hint("（叮咚）22:00，總圖閉館了。請攜帶隨身物品離館。", 3)
+            self.end_day("又沒抓到他……明天再來。", color.rgba32(20, 20, 40, 255))
             return
-        safe = self.to_cell(self.player.position) in self.world.spec["safe"]
-        if safe != self.in_safe_zone:
-            self.in_safe_zone = safe
-            self.apply_flashlight()
-        self.update_lights(self.update_monster())
+        self.in_safe_zone = to_cell(self.player.position) in self.world.spec["safe"]
+        self.update_noise()
+        self.librarian.update()
+        if self.roommate.active and not self.dead:
+            self.roommate.update()
+        self.scares.update()
         self.update_body()
 
+    # ---------- 聲音、躲藏 ----------
+    def update_noise(self):
+        rate = (0.0 if self.sneaking else 0.45 if self.running else 0.03) if self.moving else -0.35
+        self.noise = min(1.0, max(0.0, self.noise + rate * time.dt))
+        if self.noise >= 1 and not self.in_safe_zone and not self.librarian.lookout:
+            self.librarian.investigate(self.player.position)
+            self.show_hint("館員好像聽到這邊有聲音，往這裡走過來了。", 2)
+        self.noise_bar.scale_x = 0.3 * self.noise
+        self.noise_bar.color = color.rgb32(200, 60, 40) if self.noise > 0.8 else color.rgb32(90, 90, 100)
+        self.noise_label.text = "躲在桌子底下" if self.hidden else "聲音（Shift 跑步會變大）"
 
-app = Ursina(title="總圖不打烊 原型", borderless=False, development_mode=False)
+    def update_body(self):
+        if self.moving:
+            speed = 1.6 if self.running else 1.0
+            self.bob += time.dt * 9 * speed
+            self.step_timer -= time.dt * speed
+            if self.step_timer <= 0:
+                self.step_timer = 0.48
+                self.play("step", volume=0.08 if self.sneaking else 0.6 if self.running else 0.35)
+        eye = 0.6 if self.hidden else 1.2 if self.sneaking else 1.7
+        self.player.camera_pivot.y += (eye + math.sin(self.bob) * 0.04 - self.player.camera_pivot.y) * min(1, time.dt * 10)
+
+    def toggle_hide(self):
+        if self.hidden:
+            self.hidden = False
+            self.show_hint("你從桌子底下爬出來。", 2)
+            return
+        spot = min(self.world.hides, key=lambda p: (p - self.player.position).length(), default=None)
+        if spot is None or not self.near(spot, 1.9):
+            self.show_hint("附近沒有可以躲的桌子。", 2)
+            return
+        self.hidden = True
+        self.show_hint("你縮到桌子底下。館員和室友都看不到你。（C 出來）", 3)
+
+
+app = Ursina(title="偷卷仔，給我站住！", borderless=False, development_mode=False)
 font_path = find_font()
 setup_font(font_path)
-window.color = color.black
+window.color = SKY
 game = Game(font_path)
 lobby = Lobby(on_start=game.start, on_quit=application.quit, aim_camera=game.aim_menu_camera)
 game.to_lobby()
@@ -687,13 +708,15 @@ def handle_input(key):
     if game.entry:
         game.entry_key(key)
         return
+    if game.fight and key in ("e", "left mouse down"):
+        game.hit()
+        return
     if key == "escape" or (game.cleared and key == "enter"):
         game.to_lobby()
-    elif key == "e" and not game.cleared:
+    elif key == "e" and not game.cleared and not game.fight:
         game.interact()
-    elif key == "f":
-        game.flashlight_on = not game.flashlight_on
-        game.apply_flashlight()
+    elif key == "c" and not game.cleared and not game.fight:
+        game.toggle_hide()
 
 
 # 用一個空 Entity 掛每幀更新與按鍵處理，不依賴 __main__ 裡的全域函式

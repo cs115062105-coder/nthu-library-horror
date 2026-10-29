@@ -1,69 +1,70 @@
 """開始大廳：標題、難度選擇、故事介紹、操作說明。
 
-背景是真的遊戲場景：鏡頭在書庫走道裡慢慢晃，走道盡頭站著「它」。
+背景是真的遊戲場景：鏡頭在 1F 大廳裡慢慢晃，遠處站著巡館的館員。
 """
 import math
 
 from ursina import Button, Entity, Text, camera, color, time
 
 DIFFICULTIES = {
-    "簡單": dict(speed=2.0, seconds=240, sight=13,
-               desc="它走得慢，有 4 分鐘，手電筒照得比較遠。\n第一次玩選這個。"),
-    "普通": dict(speed=2.6, seconds=180, sight=10,
-               desc="原本設計的體驗。\n3 分鐘內找齊筆記。"),
-    "困難": dict(speed=3.5, seconds=150, sight=7,
-               desc="它很快，只有 2 分半，手電筒照不遠。\n別眨眼。"),
+    "簡單": dict(speed=1.6, seconds=300, sight=9, flee=4.6, hits=18, fight_time=7.0,
+               desc="館員走得慢、看不遠，一天有 5 分鐘。\n室友逃得慢，一下就打趴。"),
+    "普通": dict(speed=2.0, seconds=240, sight=12, flee=5.2, hits=25, fight_time=7.0,
+               desc="原本設計的體驗。\n一天 4 分鐘（18:00–22:00）。"),
+    "困難": dict(speed=2.6, seconds=180, sight=15, flee=5.8, hits=32, fight_time=6.5,
+               desc="館員眼睛很利，室友跑很快。\n手要按得夠快。"),
 }
 
-STORY = """期中考週，傳說總圖地下書庫藏著一本「考古題之書」，
-誰拿到，誰就 all pass。
+STORY = """期中考週。你和室友立下「擺爛聯盟」：
+這次期中考，誰都不准讀書。
 
-你跟室友半夜躲在 24 小時夜讀區，打算等館員下班後溜進去。
-你不小心睡著了。醒來時是凌晨 2:40，室友的位子空了，
-通往館藏區的門……沒有鎖。
+傍晚六點，室友說他要在宿舍睡一整天。
+但他的 IG 限動，背景是總圖的落地窗。
 
-書架之間有「東西」。
-你看著它，它就不動；你一轉頭，它就靠近。
+說好一起擺爛，結果你偷卷？
 
-凌晨 3:00 一到，一切會重來。
-但你會記得上一輪讀過的筆記。"""
+你衝進清大總圖。館員在巡館，館內不准奔跑，
+而他每隔幾秒就會抬頭張望一次。
+今天 22:00 閉館前，一定要抓到他。"""
 
-GOAL = """目標：在清大總圖一層一層往上找室友留下的線索，最後下到 B1 找到《考古題之書》。
+GOAL = """目標：照著室友留下的線索一層一層往上找，在 4F 抓到他、痛扁他。
 
-1F　夜讀區讀室友的筆記 → 聯合櫃臺電腦查預約 → 打開自助取書櫃，拿到館員門卡
-2F　照校史展示區的提示，登入電腦教室最裡面那台電腦，開通樓梯門禁
-3F　到視聽聆賞席聽還在播的錄音帶，數清楚嗶了幾聲（第一碼）
-4F　「300 科學類」書架上的便條（第二碼）、討論室白板（第三碼）
-　　→ 打開清華書房的展示櫃，拿到 B1 通行證
-B1　從東南角樓梯間一路往下，轉動密集書架的手輪，找到《考古題之書》就過關
-（5F、6F 還在蓋）
+1F　聯合櫃臺電腦查室友的預約 → 打開自助取書櫃，找到 2F 電腦教室的預約單
+2F　照校史展示區的提示，登入電腦教室最裡面那台電腦，看他的搜尋紀錄
+3F　到視聽聆賞席聽還在播的錄音帶（嗶幾聲就是展示櫃的第一碼）
+4F　室友就在某張桌子讀書！趁他低頭時躡手躡腳靠近，按 E 抓住他
+　　抓到後狂按 E 痛扁他，時間內打趴就過關
+隱藏：湊齊三碼打開清華書房的展示櫃，結局會不一樣
+（B1 是館員專用；5F、6F 還在蓋）
 
 會讓你重來的事
-・被「它」抓到。它只在你沒看著它的時候移動
-・左上角的時鐘走到 03:00
-重來時你會留在同一層，拿到的東西和讀過的筆記都記得。
+・被館員警告三次（館內奔跑、太吵）就會被請出去
+・時鐘走到 22:00 閉館
+重來時是隔天，你會留在同一層，查到的線索都記得。
 每開一局，取書櫃號碼和密碼都不一樣。"""
 
 CONTROLS = """WASD　　移動
 滑鼠　　　看
-Shift　　跑
-E　　　　讀筆記／輸入密碼
-F　　　　開關手電筒
+Shift　　跑（館員看到會警告，室友聽到會逃）
+Ctrl　　 躡手躡腳地走（不會發出聲音）
+C　　　　躲到旁邊的桌子底下／出來
+E　　　　互動、上下樓、抓室友、痛扁（狂按）
 ESC　　　回到大廳
 
 小提示
-・夜讀區燈是亮的，它進不來
-・手電筒關掉時你看不清它，它就會動
-・心跳聲越快，它越近
-・燈管開始亂閃，代表它就在附近"""
+・館員頭上冒「噓！」就是被警告了，一天三次就出局
+・左下角的聲音條滿了，館員會走過來看
+・掉書、手機響會把館員引開，趁機溜過去
+・室友抬頭張望時會看到你；低頭讀書時只聽得到跑步聲
+・他逃跑時追上去碰到他也算抓到"""
 
-ACCENT = color.rgb32(150, 30, 30)
+ACCENT = color.rgb32(200, 90, 20)
 IDLE = color.rgba32(25, 25, 28, 230)
 
 
 def _button(parent, text, y, on_click, x=-0.55, width=0.36):
     b = Button(parent=parent, text=text, position=(x, y), scale=(width, 0.065),
-               color=IDLE, highlight_color=color.rgba32(90, 20, 20, 240),
+               color=IDLE, highlight_color=color.rgba32(140, 70, 20, 240),
                pressed_color=ACCENT, radius=0.1)
     b.text_entity.scale *= 0.9
     b.on_click = on_click
@@ -80,11 +81,11 @@ class Lobby:
         # 左半邊壓暗，字比較清楚
         Entity(parent=self.root, model="quad", position=(-0.55, 0), scale=(0.9, 1.2),
                color=color.rgba32(0, 0, 0, 170), z=0.1)
-        Text(parent=self.root, text="總圖不打烊", position=(-0.55, 0.36), origin=(0, 0), scale=3.6,
+        Text(parent=self.root, text="偷卷仔，給我站住！", position=(-0.55, 0.36), origin=(0, 0), scale=2.8,
              color=color.rgb32(225, 218, 200))
-        Text(parent=self.root, text="NTHU Library · After Dark", position=(-0.55, 0.285), origin=(0, 0),
+        Text(parent=self.root, text="NTHU Library · Catch the Secret Studier", position=(-0.55, 0.285), origin=(0, 0),
              scale=1.0, color=color.rgb32(150, 145, 135))
-        Text(parent=self.root, text="凌晨 2:40。你只有到 3:00 的時間。", position=(-0.55, 0.235), origin=(0, 0),
+        Text(parent=self.root, text="說好一起擺爛，結果你偷卷？", position=(-0.55, 0.235), origin=(0, 0),
              scale=0.9, color=ACCENT)
 
         _button(self.root, "開始遊戲", 0.14, self.start)
