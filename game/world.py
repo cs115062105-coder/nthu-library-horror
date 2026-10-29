@@ -5,6 +5,7 @@
 3F 視聽、語言學習、小舞台、發呆區；4F 中文圖書 000–499、清華書房、清華故事牆；
 5F 中文圖書 500–999；6F 西文圖書；B1 密集書庫。每層是 FLOORS 裡的一張格子圖。
 """
+import math
 import random
 
 from ursina import Entity, Texture, Vec3, color, destroy, scene
@@ -20,45 +21,39 @@ SHADE = 0.95    # 白天的圖書館：燈全開，只稍微壓一點亮度避�
 # T  閱覽桌      C  自習座位               S  總服務台    O  柱子
 # G  玻璃隔間    R  感應閘門（可通過）      ,  大廳磨石子  .  地毯
 # P  起點        M  館員起點               1–6 筆記       U/D 樓梯間往上／往下的門
-# k  可移動的密集書架（由 banks 決定哪一道走道是開的）
+# k  可移動的密集書架（由 banks 決定哪一道走道是開的）  x  斜面落地窗外面（只有看不見的碰撞，外觀由 curves 的玻璃牆負責）
 # N  報紙／期刊架  E  展覽看板  Y  沙發  L  自助取書櫃  H  校史展板  Q  電腦桌  q  還開著的那台電腦
 # V  視聽座位  v  還在播的那台  Z  小舞台  X  清華書房展示櫃
 ORDER = ["B1", "1F", "2F", "3F", "4F", "5F", "6F"]
 
 # 各層格子圖照圖書館官網的樓層平面圖排：西南邊是弧形落地窗，北邊一整排是公務區，樓梯間在東南角。
-# 1F：聯合櫃臺、自助取書區、資訊島、圓形的知識集展區、輕學區、清沙龍。夜讀區在前棟，從西南的入口接過來。
+# 1F：照官網平面圖的像素座標換算（38.4 px = 1 格）：西南斜面是入口，左邊聯合櫃臺、北邊自助取書區、
+#     中間圓形的知識集展區、東邊輕學區、南邊清沙龍和逗留點，樓梯間在東南角。
 LEVEL_1F = [
-    "################################",
-    "#.....Q.Q.....LLLLLLLL...#######",
-    "#........................#######",
-    "#........................#######",
-    "#...S....................#######",
-    "#...S........Q.Q.........#######",
-    "#...S.O......O.....O.....#######",
-    "#...S..........................W",
-    "#...S........N.N.N.N...........W",
-    "#..........N.........N.........W",
-    "#................E........T..T.W",
-    "#.............E.....E..........W",
-    "#.....O......O.....O.....O.....W",
-    "##W.......................T..T.W",
-    "###W.........E.......E.........W",
-    "###W...........................W",
-    "####W.........E.....E.....T..T.W",
-    "#####W.........................W",
-    "#####WO......O...E.O.....O.....W",
-    "######W........................W",
-    "#######W..........Y..Y..M......W",
-    "########.....Y.....T...........W",
-    "########R.P....................W",
-    "#........W....Y...Y..Y.........W",
-    "W.T..T...#W..O.....O.....O.....W",
-    "W........#W....................W",
-    "W......1.################UD#####",
-    "W.T..T...#######################",
-    "W........#######################",
-    "#........#######################",
-    "################################",
+    "##########################",
+    "#...QQ.....LLLLLLLL.######",
+    "#...................######",
+    "#.S.................######",
+    "#.S....N............######",
+    "#.S........QQ.......######",
+    "#.S..O....O....O....O....W",
+    "#.S......................W",
+    "#.S......M............T..W",
+    "#........................W",
+    "x..N.....................W",
+    "xx...O....O.........O....W",
+    "xxx............E......T..W",
+    "xxxx...................1.W",
+    "xxxx.....................W",
+    "xxxxx..P..............T..W",
+    "xxxxxx....O....O....O....W",
+    "xxxxxx..R................W",
+    "xxxxxxx..R..Y.....Y......W",
+    "xxxxxxxx.....Y...T.T.....W",
+    "xxxxxxxx.................W",
+    "xxxxxxxxx.O....O....#UD###",
+    "xxxxxxxxxx..........######",
+    "xxxxxxxxxx################",
 ]
 # 2F：期刊、學位論文、校史展示區、電腦教室、閱覽區
 LEVEL_2F = [
@@ -156,7 +151,7 @@ LEVEL_4F = [
     "####################...........#",
     "################################",
 ]
-BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZX")
+BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXx")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
 LEVEL_B1 = [
@@ -197,16 +192,16 @@ HISTORY = [("1911", "清華學堂在北京成立"), ("1928", "改名國立清華
            ("1971", "成立大學部"), ("2013", "旺宏館（學習資源中心）啟用")]
 
 FLOORS = {
-    "1F": dict(level=LEVEL_1F, floor="carpet", banks=[],
-               safe={(c, r) for c in range(1, 9) for r in range(23, 30)},
-               hanging={(4, 25): ("夜讀區 24H", "Moonlight Study Area"), (6, 6): ("聯合櫃臺", "Service Counter"),
-                        (17, 3): ("自助取書區", "Smart Bookshelves · Self Pick-up"), (14, 6): ("資訊島", "Information Retrieval"),
-                        (16, 9): ("新知 · 閱報", "New Arrivals · Newspapers"), (17, 13): ("知識集 · 主題展", "The Circle · Exhibition"),
-                        (27, 8): ("輕學區", "Light Up Zone"), (20, 22): ("清沙龍", "Idea Hub"),
-                        (14, 20): ("逗留點", "Meeting Point"), (8, 20): ("入館服務", "Reception"),
-                        (25, 24): ("樓梯間", "Stairs")},
-               posters=[((9, 25), (-1, 0), "missing"), ((0, 29), (1, 0), "notice"), ((25, 5), (-1, 0), "missing"),
-                        ((27, 26), (0, -1), "notice")]),
+    "1F": dict(level=LEVEL_1F, floor="carpet", banks=[], safe=set(),
+               hanging={(3, 6): ("聯合櫃臺", "Service Counter"), (14, 2): ("自助取書區", "Smart Bookshelves · Self Pick-up"),
+                        (11, 4): ("資訊島", "Information Retrieval"), (7, 3): ("新知 · 閱報", "New Arrivals · Newspapers"),
+                        (15, 10): ("知識集 · 主題展", "The Circle · Exhibition"), (22, 10): ("輕學區", "Light Up Zone"),
+                        (18, 17): ("清沙龍", "Idea Hub"), (12, 17): ("逗留點", "Meeting Point"),
+                        (8, 14): ("入館服務", "Reception"), (21, 19): ("樓梯間", "Stairs"), (3, 9): ("自助還書", "Book Drop")},
+               posters=[((0, 5), (1, 0), "missing"), ((8, 0), (0, 1), "notice"), ((20, 4), (-1, 0), "missing"),
+                        ((12, 23), (0, -1), "notice")],
+               # 平面圖上的斜線和弧線（格子座標，可以有小數）：斜面落地窗、弧形長椅、知識集的圓形展區、入館服務台
+               curves=[{'kind': 'glass', 'pts': [(1.58, 10.81), (9.4, 22.4)]}, {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]}, {'kind': 'low', 'h': 1.1, 'pts': [(12.49, 8.39), (13.29, 7.96), (14.17, 7.73), (15.07, 7.7), (15.96, 7.89), (16.79, 8.27), (17.5, 8.83), (18.06, 9.54), (18.44, 10.37), (18.63, 11.25), (18.6, 12.16), (18.36, 13.04), (17.93, 13.83), (17.33, 14.51), (16.59, 15.03), (15.75, 15.37), (14.85, 15.5), (13.94, 15.42), (13.08, 15.13), (12.31, 14.66), (11.67, 14.02), (11.19, 13.24), (10.91, 12.38), (10.83, 11.48), (10.96, 10.58)]}, {'kind': 'low', 'h': 0.9, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]}, {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
     "2F": dict(level=LEVEL_2F, floor="carpet", banks=[], safe=set(),
                shelf_labels=["學位論文 Theses"],
                hanging={(25, 22): ("樓梯間", "Stairs"), (8, 3): ("電腦教室", "Computer Lab II"),
@@ -411,6 +406,9 @@ class World:
                     self.stage(c, r, p)
                 elif ch == "X":
                     self.case(p)
+                elif ch == "x":
+                    self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), occludes=False)
+        self.curves()
         for (c, r), lines in self.spec["hanging"].items():
             self.hanging_sign(cell_pos(c, r), lines)
         for (c, r), (dc, dr), kind in self.spec["posters"]:
@@ -418,6 +416,35 @@ class World:
             self.quad(cell_pos(c, r) + dvec * (CELL / 2 + 0.01) + Vec3(self.rng.uniform(-0.4, 0.4), 1.55, 0),
                       (0.6, 0.85), self.t[kind], rot=(0, facing_y(dvec), self.rng.uniform(-4, 4)))
         self.ceiling_lights()
+
+    def curves(self):
+        """平面圖上的斜線和弧線，用很多段細長方塊接起來：玻璃是整面落地窗，low 是展示架、長椅這類矮牆。
+        矮牆經過的格子從 walkable 拿掉，館員和室友才不會穿過去。"""
+        for spec in self.spec.get("curves", []):
+            glass = spec["kind"] == "glass"
+            h = WALL_H if glass else spec.get("h", 1.0)
+            pts = [Vec3(c * CELL, 0, -r * CELL) for c, r in spec["pts"]]
+            for a, b in zip(pts, pts[1:]):
+                d = b - a
+                seg = Entity(model="cube", position=(a + b) / 2 + Vec3(0, h / 2, 0), rotation_y=math.degrees(math.atan2(d.x, d.z)),
+                             scale=(0.2 if glass else 0.3, h, d.length() + 0.08), collider="box",
+                             texture=self.t["window"] if glass else self.t["wood"],
+                             texture_scale=(d.length() / CELL, 1) if glass else (1, 1),
+                             color=color.rgb(SHADE, SHADE, SHADE) if glass else color.rgb32(200, 190, 170))
+                if glass:
+                    self.solids.append(seg)
+            if not glass:
+                for cell in list(self.walkable):
+                    if any(self.seg_dist(cell, p, q) < 0.6 for p, q in zip(spec["pts"], spec["pts"][1:])):
+                        self.walkable.discard(cell)
+
+    @staticmethod
+    def seg_dist(cell, p, q):
+        """格子中心到線段 pq 的距離（格子座標）。"""
+        (x, y), (x1, y1), (x2, y2) = cell, p, q
+        dx, dy = x2 - x1, y2 - y1
+        t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy or 1)))
+        return math.hypot(x - x1 - t * dx, y - y1 - t * dy)
 
     def open_sides(self, c, r):
         for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
