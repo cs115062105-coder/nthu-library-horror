@@ -103,10 +103,11 @@ class Game:
         self.librarian = Librarian(self)
         self.roommate = Roommate(self)
         self.setup_audio()
-        self.hud_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0.5), position=(-0.87, 0.49),
+        self.ui_left = Entity(parent=camera.ui)   # 貼著畫面左緣的介面，螢幕比例不同也不會被切掉
+        self.hud_bg = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0.5), position=(0.02, 0.49),
                              scale=(1.25, 0.09), color=color.rgba32(255, 255, 255, 150), z=0.6)
-        self.clock_text = Text(position=(-0.85, 0.47), scale=1.2, color=color.rgb32(40, 40, 50))
-        self.goal_text = Text(position=(-0.85, 0.425), scale=1.0, color=color.rgb32(150, 70, 20))
+        self.clock_text = Text(parent=self.ui_left, position=(0.04, 0.47), scale=1.2, color=color.rgb32(40, 40, 50))
+        self.goal_text = Text(parent=self.ui_left, position=(0.04, 0.425), scale=1.0, color=color.rgb32(150, 70, 20))
         self.prompt = Text(position=(0, -0.06), origin=(0, 0), scale=1.1, color=color.white)
         self.prompt_bg = Entity(parent=camera.ui, model="quad", position=(0, -0.06), z=0.6,
                                 color=color.rgba32(0, 0, 0, 150), enabled=False)
@@ -137,11 +138,11 @@ class Game:
         self.total_warnings = 0
         self.spotted = 0             # 被室友發現（逃跑）幾次
         self.moving = self.running = self.sneaking = False
-        self.noise_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+        self.noise_bg = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0), position=(0.04, -0.44),
                                scale=(0.3, 0.018), color=color.rgba32(0, 0, 0, 60))
-        self.noise_bar = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+        self.noise_bar = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0), position=(0.04, -0.44),
                                 scale=(0, 0.018), color=color.rgb32(90, 90, 100))
-        self.noise_label = Text(position=(-0.85, -0.405), scale=0.8, color=color.rgb32(30, 30, 40))
+        self.noise_label = Text(parent=self.ui_left, position=(0.04, -0.405), scale=0.8, color=color.rgb32(30, 30, 40))
         self.scares = Scares(self)
         self.bob = 0.0
         self.step_timer = 0.0
@@ -675,7 +676,7 @@ class Game:
         else:
             story = ("他鼻青臉腫地承認：「我只是想偷偷考 100 分……」\n隔週成績公布：他 100 分，你 38 分。\n"
                      "你默默決定明天也來總圖。\n\n—— 結局：擺爛聯盟解散 ——")
-        self.note_text.text = (f"{story}\n{self.difficulty}・第 {self.day} 天・被室友發現 {self.spotted} 次・"
+        self.note_text.text = (f"{story}\n{self.difficulty}·第 {self.day} 天·被室友發現 {self.spotted} 次·"
                                f"館員警告 {self.total_warnings} 次\n按 Enter 回到大廳")
 
     def hide_note(self):
@@ -683,6 +684,7 @@ class Game:
         self.note_bg.enabled = False
 
     def update(self):
+        self.ui_left.x = -window.aspect_ratio / 2
         if self.state != "play" or self.cleared or self.dead:
             return
         if self.fight:
