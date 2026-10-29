@@ -25,6 +25,7 @@ SHADE = 0.95    # 白天的圖書館：燈全開，只稍微壓一點亮度避�
 # k  可移動的密集書架（由 banks 決定哪一道走道是開的）  x  斜面落地窗外面（只有看不見的碰撞，外觀由 curves 的玻璃牆負責）
 # N  報紙／期刊架  E  展覽看板  Y  沙發  L  自助取書櫃  H  校史展板  Q  電腦桌  q  還開著的那台電腦
 # V  視聽座位  v  還在播的那台  Z  小舞台  X  清華書房展示櫃  t  圓桌（輕學區）  h  一排排的椅子（清沙龍）
+# k  白色電腦桌（電腦共學區）  m  整面期刊架  d  窗邊閱覽桌  c  白色圓沙發
 ORDER = ["B1", "1F", "2F", "3F", "4F", "5F", "6F"]
 
 # 各層格子圖照圖書館官網的樓層平面圖排：西南邊是弧形落地窗，北邊一整排是公務區，樓梯間在東南角。
@@ -56,37 +57,41 @@ LEVEL_1F = [
     "xxxxxxxxxx..........######",
     "xxxxxxxxxx################",
 ]
-# 2F：期刊、學位論文、校史展示區、電腦教室、閱覽區
+# 2F：照官網平面圖換算（32 px = 1 格，柱距 160 px = 5 格）：西北電腦教室和電腦共學區，西南一條弧形的校史展示區，
+#     中間資訊島，北邊熱門書刊，東邊現期期刊和窗邊閱覽桌，南邊學位論文書架，樓梯間在東南角。
 LEVEL_2F = [
-    "################################",
-    "#####.......####################",
-    "#####.Q.Q.q.####################",
-    "#####.......####################",
-    "#####.Q.Q.Q.####################",
-    "####GGG.GGGGG...################",
-    "####........G...################",
-    "####.Q.Q.Q..GG.G################",
-    "####........G..................W",
-    "#..G.Q.Q.Q.........N.N.N.N.N...W",
-    "#...........G..................W",
-    "#..GGGGGGG.GG..................W",
-    "#######W.....Q.Q...O...O...O...W",
-    "########W............N.N.N.N...W",
-    "########W......................W",
-    "#########W....H......N.N.N.N...W",
-    "##########W..2.O...O...O...O...W",
-    "###########W..........M........W",
-    "###########W.....H.............W",
-    "############W.......BBBBB.BBBB.W",
-    "#############W......H..........W",
-    "##############WW....BBBBB.BBBB.W",
-    "################W..............W",
-    "#################W......P......W",
-    "##################WW######UD####",
-    "################################",
-    "################################",
-    "################################",
-    "################################",
+    "########################################",
+    "######.......###########################",
+    "######.QQQQQq###########################",
+    "######.......###########################",
+    "######.QQQQQQ###########################",
+    "######.......###########################",
+    "#######.###.############################",
+    "####.........#GGGG######################",
+    "####.........#GT.G######################",
+    "####.kk...kk.#G..G######################",
+    "####.........#GGGG######################",
+    "####..t.O..t.###########################",
+    "####.........#..........mmmmmmmmmmmmmm.W",
+    "####.kk...kk...........................W",
+    "####.....................N.N.N.N.....d.W",
+    "####.........#.........................W",
+    "##############....O....O....O....O....OW",
+    "######.................................W",
+    "######....................c...c....c.d.W",
+    "####xxxx......H.2....................d.W",
+    "####xxxxxx...............M.............W",
+    "####xxxxxxx....H..O....O....O....O....OW",
+    "####xxxxxxxxx..........................W",
+    "####xxxxxxxxxx...H........c...c......d.W",
+    "####xxxxxxxxxxx......................d.W",
+    "####xxxxxxxxxxxx.......................W",
+    "####xxxxxxxxxxxxx.O....O....O....O....OW",
+    "####xxxxxxxxxxxxxx........BBBBBB.......W",
+    "####xxxxxxxxxxxxxx...H...............d.W",
+    "####xxxxxxxxxxxxxxx.......BBBBBB.P.....W",
+    "####xxxxxxxxxxxxxxxx...................W",
+    "#################################UD#####",
 ]
 # 3F：視聽媒體與聆賞、語言學習區、簡報練習室、討論室、小舞台、發呆區
 LEVEL_3F = [
@@ -152,7 +157,7 @@ LEVEL_4F = [
     "####################...........#",
     "################################",
 ]
-BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxth")
+BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdc")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
 LEVEL_B1 = [
@@ -204,6 +209,18 @@ def pane_arc(x0, x1, gap0, gap1, depth=3.0, top=0.5, n=24):
     return left, right
 
 
+def ellipse_pts(center, a, b, rot, a0, a1, n=14):
+    """橢圓上從角度 a0 到 a1 的一段弧（格子座標，y 朝下）；rot 是長軸轉的角度。"""
+    cx, cy = center
+    cr, sr = math.cos(math.radians(rot)), math.sin(math.radians(rot))
+    pts = []
+    for i in range(n + 1):
+        t = math.radians(a0 + (a1 - a0) * i / n)
+        x, y = a * math.cos(t), b * math.sin(t)
+        pts.append((round(cx + x * cr - y * sr, 2), round(cy + x * sr + y * cr, 2)))
+    return pts
+
+
 FLOORS = {
     "1F": dict(level=LEVEL_1F, floor="tile", banks=[], safe=set(),
                hanging={(3, 6): ("聯合櫃臺", "Service Counter"), (13, 4): ("自助取書區", "Smart Bookshelves · Self Pick-up"),
@@ -232,14 +249,29 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'low', 'h': 0.9, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="carpet", banks=[], safe=set(),
+    "2F": dict(level=LEVEL_2F, floor="stripes", banks=[], safe=set(),
+               wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
+               sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
-               hanging={(25, 22): ("樓梯間", "Stairs"), (8, 3): ("電腦教室", "Computer Lab II"),
-                        (8, 8): ("電腦共學區", "Computer Lab I"), (14, 6): ("討論室", "Discussion Rooms"),
-                        (14, 11): ("資訊島", "Information Retrieval"), (23, 8): ("熱門書刊區", "Popular Books and Periodicals"),
-                        (24, 14): ("現期期刊", "Current Periodicals"), (25, 18): ("本校學位論文", "NTHU Theses"),
-                        (15, 17): ("校史展示區", "University History")},
-               posters=[((0, 10), (1, 0), "missing"), ((25, 24), (0, -1), "notice"), ((20, 7), (0, 1), "missing")]),
+               hanging={(33, 30): ("樓梯間", "Stairs"), (9, 3): ("電腦教室", "Computer Lab II"),
+                        (8, 8): ("電腦共學區", "Computer Lab I"), (15, 12): ("討論室", "Discussion Rooms"),
+                        (16, 15): ("資訊島", "Information Retrieval"), (30, 13): ("熱門書刊區", "Popular Books and Periodicals"),
+                        (30, 20): ("現期期刊", "Current Periodicals"), (25, 28): ("本校學位論文", "NTHU Theses"),
+                        (11, 18): ("校史展示區", "University History")},
+               posters=[((3, 10), (1, 0), "missing"), ((20, 31), (0, -1), "notice"), ((13, 15), (1, 0), "missing")],
+               # 照 2F 實景照片：灰色條紋地毯、校史展示區的木條天花板、電腦教室的方格天花板、窗邊的格柵天花板
+               slat_cells=[(4, 15), (4, 16), (4, 17), (5, 15), (5, 16), (5, 17), (5, 18), (6, 15), (6, 16), (6, 17), (6, 18), (7, 15), (7, 16), (7, 17), (7, 18), (8, 15), (8, 16), (8, 17), (8, 18), (8, 19), (9, 15), (9, 16), (9, 17), (9, 18), (9, 19), (10, 15), (10, 16), (10, 17), (10, 18), (10, 19), (10, 20), (11, 15), (11, 16), (11, 17), (11, 18), (11, 19), (11, 20), (11, 21), (12, 15), (12, 16), (12, 17), (12, 18), (12, 19), (12, 20), (12, 21), (13, 16), (13, 17), (13, 18), (13, 19), (13, 20), (13, 21), (13, 22), (14, 17), (14, 18), (14, 19), (14, 20), (14, 21), (14, 22), (14, 23), (15, 17), (15, 18), (15, 19), (15, 20), (15, 21), (15, 22), (15, 23), (15, 24), (16, 18), (16, 19), (16, 20), (16, 21), (16, 22), (16, 23), (16, 24), (16, 25), (17, 19), (17, 20), (17, 21), (17, 22), (17, 23), (17, 24), (17, 25), (17, 26), (18, 20), (18, 21), (18, 22), (18, 23), (18, 24), (18, 25), (18, 26), (18, 27), (18, 28), (19, 21), (19, 22), (19, 23), (19, 24), (19, 25), (19, 26), (19, 27), (19, 28), (19, 29), (20, 22), (20, 23), (20, 24), (20, 25), (20, 26), (20, 27), (20, 28), (20, 29), (20, 30), (21, 23), (21, 24), (21, 25), (21, 26), (21, 27), (21, 28), (21, 29), (21, 30), (22, 24), (22, 25), (22, 26), (22, 27), (22, 28), (22, 29), (22, 30), (23, 26), (23, 27), (23, 28), (23, 29), (23, 30), (24, 27), (24, 28), (24, 29), (24, 30), (25, 29), (25, 30)],
+               ceiling_regions=[("ceiling", 5.5, 0.5, 12.5, 5.5)],
+               grid_ceilings=[(34.5, 11.5, 39, 30.5)],
+               tri_lights=[(6, 8), (10, 8), (6, 12), (10, 12), (8, 14)],
+               label_counter=dict(a=(7.6, 18.0), b=(11.6, 19.6), lines=("校史展示區", "University History")),
+               curves=[{'kind': 'glass', 'pts': [[5.41, 17.71], [6.39, 18.11], [7.34, 18.55], [8.28, 19.03], [9.2, 19.54], [10.1, 20.08], [10.98, 20.66], [11.84, 21.27], [12.68, 21.92], [13.48, 22.59], [14.27, 23.29], [15.02, 24.03], [15.75, 24.79], [16.45, 25.58], [17.12, 26.39], [17.75, 27.23], [18.36, 28.09], [18.93, 28.97], [19.47, 29.88], [19.97, 30.8], [20.44, 31.75]]},
+                       {'kind': 'low', 'h': 2.4, 'pts': [[13.24, 16.19], [13.93, 16.66], [14.62, 17.14], [15.29, 17.65], [15.94, 18.17], [16.59, 18.7], [17.22, 19.26]]},
+                       {'kind': 'low', 'h': 2.4, 'pts': [[18.87, 20.85], [19.42, 21.44], [19.95, 22.03], [20.48, 22.64], [20.98, 23.27], [21.47, 23.9]]},
+                       {'kind': 'low', 'h': 2.4, 'pts': [[22.79, 25.78], [23.29, 26.58], [23.78, 27.4], [24.23, 28.23], [24.67, 29.07], [25.07, 29.92], [25.46, 30.79]]},
+                       {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
+                       {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
+                       {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
     "3F": dict(level=LEVEL_3F, floor="carpet", banks=[], safe=set(),
                shelf_labels=["DVD 影片", "CD 音樂"],
                hanging={(26, 20): ("樓梯間", "Stairs"), (15, 12): ("視聽聆賞席", "Viewing Carrels"),
@@ -336,11 +368,13 @@ class World:
             "note": t(tx.note_paper()), "screen": t(tx.screen()),
             "tile": t(tx.tile()), "wallw": t(tx.white_wall()), "plaster": t(tx.plaster()), "planks": t(tx.planks()),
             "cubbies": t(tx.cubbies(0)), "grid": t(tx.grid()),
+            "stripes": t(tx.stripes()), "blind": t(tx.blind()),
             "missing": t(tx.poster_missing(self.font_path), "bilinear"),
             "notice": t(tx.poster_notice(self.font_path), "bilinear"),
         }
         self.book_tex = [t(tx.books(i)) for i in range(6)]
         self.t["covers"] = [t(tx.covers(i)) for i in range(4)]
+        self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]
         World._textures = (self.t, self.book_tex)
 
     def char(self, c, r):
@@ -446,11 +480,27 @@ class World:
                     self.stage(c, r, p)
                 elif ch == "X":
                     self.case(p)
+                elif ch == "k":
+                    self.pc_desk(p)
+                elif ch == "m":
+                    self.magazine_wall(c, r, p)
+                elif ch == "d":
+                    self.window_desk(c, r, p)
+                elif ch == "c":
+                    self.tub_chairs(p)
                 elif ch == "x":
                     self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), occludes=False)
         self.curves()
         if "circle" in self.spec:
             self.circle(self.spec["circle"])
+        for cell in self.spec.get("slat_cells", []):
+            self.slat_ceiling(*cell)
+        for name, *rect in self.spec.get("ceiling_regions", []):
+            self.ceiling_region(name, *rect)
+        for cell in self.spec.get("tri_lights", []):
+            self.tri_light(cell_pos(*cell))
+        if "label_counter" in self.spec:
+            self.label_counter(**self.spec["label_counter"])
         if "plank_ceiling" in self.spec:
             self.plank_ceiling(*self.spec["plank_ceiling"])
         for rect in self.spec.get("grid_ceilings", []):
@@ -494,6 +544,10 @@ class World:
                     Entity(model="cube", position=mid + Vec3(0, 0.06, 0), rotation_y=rot, scale=(0.2, 0.12, d.length() + 0.1),
                            color=color.rgb32(235, 235, 235))
                     continue
+                if spec["kind"] == "glow":   # 2F 校史展示區：整面會發光的白色弧牆
+                    Entity(model="cube", position=mid + Vec3(0, h / 2, 0), rotation_y=rot, scale=(0.25, h, d.length() + 0.08),
+                           collider="box", color=color.rgb(1.35, 1.35, 1.3))
+                    continue
                 seg = Entity(model="cube", position=mid + Vec3(0, h / 2, 0), rotation_y=rot,
                              scale=(0.2 if glass else 0.3, h, d.length() + 0.08), collider="box",
                              texture=self.t["window"] if glass else (None if white else self.t["wood"]),
@@ -530,6 +584,9 @@ class World:
         self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
 
     def window(self, c, r, p):
+        if self.spec.get("band_windows"):
+            self.band_window(c, r, p)
+            return
         if self.spec.get("full_windows"):
             self.full_window(c, r, p)
             return
@@ -560,6 +617,120 @@ class World:
             self.quad(p + side * (CELL * 0.9) + Vec3(0, 0.015, 0), (CELL * 1.4, CELL * 1.3),
                       self.t["glow"], col=color.rgba32(255, 245, 220, 80), rot=(90, 0, 0))   # 窗邊的陽光
         self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
+
+    def band_window(self, c, r, p):
+        """2F 窗邊：白色窗台，上面一整排玻璃，上半截拉下米白色的捲簾。"""
+        sides = list(self.open_sides(c, r))
+        across_x = any(side.x for side in sides)
+        thin = (lambda t, h, y: self.box(p + Vec3(0, y, 0), (t, h, CELL) if across_x else (CELL, h, t)))
+        self.box(p + Vec3(0, 0.4, 0), (0.5, 0.8, CELL) if across_x else (CELL, 0.8, 0.5), self.t["wallw"], tscale=(1, 0.3))
+        self.box(p + Vec3(0, WALL_H - 0.2, 0), (0.5, 0.4, CELL) if across_x else (CELL, 0.4, 0.5), col=color.rgb32(240, 240, 240))
+        self.box(p + Vec3(0, 1.85, 0), (0.1, 2.1, CELL) if across_x else (CELL, 2.1, 0.1), self.t["window"])
+        for side in sides:
+            face = p + side * 0.12
+            along = Vec3(side.z, 0, side.x)
+            self.box(face + Vec3(0, 0.81, 0), (0.3, 0.03, CELL) if across_x else (CELL, 0.03, 0.3), col=color.rgb32(225, 225, 225))
+            drop = 0.5 + 0.5 * ((c * 3 + r * 5) % 3) / 2     # 每一片捲簾拉下來的長度不太一樣
+            self.box(face + Vec3(0, WALL_H - 0.4 - drop / 2, 0), (0.02, drop, CELL * 0.98) if across_x else (CELL * 0.98, drop, 0.02),
+                     self.t["blind"], col=color.rgba32(255, 255, 255, 230))
+            for k in (-0.5, 0.5):
+                self.box(face + along * (k * CELL) + Vec3(0, 1.85, 0), (0.06, 2.1, 0.06), col=color.rgb32(70, 72, 76))
+            self.quad(p + side * (CELL * 0.9) + Vec3(0, 0.015, 0), (CELL * 1.4, CELL * 1.1),
+                      self.t["glow"], col=color.rgba32(255, 245, 220, 70), rot=(90, 0, 0))   # 窗邊的陽光
+        self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
+
+    def pc_desk(self, p):
+        """電腦共學區：白色 A 字腳長桌，中間一片霧面隔板，兩邊各一台懸臂螢幕和白色旋轉椅。"""
+        white, steel = color.rgb32(242, 242, 240), color.rgb32(190, 192, 196)
+        top = p + Vec3(0, 0.75, 0)
+        self.box(top - Vec3(0, 0.02, 0), (CELL * 1.01, 0.05, 1.5), col=white)
+        for x in (-0.85, 0.85):     # A 字腳
+            for lean in (-1, 1):
+                leg = self.box(p + Vec3(x, 0.37, lean * 0.3), (0.05, 0.8, 0.05), col=white)
+                leg.rotation_x = lean * 22
+        self.box(top + Vec3(0, 0.3, 0), (CELL * 0.98, 0.6, 0.03), col=color.rgba32(225, 230, 232, 200))
+        for side in (1, -1):
+            self.box(top + Vec3(0, 0.22, side * 0.1), (0.03, 0.42, 0.03), col=steel)
+            self.box(top + Vec3(0, 0.42, side * 0.2), (0.55, 0.34, 0.03), col=color.rgb32(25, 25, 28))
+            Entity(model="quad", position=top + Vec3(0, 0.42, side * 0.22), scale=(0.5, 0.3), rotation_y=0 if side > 0 else 180,
+                   texture=self.t["screen"], color=color.rgb(1.1, 1.1, 1.1))
+            if self.rng.random() < 0.85:
+                self.swivel_chair(p + Vec3(self.rng.uniform(-0.3, 0.3), 0, side * 1.05),
+                                  (0 if side > 0 else 180) + self.rng.uniform(-25, 25))
+        self.clutter(top, 0.6)
+        self.collider(p + Vec3(0, 0.5, 0), (CELL, 1.0, 1.5), occludes=False)
+
+    def magazine_wall(self, c, r, p):
+        """期刊區：靠牆的一整面長木櫃，斜板上立著一本本雜誌。"""
+        face = next((s for s in self.open_sides(c, r) if self.char(c + int(s.x), r - int(s.z)) not in BLOCKED), Vec3(0, 0, -1))
+        back = p - face * (CELL * 0.3)
+        self.box(back + Vec3(0, 1.1, 0), (CELL, 2.2, 0.8) if face.z else (0.8, 2.2, CELL), col=color.rgb32(196, 160, 112))
+        self.quad(back + face * 0.41 + Vec3(0, 1.1, 0), (CELL * 0.98, 2.1), self.t["mags"][(c + r) % 4],
+                  rot=(0, facing_y(face), 0))
+        self.collider(back + Vec3(0, 1.1, 0), (CELL, 2.2, 0.8) if face.z else (0.8, 2.2, CELL))
+
+    def window_desk(self, c, r, p):
+        """窗邊閱覽桌：面窗的長桌，兩邊白色隔板，桌上一條燈。"""
+        east = Vec3(1, 0, 0)
+        top = p + Vec3(0, 0.75, 0)
+        self.box(top - Vec3(0, 0.02, 0), (0.9, 0.05, CELL * 0.98), col=color.rgb32(222, 196, 156))
+        self.box(p + Vec3(0.4, 0.37, 0), (0.05, 0.74, CELL * 0.9), col=color.rgb32(235, 235, 235))
+        for z in (-0.98, 0.98):
+            self.box(top + Vec3(0, 0.25, z), (0.9, 0.5, 0.03), col=color.rgb32(238, 238, 236))
+        self.box(top + Vec3(0.38, 0.45, 0), (0.06, 0.04, CELL * 0.9), col=color.rgb(1.3, 1.3, 1.25))
+        self.clutter(top, 0.2)
+        if self.rng.random() < 0.85:
+            self.swivel_chair(p - east * 0.75 + Vec3(0, 0, self.rng.uniform(-0.3, 0.3)), 90 + self.rng.uniform(-20, 20))
+        self.hides.append(p)
+        self.collider(p + Vec3(0, 0.45, 0), (0.9, 0.9, CELL * 0.98), occludes=False)
+
+    def tub_chairs(self, p):
+        """期刊區的白色桶狀單人椅，兩張對坐，中間一張鍍鉻小圓桌。"""
+        for side in (1, -1):
+            ch = Entity(parent=self.group(None), position=p + Vec3(side * 0.6, 0, 0), rotation_y=90 * side + self.rng.uniform(-15, 15))
+            Entity(parent=ch, model=Cylinder(resolution=12, radius=0.38, height=0.42), color=color.rgb32(242, 242, 242))
+            Entity(parent=ch, model="cube", position=(0, 0.6, 0.25), scale=(0.72, 0.36, 0.2), color=color.rgb32(242, 242, 242))
+            Entity(parent=ch, model="cube", position=(0, 0.44, 0), scale=(0.6, 0.06, 0.55), color=color.rgb32(210, 210, 212))
+        Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.25, height=0.03), position=p + Vec3(0, 0.5, 0),
+               color=color.rgb32(200, 202, 206))
+        self.box(p + Vec3(0, 0.25, 0), (0.04, 0.5, 0.04), col=color.rgb32(200, 202, 206))
+        self.collider(p + Vec3(0, 0.4, 0), (CELL * 0.9, 0.8, 1.0), occludes=False)
+
+    def slat_ceiling(self, c, r):
+        """校史展示區上面的木條天花板。"""
+        self.quad(cell_pos(c, r) + Vec3(0, WALL_H - 0.03, 0), (CELL, CELL), self.t["planks"], rot=(-90, 0, 0))
+
+    def ceiling_region(self, name, c0, r0, c1, r1):
+        """某一區換一種天花板，例如電腦教室的礦纖板。"""
+        x0, x1 = (c0 - 0.5) * CELL, (c1 - 0.5) * CELL
+        z0, z1 = -(r0 - 0.5) * CELL, -(r1 - 0.5) * CELL
+        w, d = abs(x1 - x0), abs(z1 - z0)
+        Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H - 0.02, (z0 + z1) / 2), scale=(w, d), rotation_x=-90,
+               texture=self.t[name], texture_scale=(w / CELL * 3, d / CELL * 3), color=color.rgb(0.9, 0.9, 0.9))
+
+    def tri_light(self, p):
+        """電腦共學區的三叉吊燈：一根吊桿，三支白色燈管往外伸。"""
+        hub = p + Vec3(0, WALL_H - 0.7, 0)
+        self.box(hub + Vec3(0, 0.35, 0), (0.02, 0.7, 0.02), col=color.rgb32(60, 60, 60))
+        for k in range(3):
+            arm = Entity(parent=self.group(None), position=hub, rotation_y=k * 120 + 15)
+            self.box((0, 0, 0.55), (0.08, 0.06, 1.1), col=color.rgb32(245, 245, 245), parent=arm)
+            self.box((0, -0.035, 0.55), (0.05, 0.01, 1.0), col=color.rgb(1.5, 1.5, 1.45), parent=arm)
+
+    def label_counter(self, a, b, lines):
+        """校史展示區入口的白色發光長櫃，正面寫著區名。"""
+        pa, pb = Vec3(a[0] * CELL, 0, -a[1] * CELL), Vec3(b[0] * CELL, 0, -b[1] * CELL)
+        d = pb - pa
+        rot = math.degrees(math.atan2(d.x, d.z))
+        mid = (pa + pb) / 2
+        Entity(model="cube", position=mid + Vec3(0, 0.5, 0), rotation_y=rot, scale=(0.6, 1.0, d.length()),
+               collider="box", color=color.rgb(1.25, 1.25, 1.22))
+        normal = Vec3(-d.z, 0, d.x).normalized()      # 朝東北，面向走道
+        tex = self.text_tex(list(lines), w=320, h=64, bg=(250, 250, 250), fg=(30, 30, 34), sizes=[36, 14])
+        self.quad(mid + normal * 0.31 + Vec3(0, 0.55, 0), (3.0, 0.6), tex, rot=(0, math.degrees(math.atan2(-normal.x, -normal.z)), 0))
+        for cell in list(self.walkable):
+            if self.seg_dist(cell, a, b) < 0.6:
+                self.walkable.discard(cell)
 
     def shelf(self, c, r, p, run):
         self.shelf_runs.setdefault(run, []).append((c, r))
@@ -1000,7 +1171,10 @@ class World:
         panels = self.spec.get("history", HISTORY)
         year, text = panels[self.history_i % len(panels)]
         self.history_i += 1
-        tex = self.text_tex([year, text], w=220, h=280, bg=(70, 50, 30), sizes=[64, 20])
+        if self.spec.get("white"):   # 白色的展示板，黑字
+            tex = self.text_tex([year, text], w=220, h=280, bg=(246, 246, 244), fg=(40, 40, 44), sizes=[64, 20])
+        else:
+            tex = self.text_tex([year, text], w=220, h=280, bg=(70, 50, 30), sizes=[64, 20])
         for rot in (0, 180):
             self.quad(p + Vec3(0, 1.35, 0.03 if rot else -0.03), (0.95, 1.2), tex, rot=(0, rot, 0))
         self.box(p + Vec3(0, 0.35, 0), (0.08, 0.7, 0.08), col=color.rgb32(60, 50, 40))
@@ -1008,8 +1182,12 @@ class World:
         self.interactables.append(dict(kind="read", pos=p, data=f"history:{year} {text}"))
 
     def computer(self, p, live=False):
-        if self.spec.get("white") and not live:
+        if self.spec.get("white"):
             self.info_desk(p)
+            if live:   # 這台還亮著
+                Entity(model="quad", position=p + Vec3(0, 1.2, 0.125), scale=(0.5, 0.3),
+                       texture=self.t["screen"], color=color.rgb(1.6, 1.6, 1.6))
+                self.interactables.append(dict(kind="lab_pc", pos=p + Vec3(0, 0, -CELL * 0.5)))
             return
         top = p + Vec3(0, 0.76, 0)
         self.box(top - Vec3(0, 0.02, 0), (1.4, 0.05, 0.8), self.t["wood"])

@@ -374,3 +374,43 @@ def grid():
         d.line([(i, 0), (i, 31)], fill=(118, 118, 122))
         d.line([(0, i), (31, i)], fill=(118, 118, 122))
     return img
+
+
+def stripes():
+    """2F 的灰色地毯：淺灰底，一條條深灰的細條紋，偶爾一條比較寬的深色帶。"""
+    rng = random.Random(16)
+    img = Image.new("RGB", (64, 64), (128, 130, 134))
+    d = ImageDraw.Draw(img)
+    for y in range(0, 64, 4):
+        g = rng.randint(104, 120)
+        d.line([(0, y), (63, y)], fill=(g, g, g + 3))
+    d.rectangle([0, 40, 63, 45], fill=(78, 80, 86))
+    return _noise(img, 4, rng)
+
+
+def magazines(seed):
+    """期刊牆：淺木色的斜板，每格立著一本彩色雜誌，下面一條木頭隔板。"""
+    rng = random.Random(400 + seed)
+    w, h = 64, 96
+    img = Image.new("RGB", (w, h), (200, 168, 120))
+    d = ImageDraw.Draw(img)
+    for row in range(4):
+        y = 4 + row * 23
+        d.rectangle([0, y + 19, w, y + 22], fill=(150, 118, 80))
+        for col in range(3):
+            x = 3 + col * 21
+            if rng.random() < 0.85:
+                c = tuple(rng.randint(40, 235) for _ in range(3))
+                d.rectangle([x, y, x + 15, y + 18], fill=c)
+                d.rectangle([x + 2, y + 2, x + 13, y + 5], fill=(250, 250, 250))
+                d.rectangle([x + 3, y + 8, x + 12, y + 15], fill=tuple(max(0, v - 50) for v in c))
+    return _noise(img, 4, rng)
+
+
+def blind():
+    """窗邊的捲簾：半透明的米白色，一條條細橫紋。"""
+    img = Image.new("RGB", (32, 32), (226, 222, 210))
+    d = ImageDraw.Draw(img)
+    for y in range(0, 32, 3):
+        d.line([(0, y), (31, y)], fill=(208, 204, 192))
+    return img
