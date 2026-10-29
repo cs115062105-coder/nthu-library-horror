@@ -274,3 +274,103 @@ def whiteboard(digit, font_path):
     d.text((222, 100), str(digit), font=_font(font_path, 56), fill=red)
     d.rectangle([0, 0, w - 1, h - 1], outline=(150, 150, 150), width=4)
     return img
+
+
+# ---------- 1F 實景：照總圖 1F 的照片做的 ----------
+def tile():
+    """1F 大廳的深灰色長條地磚，交錯排列，偶爾一條不鏽鋼收邊條。"""
+    rng = random.Random(13)
+    w, h = 64, 64
+    img = Image.new("RGB", (w, h), (64, 64, 66))
+    d = ImageDraw.Draw(img)
+    for row in range(4):
+        y0 = row * 16
+        off = 0 if row % 2 == 0 else 16
+        for k in range(-1, 3):
+            x0 = off + k * 32
+            g = rng.randint(70, 86)
+            d.rectangle([x0 + 1, y0 + 1, x0 + 31, y0 + 15], fill=(g, g, g + 2))
+    d.line([(0, 63), (63, 63)], fill=(150, 152, 156))   # 收邊條
+    return _noise(img, 3, rng)
+
+
+def white_wall():
+    """1F 的白牆：乾淨的白色，下面一條深灰踢腳板。"""
+    rng = random.Random(14)
+    img = Image.new("RGB", (64, 96), (236, 236, 234))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 92, 64, 96], fill=(80, 80, 82))
+    return _noise(img, 2, rng)
+
+
+def plaster():
+    """1F 的白色平頂天花板，一格一盞圓形嵌燈。"""
+    img = Image.new("RGB", (32, 32), (238, 238, 240))
+    d = ImageDraw.Draw(img)
+    d.ellipse([12, 12, 19, 19], fill=(200, 200, 205))
+    d.ellipse([14, 14, 17, 17], fill=(255, 255, 250))
+    return img
+
+
+def planks():
+    """聯合櫃臺上方的木條天花板。"""
+    rng = random.Random(15)
+    img = Image.new("RGB", (64, 64), (190, 170, 140))
+    d = ImageDraw.Draw(img)
+    for x in range(0, 64, 8):
+        c = rng.randint(170, 205)
+        d.rectangle([x, 0, x + 6, 63], fill=(c, c - 22, c - 55))
+        d.line([(x + 7, 0), (x + 7, 63)], fill=(110, 95, 75))
+    return _noise(img, 6, rng)
+
+
+def cubbies(seed):
+    """自助取書櫃：白色的格子櫃，每格放著幾本預約書，右下角一個紅色感應燈。"""
+    rng = random.Random(200 + seed)
+    w, h = 64, 96
+    img = Image.new("RGB", (w, h), (240, 240, 240))
+    d = ImageDraw.Draw(img)
+    cw, ch = 16, 16
+    for gy in range(0, h, ch):
+        for gx in range(0, w, cw):
+            d.rectangle([gx + 1, gy + 1, gx + cw - 2, gy + ch - 2], fill=(205, 205, 208))
+            x = gx + 3
+            for _ in range(rng.randint(0, 4)):
+                bw = rng.randint(2, 3)
+                bh = rng.randint(7, 12)
+                d.rectangle([x, gy + ch - 3 - bh, x + bw - 1, gy + ch - 3], fill=rng.choice(BOOK_COLORS))
+                x += bw
+            d.point((gx + cw - 4, gy + ch - 4), fill=(210, 40, 40))
+        d.line([(0, gy), (w, gy)], fill=(250, 250, 250))
+    return _noise(img, 3, rng)
+
+
+def covers(seed):
+    """知識集的木色展示板：上面一條主題展標題，下面三排三列的書封面。"""
+    rng = random.Random(300 + seed)
+    w, h = 64, 128
+    img = Image.new("RGB", (w, h), (214, 190, 150))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, w, 20], fill=(245, 245, 245))
+    for i, c in enumerate([(230, 60, 60), (60, 120, 220), (90, 180, 80), (240, 180, 40)]):
+        d.rectangle([3 + i * 5, 4, 6 + i * 5, 16], fill=c)
+    d.rectangle([26, 7, 58, 12], fill=(70, 120, 190))
+    for row in range(3):
+        y = 30 + row * 30
+        d.line([(2, y + 24), (w - 2, y + 24)], fill=(170, 170, 170))
+        for col in range(3):
+            x = 6 + col * 20
+            c = tuple(rng.randint(40, 230) for _ in range(3))
+            d.rectangle([x, y, x + 12, y + 17], fill=c)
+            d.rectangle([x + 2, y + 3, x + 10, y + 6], fill=(250, 250, 250))
+    return _noise(img, 3, rng)
+
+
+def grid():
+    """深色鋁格柵天花板：一格一格的方框，透出上面更暗的管線層。"""
+    img = Image.new("RGB", (32, 32), (52, 52, 55))
+    d = ImageDraw.Draw(img)
+    for i in range(0, 32, 4):
+        d.line([(i, 0), (i, 31)], fill=(118, 118, 122))
+        d.line([(0, i), (31, i)], fill=(118, 118, 122))
+    return img

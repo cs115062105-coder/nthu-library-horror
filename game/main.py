@@ -24,12 +24,12 @@ from npc import Librarian, Roommate, to_cell
 from player import Player
 from world import World, cell_pos
 
-MENU_SPOT = (5, 15)     # 大廳背景：1F 入口旁，望向圓形展區
-MENU_LIBRARIAN = (17, 15)
+MENU_SPOT = (7, 13)     # 大廳背景：1F 入口旁，望向圓形的知識集展區
+MENU_LIBRARIAN = (9, 13)
 SKY = color.rgb32(226, 226, 218)   # 白天的霧：遠處淡淡的米白色
 
 NOTES = {
-    "1": "（夜讀區，室友常坐的位子）桌上刻著：「擺爛聯盟　永不讀書」。\n旁邊卻壓著一張今天的「預約取書」收據……\n去聯合櫃臺的電腦查查看他預約了什麼。",
+    "1": "（輕學區，室友常坐的位子）桌上刻著：「擺爛聯盟　永不讀書」。\n旁邊卻壓著一張今天的「預約取書」收據……\n去聯合櫃臺的電腦查查看他預約了什麼。",
     "2": "（2F 桌上的便條，室友的字）「電腦教室最裡面那台，密碼是學校在新竹建校那年。」\n下面又補一行：「……我為什麼要寫下來？」",
     "3": "一張計算紙，寫滿了微積分。最下面寫著：「不能讓他知道。」",
     "5": "（語言學習區，耳機還是熱的）隨手寫的紙條：\n「線代錄音 → 視聽區最裡面那台（螢幕亮著）」",
@@ -169,7 +169,17 @@ class Game:
         self.apply_view()   # 霧的參數要重新套到新蓋的東西上
 
     def refresh_paths(self):
-        self.librarian_walkable = self.world.walkable - self.world.spec["safe"]   # 館員不巡夜讀區
+        """館員只走得到跟他出發點連在一起的走道（知識集圓形展區裡面那幾格走不進去），也不巡夜讀區。"""
+        open_cells = self.world.walkable - self.world.spec["safe"]
+        start = to_cell(self.world.monster_start)
+        reach, todo = {start}, [start]
+        while todo:
+            c, r = todo.pop()
+            for nxt in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)):
+                if nxt in open_cells and nxt not in reach:
+                    reach.add(nxt)
+                    todo.append(nxt)
+        self.librarian_walkable = reach
 
     def take_stairs(self, direction):
         """走進樓梯間：畫面全黑、換樓層。"""
