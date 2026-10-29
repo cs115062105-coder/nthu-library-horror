@@ -20,6 +20,7 @@ from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
+from minigames import GateRun, PrimeWall
 from npc import Librarian, Roommate, to_cell
 from player import Player
 from world import World, cell_pos
@@ -84,6 +85,8 @@ class Game:
         self.items = set()           # 跨天保留：查到的線索
         self.locker_no = 1
         self.entry = None            # 輸入密碼的畫面
+        self.mini = None             # 正在玩的小遊戲
+        self.crew = 0                # 揪來一起扁他的人數
         self.fight = None            # 痛扁小遊戲
         self.arrival = None
         self.code = "000"
@@ -202,7 +205,7 @@ class Game:
         self.code = "".join(random.choice("123456789") for _ in range(3))   # 每局密碼都不同
         self.locker_no = random.randint(1, 6)
         self.day = 1
-        self.total_warnings = self.spotted = 0
+        self.total_warnings = self.spotted = self.crew = 0
         self.cleared = False
         self.tape_playing = False
         self.load_floor("1F", came="start")   # 重蓋一次，東西都回到原狀
@@ -225,6 +228,9 @@ class Game:
         self.flash_fade()
         self.close_entry()
         self.end_fight_ui()
+        if self.mini:
+            self.mini.close()
+            self.mini = None
         self.scares.reset()
         self.noise, self.hidden = 0.0, False
         self.noise_bar.scale_x, self.noise_label.text = 0, ""
@@ -398,14 +404,36 @@ class Game:
         self.hidden = False
         self.fight = dict(hp=self.cfg["hits"], time=self.cfg["fight_time"], shake=0.0, hits=0)
         self.fight_title.text = "抓到了！狂按 E 或滑鼠左鍵痛扁他！"
+        if self.crew:
+            self.show_hint(f"你揪來的 {self.crew} 個人從書架後面衝出來！每一下 ×{self.power()}", 3)
         self.fight_line.text = "室友：「等、等一下！我可以解釋！」"
         self.hp_bg.enabled = self.hp_bar.enabled = True
         self.hp_bar.scale_x = 0.6
         self.play("sting", volume=0.4)
 
+    def start_mini(self, mini):
+        if self.state != "play" or self.cleared or self.fight or self.mini:
+            mini.close()
+            return
+        self.close_entry()
+        self.hide_note()
+        self.update_prompt(off=True)
+        self.mini = mini
+        self.player.speed = 0
+        self.player.mouse_sensitivity = Vec2(0, 0)
+        self.hidden = False
+
+    def end_mini(self, callback):
+        """小遊戲結束：恢復操作，再把結果交給 callback。"""
+        def done(result):
+            self.mini = None
+            self.player.mouse_sensitivity = Vec2(40, 40)
+            callback(result)
+        return done
+
     def hit(self):
         f = self.fight
-        f["hp"] -= 1
+        f["hp"] -= self.power()
         f["hits"] += 1
         f["shake"] = 0.15
         self.play("punch")
@@ -415,6 +443,10 @@ class Game:
         if f["hp"] <= 0:
             self.end_fight_ui()
             self.ending()
+
+    def power(self):
+        """揪來的人越多，每一下越痛：30 人 ×2、150 人 ×3、600 人 ×4。"""
+        return 1 + sum(self.crew >= n for n in (30, 150, 600))
 
     def update_fight(self):
         f = self.fight
@@ -561,7 +593,10 @@ class Game:
             elif "trail2" not in self.items:
                 self.show_hint("一台上鎖的電腦。（先去 1F 查查室友今天預約了什麼）", 3)
             else:
-                self.open_entry("電腦教室　登入", "密碼提示：本校在新竹建校的那一年", 4, self.lab_login)
+                if "lab_pw" in self.items:   # 密碼已經對過，直接重玩防偷看程式
+                    self.start_mini(PrimeWall(self, self.end_mini(self.prime_done)))
+                else:
+                    self.open_entry("電腦教室　登入", "密碼提示：本校在新竹建校的那一年", 4, self.lab_login)
         elif kind == "tape":
             if "trail3" not in self.items:
                 self.show_hint("一台還在播的錄音機。這是誰的？", 2)
@@ -576,6 +611,14 @@ class Game:
     def lab_login(self, code):
         if code != "1956":
             self.show_hint("密碼錯誤。", 2)
+            return
+        self.show_hint("密碼正確……螢幕跳出「防偷看程式」！", 2)
+        self.start_mini(PrimeWall(self, self.end_mini(self.prime_done)))
+
+    def prime_done(self, ok):
+        if not ok:
+            self.show_hint("登入失敗。再按一次 E 重新挑戰防偷看程式。", 3)
+            self.items.add("lab_pw")
             return
         self.items.add("trail3")
         self.show_note("登入成功。室友的搜尋紀錄：\n「怎麼偷讀書不被室友發現」\n「偷卷 被抓到 怎麼辦」\n「3F 視聽區 線代錄音」")
@@ -595,7 +638,14 @@ class Game:
             self.found.add(0)
             self.items.add("trail4")
             self.show_note("錄音帶是室友自己錄的線代重點，最後他小聲說：\n「……錄到這裡，我上 4F 中文書區繼續讀，讀到閉館。\n絕對不能讓他知道。」\n（剛剛嗶了幾聲？記下來）")
+            if "crew_asked" not in self.items:
+                self.items.add("crew_asked")
+                self.later(lambda: self.start_mini(GateRun(self, self.end_mini(self.crew_done))), 6)
         self.later(done, 2.5 + n * 0.6)
+
+    def crew_done(self, count):
+        self.crew = count
+        self.show_hint(f"揪到 {count} 個人，大家說好在 4F 埋伏。痛扁時每一下 ×{self.power()}！", 4)
 
     def case_open(self, code):
         if code != self.code:
@@ -676,7 +726,7 @@ class Game:
             story = ("他鼻青臉腫地承認：「我只是想偷偷考 100 分……」\n隔週成績公布：他 100 分，你 38 分。\n"
                      "你默默決定明天也來總圖。\n\n—— 結局：擺爛聯盟解散 ——")
         self.note_text.text = (f"{story}\n{self.difficulty}・第 {self.day} 天・被室友發現 {self.spotted} 次・"
-                               f"館員警告 {self.total_warnings} 次\n按 Enter 回到大廳")
+                               f"館員警告 {self.total_warnings} 次・揪了 {self.crew} 人\n按 Enter 回到大廳")
 
     def hide_note(self):
         self.note_text.text = ""
@@ -688,6 +738,9 @@ class Game:
         if self.fight:
             self.update_prompt(off=True)
             self.update_fight()
+            return
+        if self.mini:             # 玩小遊戲時時間暫停
+            self.mini.update()
             return
         self.sneaking = bool(held_keys["control"] or held_keys["left control"])
         self.moving = any(held_keys[k] for k in "wasd") and not self.hidden and not self.entry
@@ -765,6 +818,9 @@ def handle_input(key):
         return
     if game.entry:
         game.entry_key(key)
+        return
+    if game.mini:
+        game.mini.key(key)
         return
     if game.fight and key in ("e", "left mouse down"):
         game.hit()
