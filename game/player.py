@@ -2,18 +2,55 @@
 
 內建的版本有兩個問題：
 1. 撞牆時只要前進方向被擋住就整個不動，斜著貼牆走會卡住。這裡改成 x、z 分開檢查，可以沿著牆滑過去。
-2. macOS 上滑鼠鎖定靠「每幀把游標拉回中間」，系統常常回報拉回前的位置，視角會突然往反方向跳。
-   這裡在 macOS 用 Panda3D 的 relative 滑鼠模式，直接讀滑鼠的移動量，不用把游標拉回去。
+2. 滑鼠鎖定靠「每幀把游標拉回中間」。macOS 拉回去的位置常常差一截，滑鼠不動視角也會一直往下轉。
+   這裡在 macOS 用 Panda3D 的 relative 滑鼠模式；不支援時就只在游標快到邊緣才拉回中間，平常只看前後兩幀的位置差。
 """
+import math
 import sys
 
-from panda3d.core import WindowProperties
-from ursina import Vec3, application, clamp, held_keys, mouse, raycast, scene, time
+import builtins
+
+from panda3d.core import CollisionHandlerQueue, CollisionNode, CollisionSegment, CollisionTraverser, WindowProperties
+from ursina import Vec3, application, clamp, held_keys, mouse, scene, time, window
 from ursina.prefabs.first_person_controller import FirstPersonController
 
 RADIUS = 0.35          # 玩家的「身體半徑」：離牆這麼近就不能再往前
 DEG_PER_PIXEL = 0.12   # 滑鼠靈敏度（mouse_sensitivity 是 40 時）
 MAX_PIXELS = 150       # 一幀超過這麼多像素的移動當成雜訊丟掉
+
+
+class Ray:
+    """自己的射線檢查。Ursina 內建的 raycast 會先把一個隱形物件「轉向」要打的方向，
+    可是連續兩次方向剛好相反時（例如先往右、再往左）它轉不過去，射線還是往右打：
+    明明左邊是空的卻說撞到東西，人就卡住。這裡改用線段，從起點直接畫到終點，不用轉向。"""
+
+    def __init__(self):
+        self.segment = CollisionSegment()
+        node = CollisionNode("player_ray")
+        node.set_into_collide_mask(0)
+        node.add_solid(self.segment)
+        self.np = builtins.render.attach_new_node(node)
+        self.queue = CollisionHandlerQueue()
+        self.trav = CollisionTraverser()
+        self.trav.add_collider(self.np, self.queue)
+
+    def cast(self, origin, direction, distance, ignore=()):
+        """回傳最近碰到的距離；沒碰到回傳 None。"""
+        self.segment.set_point_a(origin)
+        self.segment.set_point_b(origin + direction * distance)
+        self.trav.traverse(scene)
+        if not self.queue.get_num_entries():
+            return None
+        self.queue.sort_entries()
+        for e in self.queue.get_entries():
+            ent = e.get_into_node_path().parent.getPythonTag("Entity")
+            if ent in ignore:
+                continue
+            return (Vec3(*e.get_surface_point(builtins.render)) - origin).length()
+        return None
+
+
+RADIAL = [Vec3(math.cos(k * math.pi / 4), 0, math.sin(k * math.pi / 4)) for k in range(8)]
 
 
 class Player(FirstPersonController):
@@ -23,6 +60,7 @@ class Player(FirstPersonController):
         self.skip = 2
         self.stuck_time = 0.0
         self.unstick = None      # 卡在東西裡面時要回到的位置（由遊戲設定）
+        self.ray = Ray()
         super().__init__(**kwargs)
 
     # ---------- 滑鼠 ----------
@@ -40,33 +78,38 @@ class Player(FirstPersonController):
         win = application.base.win if application.base else None
         if not win:
             return
-        props = WindowProperties()
-        props.setCursorHidden(True)
-        props.setMouseMode(WindowProperties.M_relative if sys.platform == "darwin" else WindowProperties.M_confined)
-        win.requestProperties(props)
+        # Ursina 自己的 window 也是一份 WindowProperties，它之後每次更新視窗都會整份重新送出去。
+        # 所以滑鼠模式要寫在它身上，不然會被蓋回 M_confined。
+        window.set_cursor_hidden(True)
+        window.set_mouse_mode(WindowProperties.M_relative if sys.platform == "darwin" else WindowProperties.M_confined)
+        win.requestProperties(window)
         self.relative = sys.platform == "darwin"
         self.last = None
         self.skip = 2
 
     def mouse_delta(self):
+        """這一幀滑鼠移動了多少：一律用「這次讀到的位置減上次讀到的位置」。
+        以前每幀都把游標拉回中間、再看它離中間多遠；可是 Mac 拉回去的位置常常差了一截（例如標題列的高度），
+        滑鼠沒動也每幀算成往下移，視角就一直往下轉。現在只有游標快碰到視窗邊緣才拉回中間，
+        而且拉回後下一幀重新取參考點，不假設它真的停在正中間。"""
         win = application.base.win
         if not win or not win.getProperties().getForeground():
             self.last = None
             return 0, 0
+        if self.relative and win.getProperties().getMouseMode() != WindowProperties.M_relative:
+            self.relative = False     # 系統不支援 relative 模式，改用「碰到邊緣才拉回中間」
         p = win.getPointer(0)
         x, y = p.getX(), p.getY()
-        if self.relative and win.getProperties().getMouseMode() != WindowProperties.M_relative:
-            self.relative = False     # 系統不支援 relative 模式就改回拉回中間的做法
-        if self.relative:
-            if self.last is None:
-                self.last = (x, y)
-                return 0, 0
-            dx, dy = x - self.last[0], y - self.last[1]
-            self.last = (x, y)
+        if self.last is None:
+            dx = dy = 0
         else:
-            cx, cy = win.getXSize() // 2, win.getYSize() // 2
-            dx, dy = x - cx, y - cy
-            win.movePointer(0, cx, cy)
+            dx, dy = x - self.last[0], y - self.last[1]
+        self.last = (x, y)
+        if not self.relative:
+            w, h = win.getXSize(), win.getYSize()
+            if abs(x - w / 2) > w / 4 or abs(y - h / 2) > h / 4:
+                win.movePointer(0, w // 2, h // 2)
+                self.last = None      # 拉回去之後實際停在哪裡，下一幀讀了才算數
         if self.skip > 0:          # 剛鎖定滑鼠的前幾幀位置還不準
             self.skip -= 1
             return 0, 0
@@ -89,14 +132,27 @@ class Player(FirstPersonController):
         self.check_stuck(before)
 
     def blocked(self, along, dist):
-        """往 along 方向走 dist 會不會撞到東西：在腳、腰、頭三個高度，各從身體左右兩側打射線。"""
+        """往 along 方向走 dist 會不會撞到東西。
+        1. 在腳、腰、頭三個高度，從身體中間和左右兩側往前打射線。
+        2. 斜的牆（落地窗、玻璃房、弧形矮櫃）會從身體斜前方擠進來，前方的射線看不到，
+           所以再看走過去之後身體四周八個方向有沒有東西貼得比現在更近；只准越走越鬆，不准越走越擠。"""
         side = Vec3(along.z, 0, -along.x) * (RADIUS * 0.8)
         for h in (0.3, 1.0, 1.7):
             for off in (side, -side, Vec3(0, 0, 0)):
-                if raycast(self.position + Vec3(0, h, 0) + off, along, distance=dist + RADIUS,
-                           traverse_target=scene, ignore=self.ignore_list).hit:
+                if self.ray.cast(self.position + Vec3(0, h, 0) + off, along, dist + RADIUS, self.ignore_list) is not None:
                     return True
-        return False
+        after = self.clearance(self.position + along * dist)
+        return after < RADIUS * 0.95 and after < self.clearance(self.position) - 1e-3
+
+    def clearance(self, pos):
+        """從 pos 往八個方向看，最近的東西有多遠（最多看到 RADIUS）。"""
+        best = RADIUS
+        for h in (0.3, 1.0):
+            for k in range(8):
+                hit = self.ray.cast(pos + Vec3(0, h, 0), RADIAL[k], RADIUS, self.ignore_list)
+                if hit is not None:
+                    best = min(best, hit)
+        return best
 
     def slide(self, move):
         for axis in (Vec3(1, 0, 0), Vec3(0, 0, 1)):
