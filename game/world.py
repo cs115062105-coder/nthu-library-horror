@@ -14,12 +14,12 @@ import textures as tx
 
 CELL = 2.0
 WALL_H = 3.2
-SHADE = 0.62    # 整體調暗：半夜的圖書館只剩部分燈亮著
+SHADE = 0.95    # 白天的圖書館：燈全開，只稍微壓一點亮度避免過曝
 
 # #  牆          W  窗（看得到外面的月光）  B  開架書架    K  密集書庫
 # T  閱覽桌      C  自習座位               S  總服務台    O  柱子
 # G  玻璃隔間    R  感應閘門（可通過）      ,  大廳磨石子  .  地毯
-# P  起點        M  怪物                   1–4 筆記       U/D 樓梯間往上／往下的門
+# P  起點        M  館員起點               1–6 筆記       U/D 樓梯間往上／往下的門
 # k  可移動的密集書架（由 banks 決定哪一道走道是開的）
 # N  報紙／期刊架  E  展覽看板  Y  沙發  L  自助取書櫃  H  校史展板  Q  電腦桌  q  還開著的那台電腦
 # V  視聽座位  v  還在播的那台  Z  小舞台  X  清華書房展示櫃
@@ -50,14 +50,14 @@ LEVEL_1F = [
     "######W........................W",
     "#######W..........Y..Y..M......W",
     "########.....Y.....T...........W",
-    "########R......................W",
+    "########R.P....................W",
     "#........W....Y...Y..Y.........W",
     "W.T..T...#W..O.....O.....O.....W",
     "W........#W....................W",
     "W......1.################UD#####",
     "W.T..T...#######################",
     "W........#######################",
-    "#..P.....#######################",
+    "#........#######################",
     "################################",
 ]
 # 2F：期刊、學位論文、校史展示區、電腦教室、閱覽區
@@ -192,12 +192,12 @@ CALL_NUMBERS = ["000 總類", "100 哲學", "200 宗教", "300 自然科學", "4
 # 4F 清華故事牆
 STORY_WALL = [("1925", "國學研究院：四大導師"), ("1931", "梅貽琦：大學者，有大師之謂也"),
               ("1956", "梅貽琦校長在新竹復校"), ("1962", "梅校長長眠於梅園"),
-              ("03:00", "這張合照裡，最後一排多了一個人")]
+              ("2026", "這張合照最後一排，有人偷偷在讀微積分")]
 HISTORY = [("1911", "清華學堂在北京成立"), ("1928", "改名國立清華大學"), ("1956", "在新竹建校"),
            ("1971", "成立大學部"), ("2013", "旺宏館（學習資源中心）啟用")]
 
 FLOORS = {
-    "1F": dict(level=LEVEL_1F, floor="carpet", banks=[], dead_ratio=0.2, flicker_ratio=0.12,
+    "1F": dict(level=LEVEL_1F, floor="carpet", banks=[],
                safe={(c, r) for c in range(1, 9) for r in range(23, 30)},
                hanging={(4, 25): ("夜讀區 24H", "Moonlight Study Area"), (6, 6): ("聯合櫃臺", "Service Counter"),
                         (17, 3): ("自助取書區", "Smart Bookshelves · Self Pick-up"), (14, 6): ("資訊島", "Information Retrieval"),
@@ -207,7 +207,7 @@ FLOORS = {
                         (25, 24): ("樓梯間", "Stairs")},
                posters=[((9, 25), (-1, 0), "missing"), ((0, 29), (1, 0), "notice"), ((25, 5), (-1, 0), "missing"),
                         ((27, 26), (0, -1), "notice")]),
-    "2F": dict(level=LEVEL_2F, floor="carpet", banks=[], safe=set(), dead_ratio=0.25, flicker_ratio=0.15,
+    "2F": dict(level=LEVEL_2F, floor="carpet", banks=[], safe=set(),
                shelf_labels=["學位論文 Theses"],
                hanging={(25, 22): ("樓梯間", "Stairs"), (8, 3): ("電腦教室", "Computer Lab II"),
                         (8, 8): ("電腦共學區", "Computer Lab I"), (14, 6): ("討論室", "Discussion Rooms"),
@@ -215,7 +215,7 @@ FLOORS = {
                         (24, 14): ("現期期刊", "Current Periodicals"), (25, 18): ("本校學位論文", "NTHU Theses"),
                         (15, 17): ("校史展示區", "University History")},
                posters=[((0, 10), (1, 0), "missing"), ((25, 24), (0, -1), "notice"), ((20, 7), (0, 1), "missing")]),
-    "3F": dict(level=LEVEL_3F, floor="carpet", banks=[], safe=set(), dead_ratio=0.3, flicker_ratio=0.15,
+    "3F": dict(level=LEVEL_3F, floor="carpet", banks=[], safe=set(),
                shelf_labels=["DVD 影片", "CD 音樂"],
                hanging={(26, 20): ("樓梯間", "Stairs"), (15, 12): ("視聽聆賞席", "Viewing Carrels"),
                         (24, 13): ("媒體區", "Audio-Visual Collection"), (29, 15): ("發呆區", "Relaxing and Inspiration"),
@@ -224,7 +224,7 @@ FLOORS = {
                         (11, 6): ("簡報練習室", "Presentation Rehearsal Studio"), (15, 6): ("怡嚴音樂聆賞室", "Yee-Yen Listening Room"),
                         (9, 2): ("團體室 · 紅氣球", "Group Room"), (18, 9): ("服務台", "Information Desk")},
                posters=[((0, 10), (1, 0), "missing"), ((22, 9), (-1, 0), "notice"), ((25, 21), (0, -1), "missing")]),
-    "4F": dict(level=LEVEL_4F, floor="carpet", banks=[], safe=set(), dead_ratio=0.3, flicker_ratio=0.15,
+    "4F": dict(level=LEVEL_4F, floor="carpet", banks=[], safe=set(),
                shelf_labels=["000 總類", "010 目錄學", "100 哲學類", "200 宗教類", "300 科學類",
                              "310 數學", "400 應用科學類", "410 醫藥", "490 商業"],
                history=STORY_WALL, whiteboard=(4, 2),
@@ -233,7 +233,7 @@ FLOORS = {
                         (15, 11): ("資訊島", "Information Retrieval"), (3, 10): ("閱覽區", "Reading Area"),
                         (25, 26): ("清華書房 · 推薦閱讀", "NTHU Mini-Library")},
                posters=[((0, 10), (1, 0), "missing"), ((31, 24), (-1, 0), "notice"), ((12, 7), (0, 1), "missing")]),
-    "B1": dict(level=LEVEL_B1, banks=BANKS_B1, floor="stone", safe=set(), dead_ratio=0.45, flicker_ratio=0.2,
+    "B1": dict(level=LEVEL_B1, banks=BANKS_B1, floor="stone", safe=set(),
                hanging={(8, 3): ("密集書庫 A 區", "Compact Shelving A"), (17, 3): ("密集書庫 B 區", "Compact Shelving B"),
                         (2, 3): ("B1 地下書庫", "Basement Stacks")},
                posters=[((0, 2), (1, 0), "missing")]),
@@ -350,7 +350,7 @@ class World:
         Entity(model="quad", position=center, scale=(w, d), rotation_x=90, texture=self.t[self.spec["floor"]],
                texture_scale=(self.cols, self.rows), color=color.rgb(SHADE, SHADE, SHADE))
         Entity(model="quad", position=center + Vec3(0, WALL_H, 0), scale=(w, d), rotation_x=-90,
-               texture=self.t["ceiling"], texture_scale=(self.cols * 3, self.rows * 3), color=color.rgb(0.4, 0.4, 0.4))
+               texture=self.t["ceiling"], texture_scale=(self.cols * 3, self.rows * 3), color=color.rgb(0.85, 0.85, 0.85))
         Entity(model="plane", scale=(w, 1, d), position=center, collider="box", visible=False)
 
         shelf_run = 0
@@ -438,7 +438,7 @@ class World:
             self.box(p + side * (CELL / 2) + Vec3(0, 0.92, 0), (CELL if side.z else 0.3, 0.05, 0.3 if side.z else CELL),
                      col=color.rgb32(170, 165, 150))
             pool = self.quad(p + side * (CELL * 0.9) + Vec3(0, 0.015, 0), (CELL * 1.4, CELL * 1.1),
-                             self.t["glow"], col=color.rgba32(120, 150, 210, 70), rot=(90, 0, 0))
+                             self.t["glow"], col=color.rgba32(255, 240, 200, 90), rot=(90, 0, 0))   # 窗邊的陽光
         self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
 
     def shelf(self, c, r, p, run):
@@ -725,15 +725,8 @@ class World:
             if (c + r) % 2 or self.level[r][c] == "R":
                 continue
             p = cell_pos(c, r)
-            safe = (c, r) in self.spec["safe"]     # 夜讀區 24 小時都亮著，比較暖
-            if safe:
-                state = "on"
-            elif "dead_ratio" in self.spec:
-                roll = self.rng.random()
-                state = ("dead" if roll < self.spec["dead_ratio"]
-                         else "flicker" if roll < self.spec["dead_ratio"] + self.spec["flicker_ratio"] else "on")
-            else:
-                state = "dead" if (c, r) in self.spec["dead"] else "flicker" if (c, r) in self.spec["flicker"] else "on"
+            safe = (c, r) in self.spec["safe"]     # 夜讀區的燈比較暖
+            state = "on"                           # 白天：燈全部是好的
             panel = Entity(model="quad", position=p + Vec3(0, WALL_H - 0.01, 0), scale=(0.6, 1.2),
                            rotation=(-90, 0, 0), texture=self.t["panel"])
             pool = Entity(model="quad", position=p + Vec3(0, 0.02, 0), scale=4.2 if safe else 3.2,

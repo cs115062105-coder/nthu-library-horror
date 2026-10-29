@@ -1,19 +1,25 @@
-"""隨機驚嚇事件：每一輪隔一段時間發生一件，每次抽到的都不太一樣。
+"""隨機事件：每天隔一段時間發生一件，每次抽到的都不太一樣。
 
-停電、書從架上掉下來、閉館廣播、遠處閃過室友的身影、某處的手機在響。
-事件只負責嚇人，不會直接讓玩家輸；但停電時看不清楚，它就有機會靠近。
+館內廣播、書從架上掉下來、某處手機在響、室友發了限時動態、遠處閃過室友的背影。
+掉書和手機會把館員引過去，是溜過他身邊的好機會。
 """
 import random
 
 from ursina import Entity, Vec3, camera, color, curve, destroy, time
 
-from world import CELL, World, cell_pos
+from world import CELL, cell_pos
 
 ANNOUNCEMENTS = [
-    "（叮咚）各位同學，圖書館已經閉館，請盡速離開。……陳○○同學，請到 B1 服務台。",
-    "（叮咚）現在時間，凌晨兩點四十分。現在時間，凌晨兩點四十分。現在時間……",
-    "（叮咚）提醒您，館內請保持安靜。它聽得到。",
-    "（叮咚）遺失物招領：學生證一張，姓名……是你的名字。",
+    "（叮咚）館內請勿飲食，珍奶也不行。謝謝合作。",
+    "（叮咚）遺失物招領：學生證一張，主人自稱「完全沒讀書」，請到 1F 聯合櫃臺領取。",
+    "（叮咚）提醒您，館內請保持安靜，也請勿奔跑。館員正在巡館。",
+    "（叮咚）期中考週，請勿用書包佔位。佔位的書包將被移到失物招領處。",
+    "（叮咚）4F 的同學，翻書請小聲一點，你翻得太認真了。",
+]
+STORIES = [
+    "室友剛發了限時動態：「今天在宿舍睡一整天 😴」\n……背景是總圖的落地窗。",
+    "室友剛發了限時動態：「讀書？那是什麼？能吃嗎」\n照片角落露出一本微積分。",
+    "室友在群組說：「欸今天要不要一起打電動」\n訊息顯示的定位：清華大學圖書館。",
 ]
 
 
@@ -26,9 +32,8 @@ class Scares:
         self.reset()
 
     def reset(self):
-        """每一輪重新開始計時。"""
-        self.timer = random.uniform(25, 40)
-        self.blackout = 0.0
+        """每天重新開始計時。"""
+        self.timer = random.uniform(20, 35)
         self.last = None
         self.clear()
 
@@ -42,10 +47,6 @@ class Scares:
 
     def update(self):
         g = self.game
-        if self.blackout > 0:
-            self.blackout -= time.dt
-            if self.blackout <= 0:
-                self.lights_back()
         if self.figure:
             self.figure_time -= time.dt
             if self.figure_time <= 0 or (self.figure.position - g.player.position).length() < 5:
@@ -55,12 +56,12 @@ class Scares:
             return
         self.timer -= time.dt
         if self.timer <= 0:
-            self.timer = random.uniform(35, 60)
+            self.timer = random.uniform(30, 50)
             self.trigger()
 
     def trigger(self, name=None):
-        events = {"blackout": self.blackout_event, "books": self.books_event, "announce": self.announce_event,
-                  "figure": self.figure_event, "ring": self.ring_event}
+        events = {"books": self.books_event, "announce": self.announce_event, "ring": self.ring_event,
+                  "story": self.story_event, "figure": self.figure_event}
         if name is None:
             name = random.choice([n for n in events if n != self.last])
         self.last = name
@@ -68,24 +69,6 @@ class Scares:
             self.announce_event()
 
     # ---------- 各種事件 ----------
-    def blackout_event(self):
-        for light in self.game.world.lights:
-            World.set_light(light, False)
-        self.blackout = 7.0
-        hum = self.game.sounds.get("hum")
-        if hum:
-            hum.stop()
-        self.game.show_hint("啪。整層樓的燈都熄了。", 3)
-        return True
-
-    def lights_back(self):
-        for light in self.game.world.lights:
-            World.set_light(light, light[2] != "dead")
-        hum = self.game.sounds.get("hum")
-        if hum:
-            hum.play()
-        self.game.show_hint("燈又亮了。……它剛剛在哪？", 3)
-
     def books_event(self):
         g = self.game
         cells = [cell for run in g.world.shelf_runs.values() for cell in run
@@ -104,7 +87,8 @@ class Scares:
             book.animate_rotation((90, random.uniform(0, 360), 0), duration=0.45, delay=delay)
             self.props.append(book)
         g.later(lambda: g.play("thud"), 0.5)
-        g.later(lambda: g.show_hint("書架上的書自己掉了下來。", 3), 0.6)
+        g.later(lambda: g.show_hint("有人把書架上的書撞掉了。館員往那邊走過去了。", 3), 0.6)
+        g.librarian.investigate(p + Vec3(0, 0, side * CELL / 2))
         return True
 
     def announce_event(self):
@@ -113,9 +97,30 @@ class Scares:
         g.later(lambda: g.show_hint(random.choice(ANNOUNCEMENTS), 6), 1.2)
         return True
 
-    def figure_event(self):
-        """在玩家正前方 7–11 公尺、看得到的地方，閃過一個人影。"""
+    def ring_event(self):
+        """書桌上有人忘了關靜音，館員會過去處理。"""
         g = self.game
+        spots = [p for p in g.world.hides if 4 < (p - g.player.position).length() < 16]
+        if not spots:
+            return False
+        p = random.choice(spots)
+        g.play("ring")
+        g.later(lambda: g.play("ring"), 1.8)
+        g.show_hint("某張桌上有手機在響。館員皺著眉頭走過去了。", 4)
+        g.librarian.investigate(p + Vec3(0, 0, CELL))
+        return True
+
+    def story_event(self):
+        g = self.game
+        g.play("page")
+        g.show_hint(random.choice(STORIES), 6)
+        return True
+
+    def figure_event(self):
+        """在玩家正前方 7–11 公尺，閃過一個背著紅書包的背影（室友坐定 4F 之前才會出現）。"""
+        g = self.game
+        if g.roommate.active:
+            return False
         fwd = camera.forward
         fwd = Vec3(fwd.x, 0, fwd.z).normalized()
         spots = []
@@ -129,21 +134,15 @@ class Scares:
             return False
         pos = cell_pos(*random.choice(spots))
         f = Entity(position=pos)
-        dark, skin = color.rgb32(30, 34, 46), color.rgb32(170, 160, 150)
-        Entity(parent=f, model="cube", position=(0, 1.15, 0), scale=(0.45, 0.75, 0.25), color=dark)
-        Entity(parent=f, model="cube", position=(0, 1.2, 0.18), scale=(0.35, 0.45, 0.15), color=color.rgb32(90, 30, 30))  # 書包
+        shirt, skin = color.rgb32(120, 125, 135), color.rgb32(235, 200, 170)
+        Entity(parent=f, model="cube", position=(0, 1.15, 0), scale=(0.45, 0.75, 0.25), color=shirt)
+        Entity(parent=f, model="cube", position=(0, 1.2, 0.18), scale=(0.38, 0.5, 0.16), color=color.rgb32(170, 50, 45))  # 書包
         for x in (-0.11, 0.11):
-            Entity(parent=f, model="cube", position=(x, 0.4, 0), scale=(0.14, 0.8, 0.14), color=dark)
-        Entity(parent=f, model="sphere", position=(0, 1.72, 0), scale=0.26, color=skin)
+            Entity(parent=f, model="cube", position=(x, 0.4, 0), scale=(0.16, 0.8, 0.16), color=color.rgb32(40, 60, 100))
+        Entity(parent=f, model="sphere", position=(0, 1.72, 0), scale=0.3, color=skin)
         f.look_at_2d(g.player.position, "y")
-        f.rotation_y += 180          # 背對玩家，像是正要走開
+        f.rotation_y += 180          # 背對玩家，抱著書走開
         self.figure, self.figure_time = f, 2.2
-        g.show_hint("……那是室友嗎？", 3)
+        g.show_hint("那個紅書包……是室友？！一眨眼就不見了。", 3)
         return True
 
-    def ring_event(self):
-        g = self.game
-        g.play("ring")
-        g.later(lambda: g.play("ring"), 1.8)
-        g.show_hint("不知道哪裡有手機在響。……是室友的鈴聲。", 4)
-        return True

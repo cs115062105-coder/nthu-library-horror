@@ -133,7 +133,7 @@ def books(seed):
 
 
 def window():
-    """夜晚的窗：深藍天空、月光、成功湖邊的樹影、遠處路燈。"""
+    """白天的窗：藍天白雲、成功湖邊的樹、遠處的大樓。"""
     rng = random.Random(7)
     w, h = 64, 96
     img = Image.new("RGB", (w, h))
@@ -141,17 +141,21 @@ def window():
     for y in range(h):
         for x in range(w):
             t = y / h
-            glow = max(0, 1 - math.hypot(x - 46, y - 18) / 30) * 50
-            px[x, y] = (int(14 + 20 * t + glow * 0.8), int(20 + 26 * t + glow * 0.9), int(42 + 30 * t + glow))
+            px[x, y] = (int(120 + 90 * t), int(175 + 60 * t), int(235 + 15 * t))
     d = ImageDraw.Draw(img)
-    d.ellipse([42, 14, 50, 22], fill=(210, 220, 230))
-    for i in range(7):   # 樹影
+    for _ in range(4):   # 雲
+        cx, cy = rng.randint(0, w), rng.randint(6, 36)
+        for k in range(3):
+            d.ellipse([cx - 9 + k * 6, cy - 4, cx + 3 + k * 6, cy + 5], fill=(250, 250, 252))
+    d.rectangle([40, 50, 56, 74], fill=(196, 190, 178))   # 遠處的系館
+    for yy in range(54, 72, 5):
+        d.line([(42, yy), (54, yy)], fill=(150, 170, 190))
+    for _ in range(7):   # 樹
         cx = rng.randint(0, w)
-        d.ellipse([cx - 12, 58 + rng.randint(-6, 6), cx + 12, 100], fill=(6, 9, 14))
-    d.rectangle([12, 70, 13, 80], fill=(240, 200, 120))
-    d.rectangle([0, 0, w - 1, h - 1], outline=(40, 42, 46), width=2)
-    d.line([(w // 2, 0), (w // 2, h)], fill=(40, 42, 46), width=2)
-    d.line([(0, h // 2), (w, h // 2)], fill=(40, 42, 46), width=2)
+        d.ellipse([cx - 12, 60 + rng.randint(-6, 6), cx + 12, 100], fill=(70 + rng.randint(0, 30), 130 + rng.randint(0, 30), 70))
+    d.rectangle([0, 0, w - 1, h - 1], outline=(120, 122, 126), width=2)
+    d.line([(w // 2, 0), (w // 2, h)], fill=(120, 122, 126), width=2)
+    d.line([(0, h // 2), (w, h // 2)], fill=(120, 122, 126), width=2)
     return img
 
 
@@ -203,20 +207,22 @@ def sign(lines, font_path, w=256, h=80, bg=(28, 58, 52), fg=(235, 235, 225), siz
 
 
 def poster_missing(font_path):
-    """尋人啟事：室友的照片被撕掉了一半。"""
+    """尋人啟事（你自己貼的）：室友的照片，臉上被畫了鬼臉。"""
     rng = random.Random(9)
     w, h = 120, 170
-    img = Image.new("RGB", (w, h), (232, 228, 214))
+    img = Image.new("RGB", (w, h), (246, 240, 214))
     d = ImageDraw.Draw(img)
-    d.text((26, 6), "尋 人", font=_font(font_path, 30), fill=(150, 20, 20))
-    d.rectangle([25, 44, 95, 114], fill=(120, 120, 118))
-    d.ellipse([45, 52, 75, 82], fill=(70, 70, 70))
-    d.rectangle([38, 82, 82, 114], fill=(70, 70, 70))
-    d.polygon([(60, 44), (95, 44), (95, 114), (72, 96)], fill=(200, 196, 182))   # 撕掉的角
+    d.text((22, 6), "通 緝", font=_font(font_path, 30), fill=(190, 40, 30))
+    d.rectangle([25, 44, 95, 114], fill=(170, 200, 220))
+    d.ellipse([45, 52, 75, 82], fill=(235, 200, 170))
+    d.rectangle([38, 82, 82, 114], fill=(60, 90, 140))
+    for x in (53, 64):   # 被畫上去的眼鏡
+        d.ellipse([x - 4, 62, x + 4, 70], outline=(20, 20, 20), width=2)
+    d.arc([52, 70, 68, 78], 0, 180, fill=(20, 20, 20), width=2)
     f = _font(font_path, 11)
-    for i, t in enumerate(["資工系大二 陳○○", "最後出現：總圖 02:40", "見到請聯絡 0912-○○○-○○○"]):
+    for i, t in enumerate(["罪名：偷卷", "自稱「完全沒讀書」", "抓到請就地痛扁"]):
         d.text((8, 120 + i * 15), t, font=f, fill=(40, 40, 40))
-    return _noise(img, 6, rng)
+    return _noise(img, 4, rng)
 
 
 def poster_notice(font_path):
@@ -227,7 +233,7 @@ def poster_notice(font_path):
     d.rectangle([0, 0, w, 28], fill=(90, 40, 120))
     d.text((10, 4), "清華大學圖書館", font=_font(font_path, 16), fill=(255, 255, 255))
     f = _font(font_path, 12)
-    for i, t in enumerate(["期中考週", "夜讀區 24 小時開放", "館藏區 23:00 閉館", "閉館後請勿逗留", "", "※ 本館不提供", "  任何考古題"]):
+    for i, t in enumerate(["期中考週", "館藏區 22:00 閉館", "館內請勿奔跑", "請保持安靜", "", "※ 本館不提供", "  任何考古題"]):
         d.text((8, 36 + i * 17), t, font=f, fill=(30, 30, 40))
     return _noise(img, 4, rng)
 
