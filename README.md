@@ -18,8 +18,8 @@ python game/main.py
 
 ## 操作
 
-- WASD 移動、滑鼠看、Shift 跑、Ctrl 躡手躡腳
-- E 互動（讀東西、用電腦、上下樓、抓室友），痛扁時狂按 E 或滑鼠左鍵
+- WASD 移動、滑鼠看、Shift 跑、Ctrl 躡手躡腳（貼著牆走會沿著牆滑）
+- E 互動：準心對著東西，下方會出現「[E] …」提示；痛扁時狂按 E 或滑鼠左鍵
 - C 躲到桌子底下／出來
 - ESC 回到大廳（大廳可選難度、看故事介紹與操作說明）
 
@@ -45,6 +45,7 @@ python game/main.py
 
 - `game/main.py`：遊戲流程、線索、每天的循環、痛扁小遊戲
 - `game/npc.py`：館員與室友
+- `game/player.py`：玩家移動（貼牆滑動）與滑鼠視角（macOS 用 relative 模式）
 - `game/world.py`：`LEVEL` 格子地圖與 3D 場景生成
 - `game/textures.py`：材質產生
 - `game/sfx.py`：音效合成

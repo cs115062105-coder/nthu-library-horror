@@ -16,12 +16,12 @@ from pathlib import Path
 
 from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera, color, destroy,
                     held_keys, invoke, raycast, scene, time, window)
-from ursina.prefabs.first_person_controller import FirstPersonController
 
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
 from npc import Librarian, Roommate, to_cell
+from player import Player
 from world import World, cell_pos
 
 MENU_SPOT = (5, 15)     # 大廳背景：1F 入口旁，望向圓形展區
@@ -97,17 +97,22 @@ class Game:
         self.in_safe_zone = False
         self.hidden = False
         self.load_floor("1F")
-        self.player = FirstPersonController(position=self.world.start + Vec3(0, 0.1, 0), speed=4)
+        self.player = Player(position=self.world.start, speed=4)
         self.player.cursor.visible = False
-        self.player.gravity = 1
-        self.player.jump_height = 0
+        self.player.unstick = self.nearest_open
         self.librarian = Librarian(self)
         self.roommate = Roommate(self)
         self.setup_audio()
-        self.hud_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0.5), position=(-0.87, 0.49),
+        self.ui_left = Entity(parent=camera.ui)   # 貼著畫面左緣的介面，螢幕比例不同也不會被切掉
+        self.hud_bg = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0.5), position=(0.02, 0.49),
                              scale=(1.25, 0.09), color=color.rgba32(255, 255, 255, 150), z=0.6)
-        self.clock_text = Text(position=(-0.85, 0.47), scale=1.2, color=color.rgb32(40, 40, 50))
-        self.goal_text = Text(position=(-0.85, 0.425), scale=1.0, color=color.rgb32(150, 70, 20))
+        self.clock_text = Text(parent=self.ui_left, position=(0.04, 0.47), scale=1.2, color=color.rgb32(40, 40, 50))
+        self.goal_text = Text(parent=self.ui_left, position=(0.04, 0.425), scale=1.0, color=color.rgb32(150, 70, 20))
+        self.prompt = Text(position=(0, -0.06), origin=(0, 0), scale=1.1, color=color.white)
+        self.prompt_bg = Entity(parent=camera.ui, model="quad", position=(0, -0.06), z=0.6,
+                                color=color.rgba32(0, 0, 0, 150), enabled=False)
+        self.dot = Entity(parent=camera.ui, model="circle", scale=0.006, color=color.rgba32(255, 255, 255, 200),
+                          enabled=False)
         self.hint = Text(position=(-0.3, -0.33), scale=1.1, color=color.white)
         self.hint_bg = Entity(parent=camera.ui, model="quad", color=color.rgba32(0, 0, 0, 140), origin=(-0.5, 0.5),
                               position=(-0.31, -0.32), z=0.6, enabled=False)
@@ -133,11 +138,11 @@ class Game:
         self.total_warnings = 0
         self.spotted = 0             # 被室友發現（逃跑）幾次
         self.moving = self.running = self.sneaking = False
-        self.noise_bg = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+        self.noise_bg = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0), position=(0.04, -0.44),
                                scale=(0.3, 0.018), color=color.rgba32(0, 0, 0, 60))
-        self.noise_bar = Entity(parent=camera.ui, model="quad", origin=(-0.5, 0), position=(-0.85, -0.44),
+        self.noise_bar = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0), position=(0.04, -0.44),
                                 scale=(0, 0.018), color=color.rgb32(90, 90, 100))
-        self.noise_label = Text(position=(-0.85, -0.405), scale=0.8, color=color.rgb32(30, 30, 40))
+        self.noise_label = Text(parent=self.ui_left, position=(0.04, -0.405), scale=0.8, color=color.rgb32(30, 30, 40))
         self.scares = Scares(self)
         self.bob = 0.0
         self.step_timer = 0.0
@@ -177,6 +182,7 @@ class Game:
             self.show_hint("這裡沒有路了。", 2)
             return
         self.dead = True   # 換樓層時暫停館員和時鐘
+        self.update_prompt(off=True)
         self.flash.color = color.rgba32(0, 0, 0, 255)
         self.goal_text.text = ""
         self.play("step")
@@ -216,6 +222,7 @@ class Game:
             t.text = ""
         self.hint_bg.enabled = False
         self.note_bg.enabled = False
+        self.update_prompt(off=True)
         self.flash_fade()
         self.close_entry()
         self.end_fight_ui()
@@ -316,6 +323,7 @@ class Game:
     def end_day(self, why, tint):
         if self.dead:
             return
+        self.update_prompt(off=True)
         self.dead = True
         self.hidden = False
         self.flash.color = tint
@@ -448,37 +456,85 @@ class Game:
     def code_hint(self):
         return " ".join(self.code[i] if i in self.found else "_" for i in range(3))
 
-    def interact(self):
-        if self.roommate.active and self.roommate.state in ("study", "look") and self.near(self.roommate.position, 1.9):
-            self.catch_roommate()
-            return
+    def targets(self):
+        """附近所有可以按 E 的東西：(看的位置, 要站的位置, 提示文字, 動作)。"""
+        out = []
+        r = self.roommate
+        if r.active and r.state in ("study", "look"):
+            out.append((r.position + Vec3(0, 1.0, 0), r.position, "抓住他！", self.catch_roommate))
         for key, note in self.notes.items():
-            if self.near(note.position, 1.8):
-                self.read_notes.add(key)
-                self.show_note(wrap(NOTES[key], 24))
-                return
+            out.append((note.position, note.position, "看紙條", lambda k=key: self.read_note(k)))
         for name, pos in self.world.clues.items():
-            if self.near(pos, 1.6):
-                index, text = CLUES[name]
-                self.found.add(index)
-                self.show_note(text.format(d=self.code[index]))
-                return
-        spots = [(i, (i["pos"] - self.player.position).length()) for i in self.world.interactables]
-        spots = [x for x in spots if self.near(x[0]["pos"], 1.6)]
-        if spots:
-            self.use(min(spots, key=lambda x: x[1])[0])
+            label = "看白板" if name == "whiteboard" else "抽出那本凸出來的書"
+            look = self.world.whiteboard.position if name == "whiteboard" and self.world.whiteboard else pos
+            out.append((look, pos, label, lambda n=name: self.read_clue(n)))
+        for thing in self.world.interactables:
+            out.append((thing.get("look", thing["pos"]), thing["pos"], self.label(thing), lambda t=thing: self.use(t)))
+        for direction, stair in self.world.stairs.items():
+            out.append((stair["door"].position, stair["pos"], "上樓" if direction == "up" else "下樓",
+                        lambda d=direction: self.take_stairs(d)))
+        return out
+
+    def focus(self):
+        """玩家「正在看」的那個東西：要站得夠近，然後挑最接近視線正中央的。"""
+        fwd = camera.forward
+        fwd = Vec3(fwd.x, 0, fwd.z).normalized()
+        best, best_score = None, None
+        for look, stand, label, action in self.targets():
+            to = look - self.player.position
+            to.y = 0
+            dist = to.length()
+            if not (self.near(stand, 1.8) or dist < 2.4):
+                continue
+            facing = to.normalized().dot(fwd) if dist > 0.3 else 1.0
+            if facing < 0.35 and dist > 1.2:   # 背對著的東西不算
+                continue
+            score = (1 - facing) * 3 + dist * 0.4
+            if best_score is None or score < best_score:
+                best, best_score = (label, action), score
+        return best
+
+    def interact(self):
+        target = self.focus()
+        if target:
+            target[1]()
             return
         bank, aisle = self.world.bank_at(self.player.position)
-        if bank:
-            if bank["aisle"] != aisle:
-                self.world.open_aisle(bank, aisle)
-                self.refresh_paths()
-                self.play("rumble")
-            return
-        for direction, stair in self.world.stairs.items():
-            if self.near(stair["pos"], 1.6):
-                self.take_stairs(direction)
-                return
+        if bank and bank["aisle"] != aisle:
+            self.world.open_aisle(bank, aisle)
+            self.refresh_paths()
+            self.play("rumble")
+
+    def read_note(self, key):
+        self.read_notes.add(key)
+        self.show_note(wrap(NOTES[key], 24))
+
+    def read_clue(self, name):
+        index, text = CLUES[name]
+        self.found.add(index)
+        self.show_note(text.format(d=self.code[index]))
+
+    @staticmethod
+    def label(thing):
+        kind = thing["kind"]
+        if kind == "locker":
+            return f"打開 A{thing['data']:02d} 櫃"
+        return {"read": "閱讀", "counter_pc": "查櫃臺電腦", "lab_pc": "使用電腦", "tape": "聽錄音帶",
+                "case": "打開展示櫃"}.get(kind, "查看")
+
+    def update_prompt(self, off=False):
+        """準心下方顯示現在按 E 會做什麼。"""
+        target = None if off or self.entry or self.hidden else self.focus()
+        self.prompt.text = f"[E] {target[0]}" if target else ""
+        self.prompt_bg.enabled = bool(target)
+        if target:
+            self.prompt_bg.scale = (len(self.prompt.text) * 0.022 + 0.04, 0.045)
+        self.dot.enabled = not off
+
+    def nearest_open(self, pos):
+        """離 pos 最近的走道格子中心（卡住時用）。"""
+        cells = sorted(self.world.walkable, key=lambda c: (cell_pos(*c) - pos).length())
+        return cell_pos(*cells[0]) if cells else pos
 
     def use(self, thing):
         """各樓層設施的互動：讀東西、查電腦、開取書櫃、登入電腦教室、聽錄音帶、開展示櫃。"""
@@ -607,6 +663,7 @@ class Game:
         return "到左邊的聯合櫃臺，用電腦查室友的預約"
 
     def ending(self):
+        self.update_prompt(off=True)
         self.cleared = True
         self.goal_text.text = ""
         self.roommate.hide()
@@ -619,7 +676,7 @@ class Game:
         else:
             story = ("他鼻青臉腫地承認：「我只是想偷偷考 100 分……」\n隔週成績公布：他 100 分，你 38 分。\n"
                      "你默默決定明天也來總圖。\n\n—— 結局：擺爛聯盟解散 ——")
-        self.note_text.text = (f"{story}\n{self.difficulty}・第 {self.day} 天・被室友發現 {self.spotted} 次・"
+        self.note_text.text = (f"{story}\n{self.difficulty}·第 {self.day} 天·被室友發現 {self.spotted} 次·"
                                f"館員警告 {self.total_warnings} 次\n按 Enter 回到大廳")
 
     def hide_note(self):
@@ -627,9 +684,11 @@ class Game:
         self.note_bg.enabled = False
 
     def update(self):
+        self.ui_left.x = -window.aspect_ratio / 2
         if self.state != "play" or self.cleared or self.dead:
             return
         if self.fight:
+            self.update_prompt(off=True)
             self.update_fight()
             return
         self.sneaking = bool(held_keys["control"] or held_keys["left control"])
@@ -643,6 +702,7 @@ class Game:
         self.clock_text.text = (f"{minutes // 60:02d}:{minutes % 60:02d}　第 {self.day} 天　{self.world.floor}　"
                                 f"館員警告 {self.warnings}/3")
         self.goal_text.text = "目標：" + self.goal()
+        self.update_prompt()
         if self.time_left <= 0:
             self.play("chime")
             self.show_hint("（叮咚）22:00，總圖閉館了。請攜帶隨身物品離館。", 3)
