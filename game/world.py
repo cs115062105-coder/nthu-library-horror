@@ -636,7 +636,8 @@ class World:
         """自助取書櫃：一格一格小門，每格有編號。"""
         self.lockers += 1
         n = self.lockers
-        side = next(d for d in self.open_sides(c, r))
+        side = next(Vec3(dc, 0, -dr) for dc, dr in ((0, 1), (0, -1), (1, 0), (-1, 0))
+                    if self.char(c + dc, r + dr) not in BLOCKED)   # 櫃門朝向走道，不是朝向隔壁的櫃子
         body = color.rgb32(200, 200, 205)
         self.box(p + Vec3(0, 1.1, 0), (CELL * 0.9, 2.2, CELL * 0.9), col=body)
         for row in range(4):
@@ -647,7 +648,7 @@ class World:
         self.quad(p + side * (CELL * 0.45 + 0.03) + Vec3(0, 2.05, 0), (0.6, 0.2),
                   self.text_tex([f"A{n:02d}"], w=128, h=48, bg=(30, 30, 30), sizes=[30]), rot=(0, facing_y(side), 0))
         self.collider(p + Vec3(0, 1.1, 0), (CELL * 0.9, 2.2, CELL * 0.9))
-        self.interactables.append(dict(kind="locker", pos=p + side * CELL, data=n))
+        self.interactables.append(dict(kind="locker", pos=p + side * CELL, look=p + side * (CELL * 0.45) + Vec3(0, 1.2, 0), data=n))
 
     def history(self, p):
         panels = self.spec.get("history", HISTORY)
