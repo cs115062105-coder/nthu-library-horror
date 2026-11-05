@@ -174,6 +174,100 @@ LEVEL_4F = [
     "###########################................#",
     "############################################",
 ]
+# 5F：中文圖書 500–999、閱覽區、資訊島、研究小間、討論室、影印室、藝想空間 I
+# 6F：西文圖書、中文期刊合訂本、安靜閱覽區、研究小間、討論室、影印室、藝想空間 II
+# 5F、6F 跟 4F 同一棟：外框、弧形落地窗、樓梯間都一樣。北邊不再是公務區，換成一大片閱覽區，
+# 北牆和南邊是一間間研究小間，中間樓梯電梯核的西側是電梯廳（照 6F 實拍影片：黑色亮面牆、兩部電梯）。
+LEVEL_5F = [
+    "###########WWWWWWWWWWWWWWW##################",
+    "#..#######..d.d.d.d.d.d.d.#T#T#T#T#T#T#T#T##",
+    "#T.#######................GGGGGGGGGGGGGGGGG#",
+    "##.#######..n..n..n..n..n.........BBB.BBBB.#",
+    "#..#######..................n..n...........#",
+    "#T.#######........................BBB.BBBB.#",
+    "##.#######..O....O....###########....O.....#",
+    "#..#####..............###########..........#",
+    "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
+    "#..#####................#########..........#",
+    "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
+    "W......O....O....O....###########....O.....#",
+    "W..........................................W",
+    "W...n...n...n..n...........................W",
+    "W.........................a................W",
+    "W...n...n..................................W",
+    "W.O....O....O....O....O....O....O....O.....W",
+    "###########.................a..............W",
+    "#xxxxxxxxxx...n..................BBBB.BBBB.W",
+    "#xxxxxxxxxxx.....n.......M.................W",
+    "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
+    "#xxxxxxxxxxxxxxxx.n.......a................W",
+    "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxxxx..n.....................W",
+    "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
+    "#xxxxxxxxxxxxxxxxxxxxxn....................W",
+    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n........W",
+    "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....UD#####",
+    "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxx....n....n..#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
+    "###########################O....O....#######",
+    "###########################..n....n.......##",
+    "###########################............n..##",
+    "###########################....##.........##",
+    "###########################....##..GGGGGGGG#",
+    "###########################........T#T#T#T##",
+    "############################WWWWWWW#########",
+]
+LEVEL_6F = [
+    "###########WWWWWWWWWWWWWWW##################",
+    "#..#######..d.d.d.d.d.d.d.#T#T#T#T#T#T#T#T##",
+    "#T.#######................GGGGGGGGGGGGGGGGG#",
+    "##.#######..n..n..n..n..n.........BBB.BBBB.#",
+    "#..#######..................n..n...........#",
+    "#T.#######........................BBB.BBBB.#",
+    "##.#######..O....O....###########....O.....#",
+    "#..#####..............###########..........#",
+    "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
+    "#..#####................#########..........#",
+    "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
+    "W......O....O....O....###########....O.....#",
+    "W..........................................W",
+    "W...T...T...n..n...........................W",
+    "W.........................a................W",
+    "W...T...T..................................W",
+    "W.O....O....O....O....O....O....O....O.....W",
+    "###########.................a..............W",
+    "#xxxxxxxxxx...n..................BBBB.BBBB.W",
+    "#xxxxxxxxxxx.....n.......M.................W",
+    "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
+    "#xxxxxxxxxxxxxxxx.n.......a................W",
+    "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxxxx..n.....................W",
+    "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
+    "#xxxxxxxxxxxxxxxxxxxxxn....................W",
+    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n........W",
+    "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....UD#####",
+    "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxx....n....n..#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
+    "###########################O....O....#######",
+    "###########################..n....n.......##",
+    "###########################............n..##",
+    "###########################....##.........##",
+    "###########################....##..GGGGGGGG#",
+    "###########################........T#T#T#T##",
+    "############################WWWWWWW#########",
+]
 BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnra")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
@@ -255,6 +349,7 @@ FLOORS = {
                soffit=dict(center=(18, 22.5), radii=(3.2, 4.0, 4.8), a0=200, a1=340),   # 清沙龍一層層的弧形燈槽
                ropes=[[(7.2, 18.2), (7.9, 19.0), (8.6, 19.8)], [(9.8, 17.0), (10.6, 17.6)]],   # 入館閘門旁的紅色伸縮圍欄
                tvs=[((10, 16), (-1, 0))],          # 柱子上的公告螢幕
+               stands=[(9, 17)],                   # 閘門旁的海報架（照入館閘門實拍）
                pickup_gates=[(12.3, 13.7)],        # 自助取書區入口的紅白防盜門（接在玻璃房的開口兩邊）
                # 知識集：黑色地毯圓區、天花板上發光的白色環、從地上彎上去的白色弧形骨架、木色展示板
                circle=dict(center=(14.73, 11.6), radius=3.9, carpet=(38, 42, 64), halo=(0.95, 1.05, 1.35),
@@ -334,6 +429,39 @@ FLOORS = {
                posters=[((0, 2), (1, 0), "missing")]),
 }
 
+
+# 5F、6F 的弧形落地窗、閱覽區的矮櫃隔間、資訊島都跟 4F 同一個位置
+_UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=True, white_shelves=True,
+              sign_colors=((236, 236, 246), (72, 58, 128)), halo=dict(center=(21.04, 15.47), radius=2.4),
+              curves=FLOORS["4F"]["curves"],
+              # 中間核心西側的電梯廳：黑色亮面牆、東牆兩部電梯、北牆樓層指引
+              elevator=dict(cells=(22, 8, 23, 10), doors=[(24, 8), (24, 10)], buttons=(24, 9), directory=(22, 7)),
+              spiral=(31.5, 39.5))    # 南邊研究小間旁的螺旋梯
+FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="stripes4", ceiling_tex="slats",
+                    shelf_labels=["500 社會科學類", "510 統計", "520 教育", "550 經濟", "570 政治", "580 法律",
+                                  "600 中國史地類", "700 世界史地類", "800 語言文學類", "850 中國文學", "900 藝術類"],
+                    hanging={(37, 30): ("樓梯間", "Stairs"), (1, 1): ("討論室", "Discussion Rooms"),
+                             (1, 9): ("影印室", "Photocopy Room"), (21, 9): ("電梯", "Elevators"),
+                             (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("閱覽區", "Reading Area"),
+                             (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("中文圖書 500–999", "Oriental Language Books"),
+                             (35, 22): ("中文圖書 500–999", "Oriental Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
+                             (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文圖書", "Oriental Language Books")},
+                    posters=[((5, 17), (0, -1), "missing"), ((26, 11), (0, 1), "notice"), ((36, 34), (1, 0), "missing")],
+                    art=dict(cells=[25, 26, 30, 31], row=11, title=(28, ("藝想空間 I", "Art Wall I"))))
+FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="stripes", ceiling_tex="plaster",
+                    # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
+                    label_colors=((40, 110, 190), (245, 248, 252)),
+                    shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
+                                  "Q Science", "QA Math", "T Technology"],
+                    west_labels=(22, ["期刊 中文合訂本"]),
+                    hanging={(37, 30): ("樓梯間", "Stairs"), (1, 1): ("討論室", "Discussion Rooms"),
+                             (1, 9): ("影印室", "Photocopy Room"), (21, 9): ("電梯", "Elevators"),
+                             (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("安靜閱覽區", "Quiet Reading Area"),
+                             (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("西文圖書", "Western Language Books"),
+                             (35, 22): ("西文圖書", "Western Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
+                             (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文期刊合訂本", "Oriental Bound Periodicals")},
+                    posters=[((5, 17), (0, -1), "notice"), ((26, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
+                    art=dict(cells=[25, 26, 30, 31], row=11, title=(28, ("藝想空間 II", "Art Wall II"))))
 
 def cell_pos(c, r):
     return Vec3(c * CELL, 0, -r * CELL)
@@ -558,6 +686,12 @@ class World:
             self.nthu_wall(*self.spec["nthu_wall"])
         if "halo" in self.spec:
             self.halo(**self.spec["halo"])
+        if "elevator" in self.spec:
+            self.elevator_lobby(**self.spec["elevator"])
+        if "art" in self.spec:
+            self.art_wall(**self.spec["art"])
+        if "spiral" in self.spec:
+            self.spiral_stair(*self.spec["spiral"])
         for cell in self.spec.get("slat_cells", []):
             self.slat_ceiling(*cell)
         for name, *rect in self.spec.get("ceiling_regions", []):
@@ -578,6 +712,9 @@ class World:
             self.pickup_gate(*arc[1][0])
         for pts in self.spec.get("ropes", []):
             self.rope(pts)
+        for c, r in self.spec.get("stands", []):
+            self.stand(cell_pos(c, r))
+            self.walkable.discard((c, r))
         for (c, r), d in self.spec.get("tvs", []):
             self.tv(cell_pos(c, r), Vec3(d[0], 0, -d[1]))
         for (c, r), lines in self.spec["hanging"].items():
@@ -812,11 +949,13 @@ class World:
                 self.box(p + end * (CELL / 2) + Vec3(0, 1.1, 0), (0.06, 2.24, 0.66),
                          col=color.rgb32(240, 240, 238) if white else color.rgb32(90, 96, 100))
                 labels = self.spec.get("shelf_labels", CALL_NUMBERS)
+                if "west_labels" in self.spec and c < self.spec["west_labels"][0]:
+                    labels = self.spec["west_labels"][1]    # 6F 西北角是中文期刊合訂本
                 label = labels[(run - 1) % len(labels)]
                 code, name = label.split(" ")
+                bg, fg = self.spec.get("label_colors", ((245, 200, 40), (40, 36, 30)) if white else ((30, 34, 40), (235, 235, 225)))
                 self.quad(p + end * (CELL / 2 + 0.035) + Vec3(0, 1.75, 0), (0.5, 0.26),
-                          self.text_tex([code, name], w=160, h=80, bg=(245, 200, 40) if white else (30, 34, 40),
-                                        fg=(40, 36, 30) if white else (235, 235, 225), sizes=[30, 20]),
+                          self.text_tex([code, name], w=160, h=80, bg=bg, fg=fg, sizes=[30, 20]),
                           rot=(0, facing_y(end), 0))
         self.collider(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62))
 
@@ -1129,19 +1268,32 @@ class World:
         self.collider(p + Vec3(0, WALL_H / 2, 0), size, occludes=False)
 
     def gate(self, p):
-        if self.spec.get("white"):   # 1F 入館：不鏽鋼立柱夾著兩片玻璃擺動門
-            steel = color.rgb32(185, 188, 192)
-            for x in (-0.9, 0.9):
-                self.box(p + Vec3(x, 0.55, 0), (0.22, 1.1, 0.5), col=steel)
-                self.box(p + Vec3(x, 1.11, 0), (0.24, 0.02, 0.52), col=color.rgb32(60, 200, 120))
-                self.box(p + Vec3(x * 0.5, 0.65, 0), (0.75, 0.9, 0.03), col=color.rgba32(190, 215, 225, 70))
-                self.box(p + Vec3(x * 0.5, 1.1, 0), (0.75, 0.03, 0.04), col=steel)
-                self.collider(p + Vec3(x, 0.55, 0), (0.22, 1.1, 0.5), occludes=False)
+        if self.spec.get("white"):   # 1F 入館（照實拍）：兩座不鏽鋼閘門機箱，中間兩片灰色擋板，機箱上有刷卡螢幕和綠燈
+            steel, dark = color.rgb32(176, 178, 182), color.rgb32(70, 72, 78)
+            for x in (-0.82, 0.82):
+                self.box(p + Vec3(x, 0.5, 0), (0.4, 1.0, 1.25), col=steel)
+                self.box(p + Vec3(x, 1.01, 0), (0.42, 0.03, 1.27), col=dark)
+                self.box(p + Vec3(x, 0.72, 0.64), (0.3, 0.05, 0.02), col=color.rgb(0.5, 1.6, 0.7))     # 綠燈
+                self.box(p + Vec3(x, 1.12, 0.35), (0.3, 0.2, 0.22), col=color.rgb32(200, 200, 204))    # 刷卡機
+                self.quad(p + Vec3(x, 1.2, 0.462), (0.24, 0.12), self.t["screen"], rot=(0, 180, 0))
+                self.box(p + Vec3(x * 0.55, 0.62, 0), (0.42, 0.6, 0.02), col=color.rgba32(120, 124, 130, 170))   # 擋板
+                self.collider(p + Vec3(x, 0.5, 0), (0.4, 1.0, 1.25), occludes=False)
             return
         for x in (-0.9, 0.9):
             self.box(p + Vec3(x, 0.5, 0), (0.18, 1.0, 0.7), col=color.rgb32(170, 172, 175))
             self.box(p + Vec3(x, 1.0, 0), (0.2, 0.03, 0.72), col=color.rgb32(40, 160, 90))
             self.collider(p + Vec3(x, 0.5, 0), (0.18, 1.0, 0.7), occludes=False)
+
+    def stand(self, p):
+        """入館閘門旁的黑框海報架：「氣質閱讀 優質學習」和入館須知。"""
+        tex = self.text_tex(["氣質閱讀", "優質學習", "刷卡入館 · 請勿飲食", "請勿佔位 · 輕聲細語"],
+                            w=160, h=240, bg=(70, 74, 92), fg=(240, 236, 220), sizes=[24, 24, 14, 14])
+        for rot in (0, 180):
+            self.quad(p + Vec3(0, 1.35, 0.02 if rot else -0.02), (0.7, 1.05), tex, rot=(0, rot, 0))
+        self.box(p + Vec3(0, 1.35, 0), (0.76, 1.12, 0.03), col=color.rgb32(25, 25, 28))
+        self.box(p + Vec3(0, 0.4, 0), (0.04, 0.8, 0.04), col=color.rgb32(25, 25, 28))
+        self.box(p + Vec3(0, 0.03, 0), (0.6, 0.04, 0.5), col=color.rgb32(25, 25, 28))
+        self.collider(p + Vec3(0, 0.9, 0), (0.8, 1.8, 0.3), occludes=False)
 
     def note(self, key, p):
         self.box(p + Vec3(0, 0.45, 0), (0.8, 0.05, 0.5), self.t["metal"])
@@ -1486,6 +1638,64 @@ class World:
                          color=color.rgb(1.3, 1.3, 1.45))
             seg.look_at(p1)
             seg.rotation_x = 0
+
+    def elevator_lobby(self, cells, doors, buttons, directory):
+        """5F／6F 電梯廳：牆面貼黑色亮面板，東牆是白牆配兩部銀灰色電梯，北牆掛樓層指引。"""
+        c0, r0, c1, r1 = cells
+        black, white = color.rgb32(16, 17, 22), color.rgb32(236, 236, 234)
+        for c in range(c0, c1 + 1):
+            for r in range(r0, r1 + 1):
+                p = cell_pos(c, r)
+                for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                    if self.char(c + dc, r + dr) != "#":
+                        continue
+                    d = Vec3(dc, 0, -dr)
+                    face, rot = p + d * (CELL / 2 - 0.02), (0, facing_y(-d), 0)
+                    wall = (c + dc, r + dr)
+                    if wall in doors:
+                        self.quad(face + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H), col=white, rot=rot)
+                        self.quad(face - d * 0.01 + Vec3(0, 1.2, 0), (1.3, 2.4), col=color.rgb32(132, 134, 138), rot=rot)
+                        self.quad(face - d * 0.02 + Vec3(0, 1.2, 0), (0.02, 2.4), col=color.rgb32(70, 72, 76), rot=rot)
+                    elif wall == buttons:
+                        self.quad(face + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H), col=white, rot=rot)
+                        self.quad(face - d * 0.01 + Vec3(0, 1.2, 0), (0.16, 0.34), col=color.rgb32(150, 150, 154), rot=rot)
+                        for y in (1.27, 1.13):
+                            self.quad(face - d * 0.02 + Vec3(0, y, 0), (0.06, 0.06), col=color.rgb(1.3, 1.3, 1.1), rot=rot)
+                    else:   # 黑色亮面牆，上面一道反光
+                        self.quad(face + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H), col=black, rot=rot)
+                        self.quad(face - d * 0.01 + Vec3(0.3 * dr, 1.6, 0.3 * dc), (0.12, WALL_H * 0.9),
+                                  col=color.rgba32(120, 130, 160, 60), rot=rot)
+                    if wall == directory:   # 樓層指引：深色板子上一排白字，旁邊掛一塊亮著的公告板
+                        lines = ["6F 西文圖書", "5F 中文圖書 500–999", "4F 中文圖書 000–499",
+                                 "3F 視聽 · 語言學習", "2F 期刊 · 學位論文", "1F 借還書 · 清沙龍"]
+                        tex = self.text_tex(lines, w=160, h=320, bg=(20, 20, 24), fg=(235, 225, 200), sizes=[16] * 6)
+                        self.quad(face - d * 0.02 + Vec3(-0.45 * dr, 1.5, -0.45 * dc), (0.6, 1.4), tex, rot=rot)
+                        self.quad(face - d * 0.02 + Vec3(0.45 * dr, 2.0, 0.45 * dc), (0.7, 0.9),
+                                  self.t["notice"], col=color.rgb(1.25, 1.25, 1.3), rot=rot)
+
+    def art_wall(self, cells, row, title):
+        """藝想空間：核心南面的白牆上一排畫框，中間印著標題。"""
+        for i, c in enumerate(cells):
+            p = cell_pos(c, row) + Vec3(0, 0, -(CELL / 2 + 0.03))
+            self.quad(p + Vec3(0, 1.5, 0), (1.25, 0.95), col=color.rgb32(40, 36, 32))
+            self.quad(p + Vec3(0, 1.5, -0.01), (1.1, 0.8), Texture(tx.painting(i + row), filtering=None))
+            self.box(p + Vec3(0, 2.9, 0), (0.25, 0.05, 0.25), col=color.rgb32(40, 40, 44))   # 打在畫上的軌道燈
+            self.quad(p + Vec3(0, 1.5, -0.015), (1.6, 1.4), self.t["glow"], col=color.rgba32(255, 245, 225, 50))
+        c, lines = title
+        self.wall_text(cell_pos(c, row + 1), Vec3(0, 0, 1), lines)
+
+    def spiral_stair(self, cx, cy):
+        """研究小間旁邊那座白色螺旋梯（裝飾，走不上去）。"""
+        center = Vec3(cx * CELL, 0, -cy * CELL)
+        Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.12, height=WALL_H),
+               position=center, color=color.rgb32(230, 230, 228))
+        for i in range(16):
+            a = math.radians(i * 26)
+            step = Entity(parent=self.group(None), model="cube", color=color.rgb32(222, 222, 220),
+                          position=center + Vec3(math.cos(a) * 0.75, 0.18 + i * 0.19, math.sin(a) * 0.75),
+                          scale=(1.4, 0.06, 0.45))
+            step.rotation_y = -math.degrees(a)
+        self.collider(center + Vec3(0, WALL_H / 2, 0), (CELL * 1.6, WALL_H, CELL * 1.6), occludes=False)
 
     def stage(self, c, r, p):
         """3F 小舞台：木頭平台，左上角放一台鋼琴和麥克風架。"""

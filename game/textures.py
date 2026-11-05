@@ -442,3 +442,20 @@ def blind():
     for y in range(0, 32, 3):
         d.line([(0, y), (31, y)], fill=(208, 204, 192))
     return img
+
+
+def painting(seed):
+    """藝想空間的畫：幾塊色塊和線條的抽象畫，每幅不一樣。"""
+    rng = random.Random(seed * 31 + 7)
+    palette = [(214, 92, 64), (236, 196, 90), (60, 96, 150), (90, 150, 130), (40, 40, 48), (232, 228, 216), (170, 120, 160)]
+    img = Image.new("RGB", (64, 48), rng.choice([(238, 234, 222), (222, 214, 196), (34, 38, 52)]))
+    d = ImageDraw.Draw(img)
+    for _ in range(rng.randint(3, 6)):
+        x, y = rng.randint(-10, 54), rng.randint(-10, 38)
+        w, h = rng.randint(10, 34), rng.randint(8, 26)
+        c = rng.choice(palette)
+        (d.ellipse if rng.random() < 0.4 else d.rectangle)([x, y, x + w, y + h], fill=c)
+    for _ in range(rng.randint(1, 3)):
+        d.line([(rng.randint(0, 63), rng.randint(0, 47)), (rng.randint(0, 63), rng.randint(0, 47))],
+               fill=rng.choice(palette), width=rng.randint(1, 3))
+    return _noise(img, 3, rng)
