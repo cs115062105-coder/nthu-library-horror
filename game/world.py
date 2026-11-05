@@ -387,7 +387,11 @@ FLOORS = {
     "3F": dict(level=LEVEL_3F, floor="stripes3", banks=[], safe=set(),
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
-               shelf_labels=["DVD 影片", "CD 音樂"],
+               shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
+               # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
+               ceiling_regions=[("slats", 24, 12, 38, 17)],
+               racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
+               wood_wall=(27, 42, 11, 36),
                hanging={(37, 30): ("樓梯間", "Stairs"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
                         (32, 22): ("媒體區", "Audio-Visual Collection"), (41, 21): ("發呆區", "Relaxing and Inspiration"),
                         (31, 28): ("電視區", "TV Area"), (8, 13): ("多人聆賞席", "Group Carrels"),
@@ -535,7 +539,7 @@ class World:
             "tile": t(tx.tile()), "wallw": t(tx.white_wall()), "plaster": t(tx.plaster()), "planks": t(tx.planks()),
             "cubbies": t(tx.cubbies(0)), "grid": t(tx.grid()),
             "stripes": t(tx.stripes()), "blind": t(tx.blind()),
-            "stripes3": t(tx.stripes((58, 48, 44), (196, 192, 186), 18)),
+            "stripes3": t(tx.bands()), "woodslats": t(tx.wood_slats()),
             "stripes4": t(tx.stripes((128, 120, 112), (66, 56, 52), 19)), "slats": t(tx.slats()),
             "nthu": t(tx.nthu_letters(self.font_path), "bilinear"),
             "missing": t(tx.poster_missing(self.font_path), "bilinear"),
@@ -543,6 +547,7 @@ class World:
         }
         self.book_tex = [t(tx.books(i)) for i in range(6)]
         self.t["covers"] = [t(tx.covers(i)) for i in range(4)]
+        self.t["dvds"] = [t(tx.dvds(i)) for i in range(4)]
         self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]
         World._textures = (self.t, self.book_tex)
 
@@ -715,6 +720,11 @@ class World:
         for c, r in self.spec.get("stands", []):
             self.stand(cell_pos(c, r))
             self.walkable.discard((c, r))
+        for (c, r), rot in self.spec.get("racks", []):
+            self.dvd_rack(cell_pos(c, r), rot)
+            self.walkable.discard((c, r))
+        if "wood_wall" in self.spec:
+            self.wood_wall(*self.spec["wood_wall"])
         for (c, r), d in self.spec.get("tvs", []):
             self.tv(cell_pos(c, r), Vec3(d[0], 0, -d[1]))
         for (c, r), lines in self.spec["hanging"].items():
@@ -937,6 +947,8 @@ class World:
     def shelf(self, c, r, p, run):
         self.shelf_runs.setdefault(run, []).append((c, r))
         tex = self.book_tex[(c * 7 + r * 3) % len(self.book_tex)]
+        if self.spec.get("shelf_fill") == "dvd":      # 3F 媒體區擺的是 DVD
+            tex = self.t["dvds"][(c * 7 + r * 3) % 4]
         white = self.spec.get("white_shelves")    # 3F／4F 是白色的書架，側面一塊黃色的分類牌
         self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62), None if white else self.t["metal"],
                  col=color.rgb32(238, 238, 236) if white else color.white)
@@ -1495,7 +1507,7 @@ class World:
         """3F 發呆區：面向窗戶的灰紫色高背蛋椅，下面一塊鍍鉻圓盤。"""
         rot = -90 + self.rng.uniform(-30, 30)   # 背對大廳、面向東邊的窗
         ch = Entity(parent=self.group(None), position=p, rotation_y=rot)
-        col, steel = color.rgb32(92, 88, 104), color.rgb32(200, 202, 206)
+        col, steel = color.rgb32(52, 52, 56), color.rgb32(200, 202, 206)
         Entity(parent=ch, model=Cylinder(resolution=16, radius=0.32, height=0.03), color=steel)
         Entity(parent=ch, model="cube", position=(0, 0.22, 0), scale=(0.06, 0.4, 0.06), color=steel)
         Entity(parent=ch, model="sphere", position=(0, 0.5, 0.02), scale=(0.8, 0.3, 0.75), color=col)
@@ -1505,23 +1517,56 @@ class World:
         self.collider(p + Vec3(0, 0.6, 0), (1.0, 1.2, 1.0), occludes=False)
 
     def group_booth(self, p):
-        """3F 多人聆賞席：白色的圓形矮牆圍成一個小包廂，開口朝南，裡面一圈軟墊和一台螢幕。"""
-        n, R = 10, 0.95
-        white = color.rgb32(240, 240, 238)
+        """3F 多人聆賞席：米白色的大膠囊包廂，牆上一道道直的接縫，開口朝南，裡面一圈軟墊和一台螢幕。"""
+        n, R = 12, 0.95
+        shell, seam = color.rgb32(234, 226, 210), color.rgb32(196, 186, 168)
         for k in range(n):     # 開口在南邊：角度 0 是北，留 90 度
             a0, a1 = math.radians(135 + 270 * k / n), math.radians(135 + 270 * (k + 1) / n)
-            q0 = p + Vec3(math.sin(a0), 0, math.cos(a0)) * R
-            q1 = p + Vec3(math.sin(a1), 0, math.cos(a1)) * R
-            seg = Entity(parent=self.group(None), model="cube", position=(q0 + q1) / 2 + Vec3(0, 0.75, 0),
-                         scale=(0.1, 1.5, (q1 - q0).length() + 0.04), color=white)
-            seg.look_at((q1 + Vec3(0, 0.75, 0)))
-            seg.rotation_x = 0
+            for y0, y1, r in ((0, 1.55, R), (1.55, 1.95, R * 0.86)):     # 上面一圈往內收，看起來圓圓的
+                q0 = p + Vec3(math.sin(a0), 0, math.cos(a0)) * r
+                q1 = p + Vec3(math.sin(a1), 0, math.cos(a1)) * r
+                h = y1 - y0
+                seg = Entity(parent=self.group(None), model="cube", position=(q0 + q1) / 2 + Vec3(0, y0 + h / 2, 0),
+                             scale=(0.1, h, (q1 - q0).length() + 0.04), color=shell)
+                seg.look_at(q1 + Vec3(0, y0 + h / 2, 0))
+                seg.rotation_x = 0
+            q = p + Vec3(math.sin(a0), 0, math.cos(a0)) * (R + 0.055)
+            self.box(q + Vec3(0, 0.78, 0), (0.025, 1.5, 0.025), col=seam)
         Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.75, height=0.42), position=p,
                color=color.rgb32(120, 112, 140))
         Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.45, height=0.44), position=p,
                color=color.rgb32(230, 230, 228))
         self.box(p + Vec3(0, 1.1, R - 0.12), (0.7, 0.42, 0.04), col=color.rgb32(20, 20, 24))
-        self.collider(p + Vec3(0, 0.75, 0), (CELL * 0.95, 1.5, CELL * 0.95), occludes=False)
+        self.collider(p + Vec3(0, 1.0, 0), (CELL * 0.95, 2.0, CELL * 0.95), occludes=False)
+
+    def dvd_rack(self, p, rot):
+        """3F 媒體區的黑色斜架：兩面都斜斜地擺著 DVD 封面。"""
+        rk = Entity(parent=self.group(None), position=p, rotation_y=rot)
+        black = color.rgb32(26, 26, 28)
+        for x in (-0.45, 0.45):
+            self.box((x, 0.85, 0), (0.04, 1.7, 0.5), col=black, parent=rk)
+        self.box((0, 0.05, 0), (0.94, 0.1, 0.5), col=black, parent=rk)
+        for side in (1, -1):
+            for i in range(4):
+                y = 0.45 + i * 0.36
+                face = Entity(parent=rk, model="quad", position=(0, y, side * 0.17), scale=(0.86, 0.3),
+                              rotation=(-15 * side, 0 if side < 0 else 180, 0),
+                              texture=self.t["covers"][(i + side + 4) % 4], color=color.rgb(0.95, 0.95, 0.95))
+                self.box((0, y - 0.16, side * 0.2), (0.86, 0.02, 0.1), col=black, parent=rk)
+        self.collider(p + Vec3(0, 0.85, 0), (1.0, 1.7, 1.0), occludes=False)
+
+    def wood_wall(self, c0, c1, row, tv_at=None):
+        """木條牆：貼在 row 那排牆的南面，中間掛一台電視。"""
+        x0, x1 = (c0 - 0.5) * CELL, (c1 + 0.5) * CELL
+        z = -row * CELL - CELL / 2 - 0.02
+        w = x1 - x0
+        Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z), scale=(w, WALL_H),
+               texture=self.t["woodslats"], texture_scale=(w / 1.2, 1), color=color.rgb(0.95, 0.95, 0.95))
+        if tv_at is not None:
+            x = tv_at * CELL
+            self.box(Vec3(x, 1.7, z - 0.04), (1.5, 0.9, 0.06), col=color.rgb32(18, 18, 20))
+            Entity(model="quad", position=Vec3(x, 1.7, z - 0.075), scale=(1.38, 0.78),
+                   color=color.rgb32(70, 110, 150))
 
     def tv_booth(self, p):
         """3F 電視區：米白色沙發，前面一張木頭圓桌上放電視，旁邊兩片霧面玻璃。"""

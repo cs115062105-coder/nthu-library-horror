@@ -388,6 +388,58 @@ def stripes(base=(128, 130, 134), band=(78, 80, 86), seed=16):
     return _noise(img, 4, rng)
 
 
+def bands(seed=31):
+    """3F 的地毯：一公尺寬的深炭灰和淺灰帶子交錯，帶子裡有細細的毛紋。"""
+    rng = random.Random(seed)
+    img = Image.new("RGB", (64, 64))
+    d = ImageDraw.Draw(img)
+    for y in range(64):
+        base = (70, 70, 72) if y < 32 else (182, 180, 176)
+        k = rng.randint(-14, 10)
+        d.line([(0, y), (63, y)], fill=tuple(max(0, min(255, v + k)) for v in base))
+    for _ in range(90):      # 一小段一小段的毛紋
+        x, y = rng.randrange(64), rng.randrange(64)
+        c = (95, 95, 98) if y < 32 else (205, 203, 198)
+        d.line([(x, y), (min(63, x + rng.randint(3, 10)), y)], fill=c)
+    return _noise(img, 4, rng)
+
+
+def dvds(seed):
+    """3F 媒體區的白色架子：五層擺滿 DVD 盒，大多是酒紅、粉色、黑色、白色。"""
+    rng = random.Random(500 + seed)
+    w, h = 128, 128
+    img = Image.new("RGB", (w, h), (232, 232, 230))
+    d = ImageDraw.Draw(img)
+    cols = [(120, 40, 50), (196, 140, 150), (226, 196, 200), (30, 30, 34), (236, 236, 232), (90, 60, 110), (60, 90, 140)]
+    shelf_h = h // 5
+    for s in range(5):
+        top, bottom = s * shelf_h + 4, (s + 1) * shelf_h - 3
+        x = 2
+        while x < w - 3:
+            if rng.random() < 0.05:
+                x += 6
+                continue
+            c = rng.choice(cols)
+            d.rectangle([x, top + 2, x + 1, bottom], fill=c)
+            d.point((x, top + 4), fill=(250, 250, 250))
+            x += 2
+        d.rectangle([0, bottom + 1, w, bottom + 3], fill=(250, 250, 248))   # 白色層板
+    d.rectangle([0, 0, 2, h], fill=(250, 250, 248))
+    return _noise(img, 3, rng)
+
+
+def wood_slats():
+    """3F 走道旁的淺色木條牆：一條條直的木條，縫是深色的。"""
+    rng = random.Random(41)
+    img = Image.new("RGB", (64, 64), (90, 62, 38))
+    d = ImageDraw.Draw(img)
+    for x in range(0, 64, 6):
+        c = rng.randint(190, 214)
+        d.rectangle([x, 0, x + 4, 63], fill=(c, c * 72 // 100, c * 46 // 100))
+        d.line([(x + 1, 0), (x + 1, 63)], fill=(c + 20, (c + 20) * 72 // 100, (c + 20) * 46 // 100))
+    return _noise(img, 6, rng)
+
+
 def slats():
     """4F 的深色木條天花板：一條條深咖啡木條，縫裡看得到上面黑黑的管線。"""
     rng = random.Random(17)
