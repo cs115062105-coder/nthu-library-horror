@@ -440,6 +440,45 @@ def wood_slats():
     return _noise(img, 6, rng)
 
 
+def timeline(seed):
+    """1F 知識集的弧形展牆：米白底，一排排年份、一段段字、幾張照片和黃色標籤。"""
+    rng = random.Random(700 + seed)
+    w, h = 128, 96
+    img = Image.new("RGB", (w, h), (246, 242, 228))
+    d = ImageDraw.Draw(img)
+    for col in range(3):
+        x = 6 + col * 41
+        y = 8
+        while y < h - 10:
+            kind = rng.random()
+            if kind < 0.2:       # 照片
+                d.rectangle([x, y, x + 20, y + 14], fill=rng.choice([(60, 40, 50), (90, 110, 130), (150, 120, 90)]))
+                y += 18
+            elif kind < 0.35:    # 黃色標籤
+                d.rectangle([x, y, x + 30, y + 6], fill=(245, 225, 120))
+                y += 10
+            else:                # 年份＋幾行字
+                d.rectangle([x, y, x + 12, y + 3], fill=(150, 150, 150))
+                for k in range(rng.randint(2, 4)):
+                    d.line([(x, y + 6 + k * 3), (x + rng.randint(18, 32), y + 6 + k * 3)], fill=(120, 120, 124))
+                y += 8 + 3 * 4
+    d.rectangle([0, h - 4, w, h], fill=(225, 220, 200))
+    return _noise(img, 3, rng)
+
+
+def leaf():
+    """地上貼的淡藍綠色葉子貼紙（透明背景）。"""
+    w, h = 128, 64
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse([4, 8, w - 4, h - 8], fill=(170, 220, 215, 200))
+    d.line([(8, h // 2), (w - 8, h // 2)], fill=(235, 250, 248, 220), width=2)
+    for x in range(24, w - 20, 16):
+        d.line([(x, h // 2), (x + 10, 14)], fill=(235, 250, 248, 200))
+        d.line([(x, h // 2), (x + 10, h - 14)], fill=(235, 250, 248, 200))
+    return img
+
+
 def slats():
     """4F 的深色木條天花板：一條條深咖啡木條，縫裡看得到上面黑黑的管線。"""
     rng = random.Random(17)

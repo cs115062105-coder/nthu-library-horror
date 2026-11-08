@@ -350,6 +350,11 @@ FLOORS = {
                ropes=[[(7.2, 18.2), (7.9, 19.0), (8.6, 19.8)], [(9.8, 17.0), (10.6, 17.6)]],   # 入館閘門旁的紅色伸縮圍欄
                tvs=[((10, 16), (-1, 0))],          # 柱子上的公告螢幕
                stands=[(9, 17)],                   # 閘門旁的海報架（照入館閘門實拍）
+               # 照 1F 影片：新書展示桌、深藍桌巾小圓桌、自助取書區門口的「教師指定參考書」立牌、牆上的「恕」字、地上的葉子貼紙
+               draped=[((8, 9), "books"), ((5, 12), "navy"), ((12, 20), "navy")],
+               banners=[(11.9, 4.4, 10), (14.1, 4.4, -10)],
+               frames=[((10, 0), (0, 1), "恕")],
+               decals=[(9.5, 7.6, 20, 1.0), (19.5, 14.5, -35, 0.8)],
                pickup_gates=[(12.3, 13.7)],        # 自助取書區入口的紅白防盜門（接在玻璃房的開口兩邊）
                # 知識集：黑色地毯圓區、天花板上發光的白色環、從地上彎上去的白色弧形骨架、木色展示板
                circle=dict(center=(14.73, 11.6), radius=3.9, carpet=(38, 42, 64), halo=(0.95, 1.05, 1.35),
@@ -359,7 +364,7 @@ FLOORS = {
                        {'kind': 'pane', 'pts': pane_arc(9.6, 19.4, 12.3, 13.7)[0]},
                        {'kind': 'pane', 'pts': pane_arc(9.6, 19.4, 12.3, 13.7)[1]},
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
-                       {'kind': 'low', 'h': 0.9, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
+                       {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
     "2F": dict(level=LEVEL_2F, floor="stripes", banks=[], safe=set(),
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
@@ -548,6 +553,8 @@ class World:
         self.book_tex = [t(tx.books(i)) for i in range(6)]
         self.t["covers"] = [t(tx.covers(i)) for i in range(4)]
         self.t["dvds"] = [t(tx.dvds(i)) for i in range(4)]
+        self.t["timeline"] = [t(tx.timeline(i)) for i in range(3)]
+        self.t["leaf"] = t(tx.leaf())
         self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]
         World._textures = (self.t, self.book_tex)
 
@@ -720,6 +727,16 @@ class World:
         for c, r in self.spec.get("stands", []):
             self.stand(cell_pos(c, r))
             self.walkable.discard((c, r))
+        for (c, r), kind in self.spec.get("draped", []):
+            self.draped_table(cell_pos(c, r), kind)
+            self.walkable.discard((c, r))
+        for c, r, rot in self.spec.get("banners", []):
+            self.rollup_banner(Vec3(c * CELL, 0, -r * CELL), rot, ["WELCOME", "教師指定參考書", "Course Reserved Books"])
+        for c, r, rot, sx in self.spec.get("decals", []):
+            Entity(model="quad", position=Vec3(c * CELL, 0.012, -r * CELL), rotation=(90, rot, 0), scale=(3.2 * sx, 1.6 * sx),
+                   texture=self.t["leaf"])
+        for (c, r), d, ch in self.spec.get("frames", []):
+            self.calligraphy(cell_pos(c, r), Vec3(d[0], 0, -d[1]), ch)
         for (c, r), rot in self.spec.get("racks", []):
             self.dvd_rack(cell_pos(c, r), rot)
             self.walkable.discard((c, r))
@@ -755,6 +772,18 @@ class World:
                            color=color.rgb32(245, 245, 245))
                     Entity(model="cube", position=mid + Vec3(0, 0.06, 0), rotation_y=rot, scale=(0.2, 0.12, d.length() + 0.1),
                            color=color.rgb32(235, 235, 235))
+                    continue
+                if spec["kind"] == "exhibit":   # 1F 知識集：一人多高的米白弧形展牆，兩面都印著年表
+                    seg = Entity(position=mid, rotation_y=rot)
+                    Entity(parent=seg, model="cube", position=(0, h / 2, 0), scale=(0.1, h, d.length() + 0.04),
+                           color=color.rgb32(246, 243, 232))
+                    Entity(parent=seg, model="quad", position=(0.055, h / 2 + 0.05, 0), rotation_y=90,
+                           scale=(d.length() + 0.04, h * 0.85), double_sided=True,
+                           texture=self.t["timeline"][len(self.solids) % 3], color=color.rgb(1.05, 1.05, 1.05))
+                    Entity(parent=seg, model="quad", position=(-0.055, h / 2 + 0.05, 0), rotation_y=90,
+                           scale=(d.length() + 0.04, h * 0.85), double_sided=True,
+                           texture=self.t["timeline"][(len(self.solids) + 1) % 3], color=color.rgb(1.05, 1.05, 1.05))
+                    self.collider(mid + Vec3(0, h / 2, 0), (0.12, h, d.length()), occludes=False).rotation_y = rot
                     continue
                 if spec["kind"] == "glow":   # 2F 校史展示區：整面會發光的白色弧牆
                     Entity(model="cube", position=mid + Vec3(0, h / 2, 0), rotation_y=rot, scale=(0.25, h, d.length() + 0.08),
@@ -1026,7 +1055,7 @@ class World:
         for k in range(4):
             if self.rng.random() < 0.8:
                 ang = math.radians(k * 90 + self.rng.uniform(-20, 20))
-                col = color.rgb32(245, 245, 245) if self.rng.random() < 0.5 else color.rgb32(40, 42, 46)
+                col = color.rgb32(*self.rng.choice([(245, 245, 245), (40, 42, 46), (225, 120, 40), (60, 110, 170), (200, 60, 50)]))
                 self.shell_chair(p + Vec3(math.sin(ang), 0, math.cos(ang)) * 0.85, math.degrees(ang) + self.rng.uniform(-15, 15), col)
         if self.char(c + 2, r) == "W" or self.char(c + 1, r) == "W":
             self.floor_lamp(p + Vec3(CELL * 0.55, 0, 0.5))
@@ -1080,7 +1109,7 @@ class World:
     def cover_board(self, p, rot, k):
         """木色展示板：兩面都貼著書的封面，底下一個木頭底座。"""
         b = Entity(position=p, rotation_y=rot)
-        Entity(parent=b, model="cube", position=(0, 1.15, 0), scale=(0.9, 1.9, 0.12), color=color.rgb32(214, 190, 150))
+        Entity(parent=b, model="cube", position=(0, 1.15, 0), scale=(0.9, 1.9, 0.12), color=color.rgb32(242, 240, 234))
         for side in (1, -1):
             Entity(parent=b, model="quad", position=(0, 1.15, side * 0.065), scale=(0.88, 1.85),
                    texture=self.t["covers"][(k + (side > 0)) % 4], rotation_y=0 if side < 0 else 180)
@@ -1538,6 +1567,39 @@ class World:
                color=color.rgb32(230, 230, 228))
         self.box(p + Vec3(0, 1.1, R - 0.12), (0.7, 0.42, 0.04), col=color.rgb32(20, 20, 24))
         self.collider(p + Vec3(0, 1.0, 0), (CELL * 0.95, 2.0, CELL * 0.95), occludes=False)
+
+    def draped_table(self, p, kind):
+        """1F 桌巾桌：navy 是深藍桌巾的小圓桌；books 是米色桌巾的新書展示長桌，上面擺書和一盆綠色植物。"""
+        if kind == "navy":
+            Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.55, height=0.74), position=p,
+                   color=color.rgb32(40, 52, 82))
+            Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.57, height=0.03), position=p + Vec3(0, 0.74, 0),
+                   color=color.rgb32(50, 64, 98))
+            self.collider(p + Vec3(0, 0.4, 0), (1.15, 0.8, 1.15), occludes=False)
+            return
+        self.box(p + Vec3(0, 0.38, 0), (1.9, 0.76, 0.9), col=color.rgb32(222, 210, 186))
+        for i in range(5):
+            self.box(p + Vec3(-0.75 + i * 0.3, 0.8, self.rng.uniform(-0.2, 0.2)), (0.22, 0.05, 0.3),
+                     col=color.rgb32(*tx.BOOK_COLORS[(i * 3) % len(tx.BOOK_COLORS)]))
+        self.box(p + Vec3(0.55, 0.86, 0.15), (0.3, 0.2, 0.3), col=color.rgb32(120, 90, 60))
+        Entity(parent=self.group(None), model="sphere", position=p + Vec3(0.55, 1.12, 0.15), scale=0.5,
+               color=color.rgb32(70, 120, 60))
+        self.collider(p + Vec3(0, 0.4, 0), (1.9, 0.8, 0.9), occludes=False)
+
+    def rollup_banner(self, p, rot, lines):
+        """捲軸立牌：深藍色漸層，上面印字。"""
+        b = Entity(position=p, rotation_y=rot)
+        self.box((0, 0.04, 0), (0.85, 0.08, 0.25), col=color.rgb32(190, 192, 196), parent=b)
+        tex = self.text_tex(lines, w=160, h=360, bg=(46, 66, 120), fg=(240, 240, 248), sizes=[22, 14])
+        Entity(parent=b, model="quad", position=(0, 1.08, 0), scale=(0.8, 1.95), texture=tex, double_sided=True)
+        self.collider(p + Vec3(0, 1.0, 0), (0.85, 2.0, 0.3), occludes=False).rotation_y = rot
+
+    def calligraphy(self, p, d, char):
+        """掛在白牆上的書法：深色木框、米白紙、一個大字。"""
+        face = p + d * (CELL / 2 + 0.03) + Vec3(0, 1.7, 0)
+        self.box(face, (0.75 if not d.x else 0.04, 0.95, 0.04 if not d.x else 0.75), col=color.rgb32(70, 46, 30))
+        tex = self.text_tex([char], w=96, h=128, bg=(240, 234, 214), fg=(30, 28, 26), sizes=[72])
+        self.quad(face + d * 0.025, (0.6, 0.8), tex, rot=(0, facing_y(d), 0))
 
     def dvd_rack(self, p, rot):
         """3F 媒體區的黑色斜架：兩面都斜斜地擺著 DVD 封面。"""
