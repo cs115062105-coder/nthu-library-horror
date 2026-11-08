@@ -20,6 +20,7 @@ from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
+from minimap import Minimap
 from npc import Librarian, Roommate, to_cell
 from player import Player
 from world import World, cell_pos
@@ -96,6 +97,7 @@ class Game:
         self.world = None
         self.in_safe_zone = False
         self.hidden = False
+        self.minimap = Minimap()     # 右上角的小地圖，每換一層重畫
         self.load_floor("1F")
         self.player = Player(position=self.world.start, speed=4)
         self.player.cursor.visible = False
@@ -166,6 +168,7 @@ class Game:
             d = stair["pos"] - stair["door"].position
             self.arrival, self.arrival_rot = stair["pos"], math.degrees(math.atan2(d.x, d.z))
         self.refresh_paths()
+        self.minimap.load(self.world)
         self.apply_view()   # 霧的參數要重新套到新蓋的東西上
 
     def refresh_paths(self):
@@ -221,6 +224,7 @@ class Game:
         self.flash_fade()
         self.state = "play"
         self.noise_bg.enabled = self.hud_bg.enabled = True
+        self.minimap.show(True)
         self.player.enabled = True
         self.new_day(first=True)
 
@@ -240,6 +244,7 @@ class Game:
         self.noise, self.hidden = 0.0, False
         self.noise_bar.scale_x, self.noise_label.text = 0, ""
         self.noise_bg.enabled = self.hud_bg.enabled = False
+        self.minimap.show(False)
         if self.world.floor != "1F":
             self.load_floor("1F", came="start")
         self.in_safe_zone = False
@@ -699,6 +704,7 @@ class Game:
         self.ui_left.x = -window.aspect_ratio / 2
         if self.state != "play" or self.cleared or self.dead:
             return
+        self.minimap.update(self.player, self.librarian)
         if self.fight:
             self.update_prompt(off=True)
             self.update_fight()
@@ -789,6 +795,8 @@ def handle_input(key):
         game.interact()
     elif key == "c" and not game.cleared and not game.fight:
         game.toggle_hide()
+    elif key == "m":
+        game.minimap.toggle()
 
 
 # 用一個空 Entity 掛每幀更新與按鍵處理，不依賴 __main__ 裡的全域函式
