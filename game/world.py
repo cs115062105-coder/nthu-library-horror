@@ -28,7 +28,7 @@ SHADE = 0.95    # 白天的圖書館：燈全開，只稍微壓一點亮度避�
 # k  白色電腦桌（電腦共學區）  m  整面期刊架  d  窗邊閱覽桌  c  白色圓沙發
 ORDER = ["B1", "1F", "2F", "3F", "4F", "5F", "6F"]
 
-# 各層格子圖照圖書館官網的樓層平面圖排：西南邊是弧形落地窗，北邊一整排是公務區，樓梯間在東南角。
+# 各層格子圖照圖書館官網的樓層平面圖排：西南邊是弧形落地窗，北邊一整排是公務區，樓梯間在北邊中間、電梯右邊（每層同一個位置）。
 # 1F：照官網平面圖的像素座標換算（38.4 px = 1 格）：西南斜面是入口，左邊聯合櫃臺、北邊自助取書區、
 #     中間圓形的知識集展區、東邊輕學區、南邊清沙龍和逗留點，樓梯間和電梯在北邊中間（自助借書機旁邊）。
 LEVEL_1F = [
@@ -58,7 +58,7 @@ LEVEL_1F = [
     "xxxxxxxxxx################",
 ]
 # 2F：照官網平面圖換算（32 px = 1 格，柱距 160 px = 5 格）：西北電腦教室和電腦共學區，西南一條弧形的校史展示區，
-#     中間資訊島，北邊熱門書刊，東邊現期期刊和窗邊閱覽桌，南邊學位論文書架，樓梯間在東南角。
+#     中間資訊島，北邊熱門書刊，東邊現期期刊和窗邊閱覽桌，南邊學位論文書架，樓梯間在北邊中間、電梯右邊（每層同一個位置）。
 LEVEL_2F = [
     "########################################",
     "######.......###########################",
@@ -71,7 +71,7 @@ LEVEL_2F = [
     "####.........#GT.G######################",
     "####.kk...kk.#G..G######################",
     "####.........#GGGG######################",
-    "####..t.O..t.###########################",
+    "####..t.O..t.########UD#################",
     "####.........#..........mmmmmmmmmmmmmm.W",
     "####.kk...kk...........................W",
     "####.....................N.N.N.N.....d.W",
@@ -91,7 +91,7 @@ LEVEL_2F = [
     "####xxxxxxxxxxxxxx...H...............d.W",
     "####xxxxxxxxxxxxxxx.......BBBBBB.P.....W",
     "####xxxxxxxxxxxxxxxx...................W",
-    "#################################UD#####",
+    "########################################",
 ]
 # 3F：視聽媒體與聆賞、語言學習區、簡報練習室、討論室、小舞台、發呆區
 LEVEL_3F = [
@@ -105,7 +105,7 @@ LEVEL_3F = [
     "########....####.###########################",
     "########....####.###########################",
     "########....####.###########################",
-    "########....####.###########################",
+    "########....####.########UD#################",
     "##########.#####.#####.....#################",
     "#..........................................W",
     "#.............................S............W",
@@ -126,7 +126,7 @@ LEVEL_3F = [
     "#xxxxxxxxxxxxxxxxxxxxx..VV.v.............e.W",
     "#xxxxxxxxxxxxxxxxxxxxxx......j..j..O.......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx............P......W",
-    "#####################################UD#####",
+    "############################################",
 ]
 # 4F：中文圖書 000–499、閱覽區、討論室、清華書房、清華故事牆
 LEVEL_4F = [
@@ -141,7 +141,7 @@ LEVEL_4F = [
     "#.######...n...n...n.....###################",
     "#.######.................###################",
     "#.######...n...n...n.....###################",
-    "W.######....O....O....O..###################",
+    "W.######....O....O....O..UD#################",
     "W.........6..................H.H.H.H...H...W",
     "W...n...n..................................W",
     "W........................r.................W",
@@ -161,7 +161,7 @@ LEVEL_4F = [
     "#xxxxxxxxxxxxxxxxxxxxx......BBBB.BBBB......W",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
-    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....UD#####",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx...BBBB.BBBB#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
@@ -190,7 +190,7 @@ LEVEL_5F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "#..#####................#########..........#",
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
-    "W......O....O....O....###########....O.....#",
+    "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
     "W...n...n...n..n...........................W",
     "W.........................a................W",
@@ -210,7 +210,7 @@ LEVEL_5F = [
     "#xxxxxxxxxxxxxxxxxxxxx......n..n..n........W",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
-    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....UD#####",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx....n....n..#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
@@ -235,7 +235,7 @@ LEVEL_6F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "#..#####................#########..........#",
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
-    "W......O....O....O....###########....O.....#",
+    "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
     "W...T...T...n..n...........................W",
     "W.........................a................W",
@@ -255,7 +255,7 @@ LEVEL_6F = [
     "#xxxxxxxxxxxxxxxxxxxxx......n..n..n........W",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
-    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....UD#####",
+    "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx....n....n..#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
@@ -367,11 +367,11 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="stripes", banks=[], safe=set(),
+    "2F": dict(level=LEVEL_2F, floor="stripes", banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
-               hanging={(33, 30): ("樓梯間", "Stairs"), (9, 3): ("電腦教室", "Computer Lab II"),
+               hanging={(21, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (9, 3): ("電腦教室", "Computer Lab II"),
                         (8, 8): ("電腦共學區", "Computer Lab I"), (15, 12): ("討論室", "Discussion Rooms"),
                         (16, 15): ("資訊島", "Information Retrieval"), (30, 13): ("熱門書刊區", "Popular Books and Periodicals"),
                         (30, 20): ("現期期刊", "Current Periodicals"), (25, 28): ("本校學位論文", "NTHU Theses"),
@@ -390,7 +390,7 @@ FLOORS = {
                        {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
-    "3F": dict(level=LEVEL_3F, floor="stripes3", banks=[], safe=set(),
+    "3F": dict(level=LEVEL_3F, floor="stripes3", banks=[], safe=set(), lift_doors=[(23, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
@@ -398,7 +398,7 @@ FLOORS = {
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
                wood_wall=(27, 42, 11, 36),
-               hanging={(37, 30): ("樓梯間", "Stairs"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
+               hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
                         (32, 22): ("媒體區", "Audio-Visual Collection"), (41, 21): ("發呆區", "Relaxing and Inspiration"),
                         (31, 28): ("電視區", "TV Area"), (8, 13): ("多人聆賞席", "Group Carrels"),
                         (4, 15): ("語言學習區", "Language Learning"), (10, 12): ("小舞台", "Practice Room"),
@@ -418,13 +418,13 @@ FLOORS = {
                shelf_labels=["000 總類", "010 目錄學", "100 哲學類", "200 宗教類", "300 科學類",
                              "310 數學", "400 應用科學類", "410 醫藥", "490 商業"],
                history=STORY_WALL, whiteboard=(3, 2),
-               hanging={(37, 30): ("樓梯間", "Stairs"), (1, 5): ("討論室", "Discussion Room"),
+               hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 5): ("討論室", "Discussion Room"),
                         (32, 13): ("清華故事牆", "NTHU Story Wall"), (35, 22): ("中文圖書 000–499", "Oriental Language Books"),
                         (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("閱覽區", "Reading Area"),
                         (21, 22): ("閱覽區", "Reading Area"), (33, 38): ("清華書房 · 推薦閱讀", "NTHU Mini-Library")},
                posters=[((5, 16), (0, 1), "missing"), ((26, 12), (0, -1), "notice"), ((36, 34), (1, 0), "missing")],
                # 照 4F 實景照片：深色木條天花板、灰褐條紋地毯、白書架黃色側牌、NTHU 字母書牆、雲朵閱覽桌
-               wall_texts=[((27, 12), (0, -1), ("清華圖書館 百年物語", "Visit the Library. Read a Story"))],
+               wall_texts=[((29, 12), (0, -1), ("清華圖書館 百年物語", "Visit the Library. Read a Story"))],
                nthu_wall=(27, 35, 36),
                halo=dict(center=(21.04, 15.47), radius=2.4),
                curves=[{'kind': 'glass', 'pts': [(10.5, 17.5), (10.83, 18.04), (12.07, 18.68), (13.28, 19.37), (14.46, 20.12), (15.59, 20.93), (16.69, 21.79), (17.75, 22.71), (18.76, 23.67), (19.72, 24.68), (20.63, 25.74), (21.49, 26.84), (22.3, 27.98), (23.05, 29.15), (23.74, 30.36), (24.38, 31.61), (24.95, 32.88), (25.46, 34.18), (25.91, 35.5)]},
@@ -450,28 +450,28 @@ _UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=T
 FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="stripes4", ceiling_tex="slats",
                     shelf_labels=["500 社會科學類", "510 統計", "520 教育", "550 經濟", "570 政治", "580 法律",
                                   "600 中國史地類", "700 世界史地類", "800 語言文學類", "850 中國文學", "900 藝術類"],
-                    hanging={(37, 30): ("樓梯間", "Stairs"), (1, 1): ("討論室", "Discussion Rooms"),
+                    hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
                              (1, 9): ("影印室", "Photocopy Room"), (21, 9): ("電梯", "Elevators"),
                              (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("閱覽區", "Reading Area"),
                              (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("中文圖書 500–999", "Oriental Language Books"),
                              (35, 22): ("中文圖書 500–999", "Oriental Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文圖書", "Oriental Language Books")},
                     posters=[((5, 17), (0, -1), "missing"), ((26, 11), (0, 1), "notice"), ((36, 34), (1, 0), "missing")],
-                    art=dict(cells=[25, 26, 30, 31], row=11, title=(28, ("藝想空間 I", "Art Wall I"))))
+                    art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 I", "Art Wall I"))))
 FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="stripes", ceiling_tex="plaster",
                     # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
                     label_colors=((40, 110, 190), (245, 248, 252)),
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
                                   "Q Science", "QA Math", "T Technology"],
                     west_labels=(22, ["期刊 中文合訂本"]),
-                    hanging={(37, 30): ("樓梯間", "Stairs"), (1, 1): ("討論室", "Discussion Rooms"),
+                    hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
                              (1, 9): ("影印室", "Photocopy Room"), (21, 9): ("電梯", "Elevators"),
                              (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("安靜閱覽區", "Quiet Reading Area"),
                              (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("西文圖書", "Western Language Books"),
                              (35, 22): ("西文圖書", "Western Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文期刊合訂本", "Oriental Bound Periodicals")},
                     posters=[((5, 17), (0, -1), "notice"), ((26, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
-                    art=dict(cells=[25, 26, 30, 31], row=11, title=(28, ("藝想空間 II", "Art Wall II"))))
+                    art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 II", "Art Wall II"))))
 
 def cell_pos(c, r):
     return Vec3(c * CELL, 0, -r * CELL)
