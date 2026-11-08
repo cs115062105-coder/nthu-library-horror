@@ -388,6 +388,97 @@ def stripes(base=(128, 130, 134), band=(78, 80, 86), seed=16):
     return _noise(img, 4, rng)
 
 
+def bands(seed=31):
+    """3F 的地毯：一公尺寬的深炭灰和淺灰帶子交錯，帶子裡有細細的毛紋。"""
+    rng = random.Random(seed)
+    img = Image.new("RGB", (64, 64))
+    d = ImageDraw.Draw(img)
+    for y in range(64):
+        base = (70, 70, 72) if y < 32 else (182, 180, 176)
+        k = rng.randint(-14, 10)
+        d.line([(0, y), (63, y)], fill=tuple(max(0, min(255, v + k)) for v in base))
+    for _ in range(90):      # 一小段一小段的毛紋
+        x, y = rng.randrange(64), rng.randrange(64)
+        c = (95, 95, 98) if y < 32 else (205, 203, 198)
+        d.line([(x, y), (min(63, x + rng.randint(3, 10)), y)], fill=c)
+    return _noise(img, 4, rng)
+
+
+def dvds(seed):
+    """3F 媒體區的白色架子：五層擺滿 DVD 盒，大多是酒紅、粉色、黑色、白色。"""
+    rng = random.Random(500 + seed)
+    w, h = 128, 128
+    img = Image.new("RGB", (w, h), (232, 232, 230))
+    d = ImageDraw.Draw(img)
+    cols = [(120, 40, 50), (196, 140, 150), (226, 196, 200), (30, 30, 34), (236, 236, 232), (90, 60, 110), (60, 90, 140)]
+    shelf_h = h // 5
+    for s in range(5):
+        top, bottom = s * shelf_h + 4, (s + 1) * shelf_h - 3
+        x = 2
+        while x < w - 3:
+            if rng.random() < 0.05:
+                x += 6
+                continue
+            c = rng.choice(cols)
+            d.rectangle([x, top + 2, x + 1, bottom], fill=c)
+            d.point((x, top + 4), fill=(250, 250, 250))
+            x += 2
+        d.rectangle([0, bottom + 1, w, bottom + 3], fill=(250, 250, 248))   # 白色層板
+    d.rectangle([0, 0, 2, h], fill=(250, 250, 248))
+    return _noise(img, 3, rng)
+
+
+def wood_slats():
+    """3F 走道旁的淺色木條牆：一條條直的木條，縫是深色的。"""
+    rng = random.Random(41)
+    img = Image.new("RGB", (64, 64), (90, 62, 38))
+    d = ImageDraw.Draw(img)
+    for x in range(0, 64, 6):
+        c = rng.randint(190, 214)
+        d.rectangle([x, 0, x + 4, 63], fill=(c, c * 72 // 100, c * 46 // 100))
+        d.line([(x + 1, 0), (x + 1, 63)], fill=(c + 20, (c + 20) * 72 // 100, (c + 20) * 46 // 100))
+    return _noise(img, 6, rng)
+
+
+def timeline(seed):
+    """1F 知識集的弧形展牆：米白底，一排排年份、一段段字、幾張照片和黃色標籤。"""
+    rng = random.Random(700 + seed)
+    w, h = 128, 96
+    img = Image.new("RGB", (w, h), (246, 242, 228))
+    d = ImageDraw.Draw(img)
+    for col in range(3):
+        x = 6 + col * 41
+        y = 8
+        while y < h - 10:
+            kind = rng.random()
+            if kind < 0.2:       # 照片
+                d.rectangle([x, y, x + 20, y + 14], fill=rng.choice([(60, 40, 50), (90, 110, 130), (150, 120, 90)]))
+                y += 18
+            elif kind < 0.35:    # 黃色標籤
+                d.rectangle([x, y, x + 30, y + 6], fill=(245, 225, 120))
+                y += 10
+            else:                # 年份＋幾行字
+                d.rectangle([x, y, x + 12, y + 3], fill=(150, 150, 150))
+                for k in range(rng.randint(2, 4)):
+                    d.line([(x, y + 6 + k * 3), (x + rng.randint(18, 32), y + 6 + k * 3)], fill=(120, 120, 124))
+                y += 8 + 3 * 4
+    d.rectangle([0, h - 4, w, h], fill=(225, 220, 200))
+    return _noise(img, 3, rng)
+
+
+def leaf():
+    """地上貼的淡藍綠色葉子貼紙（透明背景）。"""
+    w, h = 128, 64
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse([4, 8, w - 4, h - 8], fill=(170, 220, 215, 200))
+    d.line([(8, h // 2), (w - 8, h // 2)], fill=(235, 250, 248, 220), width=2)
+    for x in range(24, w - 20, 16):
+        d.line([(x, h // 2), (x + 10, 14)], fill=(235, 250, 248, 200))
+        d.line([(x, h // 2), (x + 10, h - 14)], fill=(235, 250, 248, 200))
+    return img
+
+
 def slats():
     """4F 的深色木條天花板：一條條深咖啡木條，縫裡看得到上面黑黑的管線。"""
     rng = random.Random(17)
@@ -442,3 +533,20 @@ def blind():
     for y in range(0, 32, 3):
         d.line([(0, y), (31, y)], fill=(208, 204, 192))
     return img
+
+
+def painting(seed):
+    """藝想空間的畫：幾塊色塊和線條的抽象畫，每幅不一樣。"""
+    rng = random.Random(seed * 31 + 7)
+    palette = [(214, 92, 64), (236, 196, 90), (60, 96, 150), (90, 150, 130), (40, 40, 48), (232, 228, 216), (170, 120, 160)]
+    img = Image.new("RGB", (64, 48), rng.choice([(238, 234, 222), (222, 214, 196), (34, 38, 52)]))
+    d = ImageDraw.Draw(img)
+    for _ in range(rng.randint(3, 6)):
+        x, y = rng.randint(-10, 54), rng.randint(-10, 38)
+        w, h = rng.randint(10, 34), rng.randint(8, 26)
+        c = rng.choice(palette)
+        (d.ellipse if rng.random() < 0.4 else d.rectangle)([x, y, x + w, y + h], fill=c)
+    for _ in range(rng.randint(1, 3)):
+        d.line([(rng.randint(0, 63), rng.randint(0, 47)), (rng.randint(0, 63), rng.randint(0, 47))],
+               fill=rng.choice(palette), width=rng.randint(1, 3))
+    return _noise(img, 3, rng)
