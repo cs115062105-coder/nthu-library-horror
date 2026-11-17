@@ -479,6 +479,58 @@ def leaf():
     return img
 
 
+def books_light(seed):
+    """6F 西文書：白色書架，書背大多是白、米、淺藍、淺灰，高高低低，偶爾一本深色的。"""
+    rng = random.Random(900 + seed)
+    w, h = 128, 128
+    img = Image.new("RGB", (w, h), (226, 228, 230))
+    d = ImageDraw.Draw(img)
+    cols = [(240, 238, 230), (228, 220, 200), (180, 200, 220), (200, 204, 210), (150, 170, 196),
+            (236, 236, 240), (120, 140, 170), (60, 70, 96), (150, 60, 60), (210, 190, 150)]
+    weights = [6, 5, 4, 4, 3, 5, 2, 1, 1, 2]
+    shelf_h = h // 6
+    for s in range(6):
+        bottom = (s + 1) * shelf_h - 3
+        x = 2
+        while x < w - 3:
+            bw = rng.randint(2, 5)
+            if rng.random() < 0.08:
+                x += bw + 3
+                continue
+            bh = rng.randint(int(shelf_h * 0.5), shelf_h - 5)
+            c = rng.choices(cols, weights)[0]
+            c = tuple(max(0, min(255, v + rng.randint(-12, 12))) for v in c)
+            d.rectangle([x, bottom - bh, x + bw - 1, bottom], fill=c)
+            d.line([(x, bottom - bh), (x, bottom)], fill=tuple(int(v * 0.8) for v in c))
+            if bh > 10 and rng.random() < 0.6:
+                d.rectangle([x, bottom - 5, x + bw - 2, bottom - 3], fill=(250, 250, 250))
+            x += bw
+        d.rectangle([0, bottom + 1, w, bottom + 3], fill=(248, 248, 248))   # 白色層板
+    d.rectangle([0, 0, 2, h], fill=(248, 248, 248))
+    return _noise(img, 3, rng)
+
+
+def photo(seed):
+    """6F 藝想空間 II 的攝影展：模糊背景前一朵花或一片葉子的特寫。"""
+    rng = random.Random(seed * 17 + 3)
+    w, h = 64, 48
+    bg = rng.choice([(40, 70, 40), (110, 140, 60), (30, 30, 36), (170, 120, 150), (60, 90, 110)])
+    img = Image.new("RGB", (w, h), bg)
+    d = ImageDraw.Draw(img)
+    for _ in range(14):     # 模糊的背景光斑
+        x, y, r = rng.randrange(w), rng.randrange(h), rng.randint(4, 12)
+        c = tuple(max(0, min(255, v + rng.randint(-30, 40))) for v in bg)
+        d.ellipse([x - r, y - r, x + r, y + r], fill=c)
+    fg = rng.choice([(220, 80, 140), (240, 200, 60), (120, 190, 70), (200, 60, 50), (180, 140, 220)])
+    cx, cy = rng.randint(20, 44), rng.randint(14, 34)
+    for k in range(6):      # 花瓣
+        a = k * math.pi / 3 + rng.random() * 0.3
+        px, py = cx + math.cos(a) * 7, cy + math.sin(a) * 7
+        d.ellipse([px - 6, py - 4, px + 6, py + 4], fill=fg)
+    d.ellipse([cx - 3, cy - 3, cx + 3, cy + 3], fill=(250, 230, 120))
+    return _noise(img, 6, rng)
+
+
 def slats():
     """4F 的深色木條天花板：一條條深咖啡木條，縫裡看得到上面黑黑的管線。"""
     rng = random.Random(17)

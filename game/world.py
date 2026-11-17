@@ -458,7 +458,8 @@ FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="stripes4", ceiling_tex="slats
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文圖書", "Oriental Language Books")},
                     posters=[((5, 17), (0, -1), "missing"), ((26, 11), (0, 1), "notice"), ((36, 34), (1, 0), "missing")],
                     art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 I", "Art Wall I"))))
-FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="stripes", ceiling_tex="plaster",
+FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="stripes6", ceiling_tex="plaster", shelf_fill="light", end_style="blue",
+                    stools=10,
                     # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
                     label_colors=((40, 110, 190), (245, 248, 252)),
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
@@ -470,8 +471,8 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="stripes", ceiling_tex="plaste
                              (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("西文圖書", "Western Language Books"),
                              (35, 22): ("西文圖書", "Western Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文期刊合訂本", "Oriental Bound Periodicals")},
-                    posters=[((5, 17), (0, -1), "notice"), ((26, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
-                    art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 II", "Art Wall II"))))
+                    posters=[((5, 17), (0, -1), "notice"), ((24, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
+                    art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 II", "Art Wall II")), style="photo"))
 
 def cell_pos(c, r):
     return Vec3(c * CELL, 0, -r * CELL)
@@ -555,6 +556,8 @@ class World:
         self.t["covers"] = [t(tx.covers(i)) for i in range(4)]
         self.t["dvds"] = [t(tx.dvds(i)) for i in range(4)]
         self.t["timeline"] = [t(tx.timeline(i)) for i in range(3)]
+        self.t["light_books"] = [t(tx.books_light(i)) for i in range(4)]
+        self.t["stripes6"] = t(tx.stripes((160, 158, 152), (72, 70, 70), 23))
         self.t["leaf"] = t(tx.leaf())
         self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]
         World._textures = (self.t, self.book_tex)
@@ -733,6 +736,13 @@ class World:
             self.box(p + Vec3(0, 1.15, 0), (1.5, 2.3, 0.06), col=color.rgb32(150, 152, 156))
             self.box(p + Vec3(0, 1.1, -0.035), (0.02, 2.1, 0.01), col=color.rgb32(70, 70, 74))
             self.box(p + Vec3(1.0, 1.15, -0.02), (0.14, 0.3, 0.03), col=color.rgb32(185, 188, 192))
+        if self.spec.get("stools"):     # 書架走道上的白色圓形踏凳（踢凳）
+            aisles = sorted(cell for cell in self.walkable
+                            if self.char(cell[0], cell[1] - 1) == "B" or self.char(cell[0], cell[1] + 1) == "B")
+            for c, r in self.rng.sample(aisles, min(len(aisles), self.spec["stools"])):
+                q = cell_pos(c, r) + Vec3(self.rng.uniform(-0.5, 0.5), 0, self.rng.uniform(-0.3, 0.3))
+                Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.24, height=0.42),
+                       position=q, color=color.rgb32(242, 242, 240))
         for (c, r), kind in self.spec.get("draped", []):
             self.draped_table(cell_pos(c, r), kind)
             self.walkable.discard((c, r))
@@ -984,6 +994,9 @@ class World:
         tex = self.book_tex[(c * 7 + r * 3) % len(self.book_tex)]
         if self.spec.get("shelf_fill") == "dvd":      # 3F 媒體區擺的是 DVD
             tex = self.t["dvds"][(c * 7 + r * 3) % 4]
+        elif self.spec.get("shelf_fill") == "light":  # 6F 西文書，書背顏色淺
+            tex = self.t["light_books"][(c * 7 + r * 3) % 4]
+        blue_end = self.spec.get("end_style") == "blue"
         white = self.spec.get("white_shelves")    # 3F／4F 是白色的書架，側面一塊黃色的分類牌
         self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62), None if white else self.t["metal"],
                  col=color.rgb32(238, 238, 236) if white else color.white)
@@ -995,13 +1008,19 @@ class World:
                 end = Vec3(dc, 0, 0)
                 self.box(p + end * (CELL / 2) + Vec3(0, 1.1, 0), (0.06, 2.24, 0.66),
                          col=color.rgb32(240, 240, 238) if white else color.rgb32(90, 96, 100))
+                if blue_end:   # 6F：側板是霧面玻璃，兩邊鑲藍色邊條，上面一塊藍框的索書號牌
+                    face = p + end * (CELL / 2 + 0.032)
+                    self.box(face + Vec3(0, 0.85, 0), (0.01, 1.5, 0.58), col=color.rgb32(222, 230, 236))
+                    for z in (-0.31, 0.31):
+                        self.box(face + Vec3(0, 1.1, z), (0.02, 2.24, 0.05), col=color.rgb32(40, 110, 190))
+                    self.box(face + Vec3(0, 2.0, 0), (0.02, 0.36, 0.66), col=color.rgb32(40, 110, 190))
                 labels = self.spec.get("shelf_labels", CALL_NUMBERS)
                 if "west_labels" in self.spec and c < self.spec["west_labels"][0]:
                     labels = self.spec["west_labels"][1]    # 6F 西北角是中文期刊合訂本
                 label = labels[(run - 1) % len(labels)]
                 code, name = label.split(" ")
                 bg, fg = self.spec.get("label_colors", ((245, 200, 40), (40, 36, 30)) if white else ((30, 34, 40), (235, 235, 225)))
-                self.quad(p + end * (CELL / 2 + 0.035) + Vec3(0, 1.75, 0), (0.5, 0.26),
+                self.quad(p + end * (CELL / 2 + 0.045) + Vec3(0, 2.0 if blue_end else 1.75, 0), (0.6 if blue_end else 0.5, 0.28 if blue_end else 0.26),
                           self.text_tex([code, name], w=160, h=80, bg=bg, fg=fg, sizes=[30, 20]),
                           rot=(0, facing_y(end), 0))
         self.collider(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62))
@@ -1786,12 +1805,13 @@ class World:
                         self.quad(face - d * 0.02 + Vec3(0.45 * dr, 2.0, 0.45 * dc), (0.7, 0.9),
                                   self.t["notice"], col=color.rgb(1.25, 1.25, 1.3), rot=rot)
 
-    def art_wall(self, cells, row, title):
+    def art_wall(self, cells, row, title, style="paint"):
         """藝想空間：核心南面的白牆上一排畫框，中間印著標題。"""
         for i, c in enumerate(cells):
             p = cell_pos(c, row) + Vec3(0, 0, -(CELL / 2 + 0.03))
             self.quad(p + Vec3(0, 1.5, 0), (1.25, 0.95), col=color.rgb32(40, 36, 32))
-            self.quad(p + Vec3(0, 1.5, -0.01), (1.1, 0.8), Texture(tx.painting(i + row), filtering=None))
+            art = tx.photo(i + row) if style == "photo" else tx.painting(i + row)
+            self.quad(p + Vec3(0, 1.5, -0.01), (1.1, 0.8), Texture(art, filtering=None))
             self.box(p + Vec3(0, 2.9, 0), (0.25, 0.05, 0.25), col=color.rgb32(40, 40, 44))   # 打在畫上的軌道燈
             self.quad(p + Vec3(0, 1.5, -0.015), (1.6, 1.4), self.t["glow"], col=color.rgba32(255, 245, 225, 50))
         c, lines = title
