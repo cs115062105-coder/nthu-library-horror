@@ -20,8 +20,10 @@ from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
+from minimap import Minimap
 from npc import Librarian, Roommate, to_cell
 from player import Player
+from shading import light_scene
 from world import World, cell_pos
 
 MENU_SPOT = (7, 13)     # 大廳背景：1F 入口旁，望向圓形的知識集展區
@@ -39,7 +41,7 @@ NOTES = {
 # 樓梯間的門鎖：(樓層, 方向) → (需要的東西, 沒有時的提示)。白天的樓梯大家都能走，只有這兩扇不行
 LOCKS = {
     ("1F", "down"): ("b1", "B1 密集書庫：館員專用。（室友不可能在這裡）"),
-    ("4F", "up"): ("5f", "往 5F 的樓梯被施工圍籬擋住了。（5F 之後的樓層還在蓋）"),
+    ("6F", "up"): ("7f", "7F 是行政中心，不對外開放。"),
 }
 READABLE = {
     "newspaper": "《清華新聞》頭條：「期中考週，總圖座位一位難求」\n副標：「有學生自稱『完全沒讀』，卻被拍到在 4F 讀到閉館」",
@@ -96,6 +98,7 @@ class Game:
         self.world = None
         self.in_safe_zone = False
         self.hidden = False
+        self.minimap = Minimap()     # 右上角的小地圖，每換一層重畫
         self.load_floor("1F")
         self.player = Player(position=self.world.start, speed=4)
         self.player.cursor.visible = False
@@ -166,6 +169,7 @@ class Game:
             d = stair["pos"] - stair["door"].position
             self.arrival, self.arrival_rot = stair["pos"], math.degrees(math.atan2(d.x, d.z))
         self.refresh_paths()
+        self.minimap.load(self.world)
         self.apply_view()   # 霧的參數要重新套到新蓋的東西上
 
     def refresh_paths(self):
@@ -221,6 +225,7 @@ class Game:
         self.flash_fade()
         self.state = "play"
         self.noise_bg.enabled = self.hud_bg.enabled = True
+        self.minimap.show(True)
         self.player.enabled = True
         self.new_day(first=True)
 
@@ -240,6 +245,7 @@ class Game:
         self.noise, self.hidden = 0.0, False
         self.noise_bar.scale_x, self.noise_label.text = 0, ""
         self.noise_bg.enabled = self.hud_bg.enabled = False
+        self.minimap.show(False)
         if self.world.floor != "1F":
             self.load_floor("1F", came="start")
         self.in_safe_zone = False
@@ -262,6 +268,7 @@ class Game:
     # ---------- 場景 ----------
     def apply_view(self):
         """白天：燈全亮，只留一層很淡的霧讓遠處柔和一點。"""
+        light_scene()       # 先換成有光影的 shader，下面的霧才會套到它身上
         scene.fog_color = SKY
         scene.fog_density = (20.0, 75.0)
 
@@ -295,6 +302,8 @@ class Game:
                "2F": "2F。期刊區很安靜，大家都在假裝自己很認真。",
                "3F": "3F。視聽區傳來線性代數的錄音……這聲音好熟。",
                "4F": "4F。一整層的中文書。空氣裡有一股「偷卷」的味道。",
+               "5F": "5F。中文圖書 500–999，研究小間裡每個人都在埋頭苦讀。",
+               "6F": "6F。西文圖書區，安靜到聽得見翻頁聲。",
                "B1": "B1。你怎麼進來的？"}.get(self.world.floor, f"{self.world.floor}。")
         if self.world.floor == "4F" and self.roommate.active:
             msg += "\n他就在這層某張桌子。趁他低頭時靠近，他抬頭時躲好！"
@@ -697,6 +706,7 @@ class Game:
         self.ui_left.x = -window.aspect_ratio / 2
         if self.state != "play" or self.cleared or self.dead:
             return
+        self.minimap.update(self.player, self.librarian)
         if self.fight:
             self.update_prompt(off=True)
             self.update_fight()
@@ -787,6 +797,8 @@ def handle_input(key):
         game.interact()
     elif key == "c" and not game.cleared and not game.fight:
         game.toggle_hide()
+    elif key == "m":
+        game.minimap.toggle()
 
 
 # 用一個空 Entity 掛每幀更新與按鍵處理，不依賴 __main__ 裡的全域函式
