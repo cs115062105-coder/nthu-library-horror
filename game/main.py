@@ -23,6 +23,7 @@ from menu import DIFFICULTIES, Lobby
 from minimap import Minimap
 from npc import Librarian, Roommate, to_cell
 from player import Player
+from shading import light_scene
 from world import World, cell_pos
 
 MENU_SPOT = (7, 13)     # 大廳背景：1F 入口旁，望向圓形的知識集展區
@@ -267,6 +268,7 @@ class Game:
     # ---------- 場景 ----------
     def apply_view(self):
         """白天：燈全亮，只留一層很淡的霧讓遠處柔和一點。"""
+        light_scene()       # 先換成有光影的 shader，下面的霧才會套到它身上
         scene.fog_color = SKY
         scene.fog_density = (20.0, 75.0)
 

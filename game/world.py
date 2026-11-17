@@ -1029,11 +1029,24 @@ class World:
         blue_end = self.spec.get("end_style") == "blue"
         edge = color.rgb32(*self.spec.get("end_color", (40, 110, 190)))
         white = self.spec.get("white_shelves")    # 3F／4F 是白色的書架，側面一塊黃色的分類牌
-        self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62), None if white else self.t["metal"],
-                 col=color.rgb32(238, 238, 236) if white else color.white)
+        frame_col = color.rgb32(238, 238, 236) if white else color.white
+        self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.5), None if white else self.t["metal"], col=frame_col)
+        light = white or self.spec.get("shelf_fill") in ("dvd", "light")
+        board = color.rgb32(246, 246, 244) if light else color.rgb32(150, 154, 158)
+        rows = 6 if self.spec.get("shelf_fill") == "light" else 5
         for side in (1, -1):
-            self.quad(p + Vec3(0, 1.08, side * 0.315), (CELL * 0.98, 2.1), tex,
+            # 書往裡面縮一點，前面露出層板的邊，看起來才有深度
+            self.quad(p + Vec3(0, 1.08, side * 0.255), (CELL * 0.98, 2.1), tex,
                       rot=(0, 0 if side < 0 else 180, 0))
+            for k in range(rows):
+                y = 2.13 - 2.1 * ((k + 1) / rows - 1.5 / 128)
+                self.box(p + Vec3(0, y - 0.01, side * 0.285), (CELL * 0.98, 0.028, 0.065), col=board)
+            self.box(p + Vec3(0, 0.06, side * 0.285), (CELL, 0.12, 0.07), col=color.rgb32(60, 62, 66) if not light else board)
+            for x in (0, CELL / 2):   # 每格中間、格跟格之間的直立柱
+                if x and self.char(c + 1, r) != "B":
+                    continue
+                self.box(p + Vec3(x, 1.1, side * 0.285), (0.045, 2.2, 0.07), col=board)
+        self.box(p + Vec3(0, 2.225, 0), (CELL, 0.05, 0.66), col=board)   # 頂蓋
         for dc in (-1, 1):
             if self.char(c + dc, r) != "B":
                 end = Vec3(dc, 0, 0)
@@ -1084,20 +1097,27 @@ class World:
 
     def chair(self, pos, rot):
         ch = Entity(parent=self.group(None), position=pos, rotation_y=rot)
-        dark = color.rgb32(45, 45, 50)
-        self.box((0, 0.45, 0), (0.45, 0.05, 0.45), col=color.rgb32(70, 80, 110), parent=ch)
-        self.box((0, 0.75, 0.21), (0.45, 0.55, 0.04), col=color.rgb32(70, 80, 110), parent=ch)
+        dark, cloth = color.rgb32(45, 45, 50), color.rgb32(70, 80, 110)
+        self.box((0, 0.44, 0), (0.45, 0.03, 0.45), col=dark, parent=ch)              # 椅面底板
+        self.box((0, 0.475, -0.01), (0.42, 0.05, 0.42), col=cloth, parent=ch)         # 坐墊
+        self.box((0, 0.78, 0.215), (0.4, 0.36, 0.05), col=cloth, parent=ch).rotation_x = -6   # 靠背墊
         for x in (-0.2, 0.2):
-            for z in (-0.2, 0.2):
-                self.box((x, 0.22, z), (0.03, 0.45, 0.03), col=dark, parent=ch)
+            self.box((x, 0.22, -0.2), (0.03, 0.45, 0.03), col=dark, parent=ch)
+            self.box((x, 0.5, 0.2), (0.03, 0.98, 0.03), col=dark, parent=ch)          # 後腳一路接到椅背
+            self.box((x, 0.12, 0), (0.02, 0.02, 0.4), col=dark, parent=ch)            # 橫桿
+        self.box((0, 0.97, 0.2), (0.43, 0.035, 0.035), col=dark, parent=ch)
 
     def shell_chair(self, pos, rot, col):
         """1F 那種一體成型的塑膠殼椅：彎彎的椅背，四支細鐵腳。"""
         ch = Entity(parent=self.group(None), position=pos, rotation_y=rot)
         leg = color.rgb32(180, 182, 186)
         self.box((0, 0.46, 0), (0.44, 0.05, 0.42), col=col, parent=ch)
-        self.box((0, 0.72, 0.2), (0.42, 0.48, 0.04), col=col, parent=ch)
-        self.box((0, 0.72, 0.2), (0.44, 0.48, 0.035), col=col, parent=ch).rotation_x = -8
+        self.box((0, 0.445, -0.215), (0.44, 0.04, 0.04), col=col, parent=ch).rotation_x = 35   # 前緣往下彎
+        self.box((0, 0.53, 0.2), (0.43, 0.14, 0.04), col=col, parent=ch).rotation_x = 20      # 椅面接椅背的彎
+        self.box((0, 0.8, 0.24), (0.44, 0.42, 0.035), col=col, parent=ch).rotation_x = -10
+        for x in (-0.205, 0.205):   # 椅背兩側往前包
+            self.box((x, 0.8, 0.22), (0.035, 0.38, 0.08), col=col, parent=ch).rotation_x = -10
+        self.box((0, 0.43, 0), (0.36, 0.02, 0.36), col=leg, parent=ch)
         for x in (-0.18, 0.18):
             for z in (-0.17, 0.17):
                 self.box((x, 0.22, z), (0.025, 0.46, 0.025), col=leg, parent=ch)
@@ -1204,9 +1224,15 @@ class World:
         self.box((0, 0.5, 0), (0.46, 0.05, 0.44), col=white, parent=ch)
         self.box((0, 0.78, -0.2), (0.44, 0.5, 0.04), col=white, parent=ch)
         self.box((0, 0.27, 0), (0.05, 0.45, 0.05), col=steel, parent=ch)
+        self.box((0, 0.46, 0), (0.12, 0.05, 0.12), col=color.rgb32(60, 60, 64), parent=ch)   # 氣壓棒底座
+        for x in (-0.25, 0.25):     # 扶手
+            self.box((x, 0.62, 0.02), (0.035, 0.22, 0.035), col=steel, parent=ch)
+            self.box((x, 0.735, 0.0), (0.06, 0.03, 0.3), col=color.rgb32(70, 70, 74), parent=ch)
         for k in range(5):
-            leg = self.box((0, 0.04, 0), (0.04, 0.03, 0.6), col=steel, parent=ch)
+            a = math.radians(k * 72)
+            leg = self.box((math.sin(a) * 0.15, 0.06, math.cos(a) * 0.15), (0.04, 0.03, 0.3), col=steel, parent=ch)
             leg.rotation_y = k * 72
+            self.box((math.sin(a) * 0.29, 0.025, math.cos(a) * 0.29), (0.05, 0.05, 0.05), col=color.rgb32(40, 40, 44), parent=ch)
 
     def grid_ceiling(self, c0, r0, c1, r1, tex="grid"):
         """深色的鋁格柵天花板。"""
@@ -1284,7 +1310,10 @@ class World:
         for _ in range(self.rng.randint(1, 3)):
             off = Vec3(self.rng.uniform(-spread, spread), 0, self.rng.uniform(-0.25, 0.25))
             h = self.rng.uniform(0.03, 0.12)
-            self.box(top + off + Vec3(0, h / 2, 0), (0.22, h, 0.3), col=color.rgb32(*self.rng.choice(tx.BOOK_COLORS)))
+            book = self.box(top + off + Vec3(0, h / 2, 0), (0.22, h, 0.3), col=color.rgb32(*self.rng.choice(tx.BOOK_COLORS)))
+            book.rotation_y = self.rng.uniform(-25, 25)
+            pages = self.box(top + off + Vec3(0.015, h / 2, 0), (0.2, h * 0.8, 0.31), col=color.rgb32(238, 232, 214))
+            pages.rotation_y = book.rotation_y       # 書頁那一邊是白的
         if self.rng.random() < 0.5:
             self.box(top + Vec3(self.rng.uniform(-spread, spread), 0.08, 0.1), (0.07, 0.16, 0.07),
                      col=color.rgb32(200, 190, 160))
@@ -1297,9 +1326,21 @@ class World:
         self.hides.append(p)
         top = p + Vec3(0, 0.76, 0)
         self.box(top - Vec3(0, 0.02, 0), (1.7, 0.05, 1.0), self.t["wood"])
+        edge = color.rgb32(70, 52, 36)
+        for z in (-0.5, 0.5):        # 桌緣封邊
+            self.box(top + Vec3(0, -0.02, z), (1.72, 0.055, 0.02), col=edge)
+        for x in (-0.85, 0.85):
+            self.box(top + Vec3(x, -0.02, 0), (0.02, 0.055, 1.02), col=edge)
+        steel = color.rgb32(50, 50, 54)
+        for z in (-0.4, 0.4):
+            self.box(top + Vec3(0, -0.1, z), (1.5, 0.1, 0.03), col=steel)          # 桌下橫樑
         for x in (-0.75, 0.75):
             for z in (-0.4, 0.4):
-                self.box(p + Vec3(x, 0.37, z), (0.05, 0.74, 0.05), col=color.rgb32(50, 50, 54))
+                self.box(p + Vec3(x, 0.37, z), (0.05, 0.74, 0.05), col=steel)
+                self.box(p + Vec3(x, 0.01, z), (0.08, 0.02, 0.08), col=color.rgb32(30, 30, 32))   # 腳墊
+        self.box(top + Vec3(0, 0.005, 0), (0.24, 0.012, 0.08), col=color.rgb32(40, 40, 44))      # 桌面中間的插座盒
+        for x in (-0.06, 0.06):
+            self.box(top + Vec3(x, 0.012, 0), (0.05, 0.004, 0.03), col=color.rgb32(220, 220, 215))
         for x in (-0.45, 0.45):
             for z, rot in ((-0.75, 0), (0.75, 180)):
                 if self.rng.random() < 0.85:
