@@ -665,7 +665,7 @@ class World:
                 elif ch == "E":
                     self.exhibit(p)
                 elif ch == "Y":
-                    self.sofa(p)
+                    self.sofa(p, back=-1 if self.char(c, r - 2) == "Y" else 1)   # 兩張一組就面對面坐
                 elif ch == "L":
                     self.locker(c, r, p)
                 elif ch == "H":
@@ -948,19 +948,29 @@ class World:
         self.collider(back + Vec3(0, 1.1, 0), (CELL, 2.2, 0.8) if face.z else (0.8, 2.2, CELL))
 
     def window_desk(self, c, r, p):
-        """窗邊閱覽桌：面窗的長桌，兩邊白色隔板，桌上一條燈。"""
-        east = Vec3(1, 0, 0)
+        """窗邊閱覽桌：面窗的長桌，前面一道白色隔板，兩邊側板，桌上一條燈；椅子在背窗那一邊，坐的人面向窗戶。"""
+        f = Vec3(1, 0, 0)        # 朝窗戶的方向：看旁邊哪一格是窗
+        for d in (Vec3(0, 0, 1), Vec3(1, 0, 0), Vec3(0, 0, -1), Vec3(-1, 0, 0)):
+            if self.char(c + int(d.x), r - int(d.z)) == "W":
+                f = d
+                break
+        s = Vec3(f.z, 0, -f.x)    # 桌子長的那一邊
+
+        def sz(along_f, y, along_s):
+            return (along_f, y, along_s) if f.x else (along_s, y, along_f)
+
         top = p + Vec3(0, 0.75, 0)
-        self.box(top - Vec3(0, 0.02, 0), (0.9, 0.05, CELL * 0.98), col=color.rgb32(222, 196, 156))
-        self.box(p + Vec3(0.4, 0.37, 0), (0.05, 0.74, CELL * 0.9), col=color.rgb32(235, 235, 235))
-        for z in (-0.98, 0.98):
-            self.box(top + Vec3(0, 0.25, z), (0.9, 0.5, 0.03), col=color.rgb32(238, 238, 236))
-        self.box(top + Vec3(0.38, 0.45, 0), (0.06, 0.04, CELL * 0.9), col=color.rgb(1.3, 1.3, 1.25))
+        self.box(top - Vec3(0, 0.02, 0), sz(0.9, 0.05, CELL * 0.98), col=color.rgb32(222, 196, 156))
+        self.box(p + f * 0.4 + Vec3(0, 0.37, 0), sz(0.05, 0.74, CELL * 0.9), col=color.rgb32(235, 235, 235))
+        for k in (-0.98, 0.98):
+            self.box(top + s * k + Vec3(0, 0.25, 0), sz(0.9, 0.5, 0.03), col=color.rgb32(238, 238, 236))
+        self.box(top + f * 0.38 + Vec3(0, 0.45, 0), sz(0.06, 0.04, CELL * 0.9), col=color.rgb(1.3, 1.3, 1.25))
         self.clutter(top, 0.2)
         if self.rng.random() < 0.85:
-            self.swivel_chair(p - east * 0.75 + Vec3(0, 0, self.rng.uniform(-0.3, 0.3)), 90 + self.rng.uniform(-20, 20))
+            rot = math.degrees(math.atan2(f.x, f.z))     # 旋轉椅坐的人面向 +z，轉到面向窗戶
+            self.swivel_chair(p - f * 0.75 + s * self.rng.uniform(-0.3, 0.3), rot + self.rng.uniform(-20, 20))
         self.hides.append(p)
-        self.collider(p + Vec3(0, 0.45, 0), (0.9, 0.9, CELL * 0.98), occludes=False)
+        self.collider(p + Vec3(0, 0.45, 0), sz(0.9, 0.9, CELL * 0.98), occludes=False)
 
     def tub_chairs(self, p):
         """期刊區的白色桶狀單人椅，兩張對坐，中間一張鍍鉻小圓桌。2F 照影片換成白色／黃色的多角形扶手椅。"""
@@ -1545,10 +1555,11 @@ class World:
         self.collider(p + Vec3(0, 1.0, 0), (1.0, 2.0, 0.2), occludes=False)
         self.interactables.append(dict(kind="read", pos=p, data="exhibit"))
 
-    def sofa(self, p):
+    def sofa(self, p, back=1):
+        """沙發：椅背在 back 那一邊（1 = 北），坐的人面向另一邊。"""
         col = color.rgb32(120, 60, 50)
         self.box(p + Vec3(0, 0.22, 0), (1.5, 0.44, 0.8), col=col)
-        self.box(p + Vec3(0, 0.55, 0.32), (1.5, 0.5, 0.18), col=col)
+        self.box(p + Vec3(0, 0.55, 0.32 * back), (1.5, 0.5, 0.18), col=col)
         for x in (-0.72, 0.72):
             self.box(p + Vec3(x, 0.35, 0), (0.16, 0.5, 0.8), col=col)
         self.collider(p + Vec3(0, 0.4, 0), (1.5, 0.8, 0.8), occludes=False)
