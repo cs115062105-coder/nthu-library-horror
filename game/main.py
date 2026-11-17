@@ -20,11 +20,12 @@ from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
-from minimap import Minimap
+from minimap import Minimap, bang_texture, triangle
 from npc import Librarian, Roommate, to_cell
 from player import Player
 from shading import light_scene
-from world import World, cell_pos
+from ursina.shaders import unlit_shader
+from world import ORDER, World, cell_pos
 
 MENU_SPOT = (7, 13)     # 大廳背景：1F 入口旁，望向圓形的知識集展區
 MENU_LIBRARIAN = (9, 13)
@@ -147,6 +148,18 @@ class Game:
                                 scale=(0, 0.018), color=color.rgb32(90, 90, 100))
         self.noise_label = Text(parent=self.ui_left, position=(0.04, -0.405), scale=0.8, color=color.rgb32(30, 30, 40))
         self.scares = Scares(self)
+        # 卡關提示：同一個步驟待太久、或錯太多次，就在小地圖和場景裡標出下一步要去哪
+        self.stage = None
+        self.stage_time = 0.0
+        self.mistakes = 0
+        self.helping = False
+        self.bang = Entity(model="quad", texture=bang_texture(), scale=0.7, billboard=True, always_on_top=True,
+                           shader=unlit_shader, enabled=False)
+        self.edge_bang = Entity(parent=camera.ui, model="quad", texture=bang_texture(), scale=0.07, enabled=False)
+        self.edge_arrow = Entity(parent=self.edge_bang, model=triangle(), color=color.rgb32(255, 205, 30), scale=0.6,
+                                 double_sided=True)
+        self.goal_bang = Entity(parent=self.ui_left, model="quad", texture=bang_texture(), position=(0.022, 0.413),
+                                scale=0.03, enabled=False)
         self.bob = 0.0
         self.step_timer = 0.0
         self.time_left = 0
@@ -196,6 +209,7 @@ class Game:
             self.show_hint("這裡沒有路了。", 2)
             return
         self.dead = True   # 換樓層時暫停館員和時鐘
+        self.hide_help()
         self.update_prompt(off=True)
         self.flash.color = color.rgba32(0, 0, 0, 255)
         self.goal_text.text = ""
@@ -207,6 +221,76 @@ class Game:
             self.later(self.flash_fade, 0.3)
         self.later(arrive, 0.8)
 
+    # ---------- 卡關提示 ----------
+    def stage_id(self):
+        """現在卡在哪一步（跟在哪一層無關，換樓層不會重算時間）。"""
+        for key in ("trail4", "trail3", "trail2", "locker_known"):
+            if key in self.items:
+                return key
+        return "start"
+
+    def mistake(self):
+        """做錯一次（開錯櫃子、密碼錯、太早來、被室友掙脫……）。"""
+        self.mistakes += 1
+
+    def help_target(self):
+        """下一步要去的位置；目標在別層就回傳往那層的樓梯。"""
+        items, w = self.items, self.world
+        if "trail4" in items:
+            want = "4F"
+            target = self.roommate.position if self.roommate.active else None
+        elif "trail3" in items:
+            want, target = "3F", next((t["pos"] for t in w.interactables if t["kind"] == "tape"), None)
+        elif "trail2" in items:
+            want, target = "2F", next((t["pos"] for t in w.interactables if t["kind"] == "lab_pc"), None)
+        elif "locker_known" in items:
+            want = "1F"
+            target = next((t.get("look", t["pos"]) for t in w.interactables
+                           if t["kind"] == "locker" and t.get("data") == self.locker_no), None)
+        else:
+            want, target = "1F", next((t["pos"] for t in w.interactables if t["kind"] == "counter_pc"), None)
+        if w.floor != want:
+            way = "up" if ORDER.index(want) > ORDER.index(w.floor) else "down"
+            stair = w.stairs.get(way)
+            return stair["pos"] if stair else None
+        return target
+
+    def update_help(self):
+        stage = self.stage_id()
+        if stage != self.stage:            # 進到下一步：重新計時、錯誤歸零、提示收起來
+            self.stage, self.stage_time, self.mistakes = stage, 0.0, 0
+            self.helping = False
+        self.stage_time += time.dt
+        if not self.helping and (self.stage_time > self.cfg.get("help_after", 90) or self.mistakes >= 2):
+            self.helping = True
+            self.play("chime", volume=0.4)
+            self.show_hint("卡住了嗎？跟著黃色驚嘆號走（小地圖上也有）。", 4)
+        target = self.help_target() if self.helping else None
+        self.minimap.mark(target)
+        self.goal_bang.enabled = self.helping
+        self.bang.enabled = target is not None
+        self.edge_bang.enabled = False
+        if target is not None:
+            self.bang.position = target + Vec3(0, 2.3 + 0.12 * math.sin(time.time() * 3), 0)
+            to = target - self.player.position
+            to.y = 0
+            self.bang.scale = max(0.7, to.length() * 0.05)      # 遠的時候放大一點，才看得到
+            fwd = camera.forward
+            fwd = Vec3(fwd.x, 0, fwd.z).normalized()
+            if to.length() > 0.5:
+                to = to.normalized()
+                ang = math.degrees(math.atan2(fwd.x * to.z - fwd.z * to.x, fwd.dot(to)))   # 正的在左邊
+                if abs(ang) > 38:     # 不在畫面裡：在畫面左右邊緣放一個驚嘆號和箭頭
+                    side = -1 if ang > 0 else 1
+                    self.edge_bang.enabled = True
+                    self.edge_bang.position = (side * (window.aspect_ratio / 2 - 0.09), 0.02 * math.sin(time.time() * 5))
+                    self.edge_arrow.position = (side * 0.85, 0)
+                    self.edge_arrow.rotation_z = 90 * side
+
+    def hide_help(self):
+        self.bang.enabled = self.goal_bang.enabled = self.edge_bang.enabled = False
+        self.minimap.mark(None)
+
     # ---------- 大廳與開局 ----------
     def start(self, cfg, name):
         self.session += 1
@@ -216,6 +300,7 @@ class Game:
         self.items.clear()
         self.code = "".join(random.choice("123456789") for _ in range(3))   # 每局密碼都不同
         self.locker_no = random.randint(1, 6)
+        self.stage = None
         self.day = 1
         self.total_warnings = self.spotted = 0
         self.cleared = False
@@ -237,6 +322,7 @@ class Game:
             t.text = ""
         self.hint_bg.enabled = False
         self.note_bg.enabled = False
+        self.hide_help()
         self.update_prompt(off=True)
         self.flash_fade()
         self.close_entry()
@@ -451,6 +537,7 @@ class Game:
         if f["time"] <= 0:   # 打不夠，他掙脫逃走
             self.end_fight_ui()
             self.show_hint("室友掙脫了！「下次再說！」……他又跑了。", 3)
+            self.mistake()
             self.spotted += 1
             self.roommate.flee()
 
@@ -568,6 +655,7 @@ class Game:
         elif kind == "locker":
             if data != self.locker_no:
                 self.show_hint(f"A{data:02d}：別人的書，不要亂開。", 2)
+                self.mistake()
             elif "trail2" in self.items:
                 self.show_hint("你已經翻過這個櫃子了。", 2)
             else:
@@ -580,11 +668,13 @@ class Game:
                 self.show_note("瀏覽紀錄還開著：「3F 視聽區 線代錄音」")
             elif "trail2" not in self.items:
                 self.show_hint("一台上鎖的電腦。（先去 1F 查查室友今天預約了什麼）", 3)
+                self.mistake()
             else:
                 self.open_entry("電腦教室　登入", "密碼提示：本校在新竹建校的那一年", 4, self.lab_login)
         elif kind == "tape":
             if "trail3" not in self.items:
                 self.show_hint("一台還在播的錄音機。這是誰的？", 2)
+                self.mistake()
             else:
                 self.play_tape()
         elif kind == "case":
@@ -596,6 +686,7 @@ class Game:
     def lab_login(self, code):
         if code != "1956":
             self.show_hint("密碼錯誤。", 2)
+            self.mistake()
             return
         self.items.add("trail3")
         self.show_note("登入成功。室友的搜尋紀錄：\n「怎麼偷讀書不被室友發現」\n「偷卷 被抓到 怎麼辦」\n「3F 視聽區 線代錄音」")
@@ -683,6 +774,7 @@ class Game:
 
     def ending(self):
         self.update_prompt(off=True)
+        self.hide_help()
         self.cleared = True
         self.goal_text.text = ""
         self.roommate.hide()
@@ -722,6 +814,7 @@ class Game:
         self.clock_text.text = (f"{minutes // 60:02d}:{minutes % 60:02d}　第 {self.day} 天　{self.world.floor}　"
                                 f"館員警告 {self.warnings}/3")
         self.goal_text.text = "目標：" + self.goal()
+        self.update_help()
         self.update_prompt()
         if self.time_left <= 0:
             self.play("chime")

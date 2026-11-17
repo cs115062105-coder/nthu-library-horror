@@ -4,9 +4,12 @@
 · 綠色方塊是樓梯
 · 橘色箭頭是你，箭頭指著你面向的方向
 · 館員走到附近（聽得到腳步聲的距離）才會出現紅點，遠的看不到
+· 卡關太久或錯太多次時，下一步要去的地方會出現黃色驚嘆號（在別層就標樓梯）
 按 M 可以開關。
 """
-from PIL import Image
+from PIL import Image, ImageDraw
+import time
+
 from ursina import Entity, Mesh, Text, Texture, camera, color, window
 
 from world import CELL
@@ -18,6 +21,17 @@ NEAR = 14           # 館員離你幾公尺內才會出現在地圖上
 def to_grid(pos):
     """3D 座標換成格子座標（可以是小數）。"""
     return pos.x / CELL, -pos.z / CELL
+
+
+def bang_texture():
+    """黃色圓底、深色驚嘆號的小圖示，小地圖和場景裡的提示共用。"""
+    k = 128
+    img = Image.new("RGBA", (k, k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((4, 4, k - 4, k - 4), fill=(255, 205, 30, 255), outline=(120, 80, 0, 255), width=6)
+    d.rounded_rectangle((k / 2 - 10, 22, k / 2 + 10, 82), radius=8, fill=(50, 36, 10, 255))
+    d.ellipse((k / 2 - 11, 90, k / 2 + 11, 112), fill=(50, 36, 10, 255))
+    return Texture(img)
 
 
 def triangle():
@@ -33,6 +47,8 @@ class Minimap:
         self.you = Entity(parent=self.root, model=triangle(), color=color.rgb32(235, 110, 30), z=-0.03,
                           scale=0.022, double_sided=True)
         self.guard = Entity(parent=self.root, model="circle", color=color.rgb32(220, 40, 40), z=-0.02, scale=0.016)
+        self.bang = Entity(parent=self.root, model="quad", texture=bang_texture(), z=-0.04, scale=0.03, enabled=False)
+        self.bang_pos = None
         self.on = True
         self.cols = self.rows = 1
 
@@ -76,11 +92,19 @@ class Minimap:
         self.root.y = 0.5 - self.h / 2 - 0.045
         self.you.position = (*self.spot(player.position), -0.03)
         self.you.rotation_z = player.rotation_y
+        self.bang.enabled = self.bang_pos is not None
+        if self.bang_pos is not None:
+            self.bang.position = (*self.spot(self.bang_pos), -0.04)
+            self.bang.scale = 0.03 + 0.006 * abs(((time.time() * 2) % 2) - 1)     # 一縮一放比較顯眼
         g = librarian.root.position
         near = (g - player.position).length() < NEAR
         self.guard.enabled = near
         if near:
             self.guard.position = (*self.spot(g), -0.02)
+
+    def mark(self, pos):
+        """在小地圖上標一個黃色驚嘆號；pos 是 None 就拿掉。"""
+        self.bang_pos = pos
 
     def show(self, on):
         self.root.enabled = on and self.on
