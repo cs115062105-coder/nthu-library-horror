@@ -571,6 +571,8 @@ class World:
         self.t["stripes6"] = t(tx.stripes((160, 158, 152), (72, 70, 70), 23))
         self.t["leaf"] = t(tx.leaf())
         self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]
+        self.t["screens"] = [t(tx.screen_hd(self.font_path, i)) for i in range(4)]
+        self.t["keyboard"] = t(tx.keyboard())
         World._textures = (self.t, self.book_tex)
 
     def char(self, c, r):
@@ -928,14 +930,11 @@ class World:
                 leg = self.box(p + Vec3(x, 0.37, lean * 0.3), (0.05, 0.8, 0.05), col=white)
                 leg.rotation_x = lean * 22
         self.box(top + Vec3(0, 0.3, 0), (CELL * 0.98, 0.6, 0.03), col=color.rgba32(225, 230, 232, 200))
-        for side in (1, -1):
-            self.box(top + Vec3(0, 0.22, side * 0.1), (0.03, 0.42, 0.03), col=steel)
-            self.box(top + Vec3(0, 0.42, side * 0.2), (0.55, 0.34, 0.03), col=color.rgb32(25, 25, 28))
-            Entity(model="quad", position=top + Vec3(0, 0.42, side * 0.22), scale=(0.5, 0.3), rotation_y=0 if side > 0 else 180,
-                   texture=self.t["screen"], color=color.rgb(1.1, 1.1, 1.1))
+        for side in (1, -1):        # 螢幕朝外、椅子朝桌子
+            self.monitor(top + Vec3(0, 0, side * 0.3), 180 if side > 0 else 0)
             if self.rng.random() < 0.85:
                 self.swivel_chair(p + Vec3(self.rng.uniform(-0.3, 0.3), 0, side * 1.05),
-                                  (0 if side > 0 else 180) + self.rng.uniform(-25, 25))
+                                  (180 if side > 0 else 0) + self.rng.uniform(-25, 25))
         self.clutter(top, 0.6)
         self.collider(p + Vec3(0, 0.5, 0), (CELL, 1.0, 1.5), occludes=False)
 
@@ -1108,12 +1107,13 @@ class World:
         dark, cloth = color.rgb32(45, 45, 50), color.rgb32(70, 80, 110)
         self.box((0, 0.44, 0), (0.45, 0.03, 0.45), col=dark, parent=ch)              # 椅面底板
         self.box((0, 0.475, -0.01), (0.42, 0.05, 0.42), col=cloth, parent=ch)         # 坐墊
-        self.box((0, 0.78, 0.215), (0.4, 0.36, 0.05), col=cloth, parent=ch).rotation_x = -6   # 靠背墊
+        # 椅背在 -z 那一邊，坐的人面向 +z（跟旋轉椅一樣）
+        self.box((0, 0.78, -0.215), (0.4, 0.36, 0.05), col=cloth, parent=ch).rotation_x = 6   # 靠背墊
         for x in (-0.2, 0.2):
-            self.box((x, 0.22, -0.2), (0.03, 0.45, 0.03), col=dark, parent=ch)
-            self.box((x, 0.5, 0.2), (0.03, 0.98, 0.03), col=dark, parent=ch)          # 後腳一路接到椅背
+            self.box((x, 0.22, 0.2), (0.03, 0.45, 0.03), col=dark, parent=ch)
+            self.box((x, 0.5, -0.2), (0.03, 0.98, 0.03), col=dark, parent=ch)         # 後腳一路接到椅背
             self.box((x, 0.12, 0), (0.02, 0.02, 0.4), col=dark, parent=ch)            # 橫桿
-        self.box((0, 0.97, 0.2), (0.43, 0.035, 0.035), col=dark, parent=ch)
+        self.box((0, 0.97, -0.2), (0.43, 0.035, 0.035), col=dark, parent=ch)
 
     def shell_chair(self, pos, rot, col):
         """1F 那種一體成型的塑膠殼椅：彎彎的椅背，四支細鐵腳。"""
@@ -1212,18 +1212,39 @@ class World:
         Entity(parent=b, model="cube", position=(0, 0.6, 0), scale=(0.95, 0.03, 0.25), color=color.rgb32(185, 160, 125), collider="box")
         self.collider(p + Vec3(0, 1.0, 0), (0.95, 2.0, 0.95), occludes=False).rotation_y = rot
 
-    def info_desk(self, p):
+    def info_desk(self, p, live=False):
         """1F 資訊島：一長條淺木色桌面、不鏽鋼桌腳、懸臂螢幕，配白色旋轉椅。"""
         top = p + Vec3(0, 0.78, 0)
         self.box(top - Vec3(0, 0.02, 0), (CELL * 1.01, 0.05, 0.85), col=color.rgb32(225, 200, 160))
         self.box(p + Vec3(0, 0.38, 0), (0.08, 0.76, 0.08), col=color.rgb32(185, 188, 192))
-        self.box(top + Vec3(0, 0.02, 0.15), (0.22, 0.02, 0.16), col=color.rgb32(60, 60, 62))
-        self.box(top + Vec3(0, 0.25, 0.22), (0.03, 0.45, 0.03), col=color.rgb32(185, 188, 192))
-        self.box(top + Vec3(0, 0.42, 0.15), (0.55, 0.34, 0.03), col=color.rgb32(25, 25, 28))
-        Entity(model="quad", position=top + Vec3(0, 0.42, 0.13), scale=(0.5, 0.3),
-               texture=self.t["screen"], color=color.rgb(1.2, 1.2, 1.2))
+        self.monitor(top + Vec3(0, 0, 0.18), 0, live=live)
         self.swivel_chair(p + Vec3(self.rng.uniform(-0.3, 0.3), 0, -0.75), self.rng.uniform(-25, 25))
         self.collider(p + Vec3(0, 0.4, 0), (CELL, 0.8, 0.85), occludes=False)
+
+    def monitor(self, base, rot, live=False, w=0.56):
+        """一台液晶螢幕：細邊框、背後的外殼、支架和底座，前面放鍵盤和滑鼠。
+        base 是桌面上螢幕底座的位置；rot 跟 quad 一樣，0 是螢幕朝 -z（坐的人在 -z 那邊）。"""
+        a = math.radians(rot)
+
+        def at(x, y, z):    # 本地座標換成世界座標（跟 Ursina 的 rotation_y 同一個方向）
+            return base + Vec3(x * math.cos(a) + z * math.sin(a), y, -x * math.sin(a) + z * math.cos(a))
+        h = w * 0.6
+        cy = 0.13 + h / 2
+        dark, grey = color.rgb32(28, 28, 32), color.rgb32(58, 58, 64)
+        parts = [((0, cy, 0), (w + 0.02, h + 0.02, 0.022), dark),          # 邊框
+                 ((0, cy, 0.026), (w * 0.62, h * 0.6, 0.035), grey),      # 背後鼓起來的外殼
+                 ((0, 0.085, 0.05), (0.045, 0.17, 0.025), grey),           # 支架
+                 ((0, 0.008, 0.035), (0.24, 0.016, 0.17), grey),           # 底座
+                 ((0.27, 0.012, -0.3), (0.06, 0.022, 0.1), color.rgb32(40, 40, 44)),   # 滑鼠
+                 ((0, 0.008, -0.3), (0.44, 0.016, 0.15), color.rgb32(46, 46, 50))]     # 鍵盤底
+        for pos, sc, col in parts:
+            self.box(at(*pos), sc, col=col).rotation_y = rot
+        # 有貼圖的東西不放進 group(None)，不然貼圖會不見
+        Entity(model="quad", position=at(0, 0.0175, -0.3), scale=(0.42, 0.13), rotation=(90, rot, 0),
+               texture=self.t["keyboard"])
+        k = self.rng.randrange(len(self.t["screens"]))
+        Entity(model="quad", position=at(0, cy, -0.0125), scale=(w - 0.012, h - 0.012), rotation_y=rot,
+               texture=self.t["screens"][k], color=color.rgb(1.35, 1.35, 1.35) if live else color.rgb(1.08, 1.08, 1.08))
 
     def swivel_chair(self, pos, rot):
         """白色辦公旋轉椅：殼椅加上五爪腳和輪子。"""
@@ -1367,8 +1388,8 @@ class World:
             for x in (-0.6, 0.6):
                 self.box(p + Vec3(x, 0.65, 0), (0.04, 1.3, 0.75), col=color.rgba32(222, 230, 232, 190))
             self.box(p + Vec3(0, 1.0, -0.36), (1.2, 0.5, 0.04), col=color.rgba32(222, 230, 232, 190))
-            self.box(top + Vec3(0, 0.22, -0.25), (0.5, 0.32, 0.03), col=color.rgb32(22, 22, 26))
-            self.swivel_chair(p + Vec3(0, 0, 0.6), self.rng.uniform(-20, 20))
+            self.monitor(top + Vec3(0, 0, -0.18), 180, w=0.5)     # 螢幕朝 +z，對著坐的人
+            self.swivel_chair(p + Vec3(0, 0, 0.6), 180 + self.rng.uniform(-20, 20))
         else:
             self.box(top - Vec3(0, 0.02, 0), (1.2, 0.05, 0.7), self.t["wood"])
             for x in (-0.6, 0.6):
@@ -1403,7 +1424,7 @@ class World:
         self.box(p + Vec3(0.3, 1.2, -0.45), (0.04, 0.3, 0.35), col=white)
         self.quad(p + Vec3(0.33, 1.2, -0.45), (0.3, 0.26),
                   self.text_tex([str(n)], w=64, h=56, bg=(250, 250, 250), fg=(60, 40, 110), sizes=[40]), rot=(0, -90, 0))
-        self.shell_chair(p + Vec3(0.95, 0, -0.45), -90 + self.rng.uniform(-20, 20), color.rgb32(240, 240, 240))
+        self.shell_chair(p + Vec3(0.95, 0, -0.45), 90 + self.rng.uniform(-20, 20), color.rgb32(240, 240, 240))
         self.collider(p + Vec3(0, 0.55, 0), (1.0, 1.1, CELL), occludes=False)
 
     def pillar(self, p):
@@ -1614,19 +1635,15 @@ class World:
 
     def computer(self, p, live=False):
         if self.spec.get("white"):
-            self.info_desk(p)
+            self.info_desk(p, live)
             if live:   # 這台還亮著
-                Entity(model="quad", position=p + Vec3(0, 1.2, 0.125), scale=(0.5, 0.3),
-                       texture=self.t["screen"], color=color.rgb(1.6, 1.6, 1.6))
                 self.interactables.append(dict(kind="lab_pc", pos=p + Vec3(0, 0, -CELL * 0.5)))
             return
         top = p + Vec3(0, 0.76, 0)
         self.box(top - Vec3(0, 0.02, 0), (1.4, 0.05, 0.8), self.t["wood"])
         self.box(p + Vec3(0, 0.37, 0.3), (1.4, 0.74, 0.05), col=color.rgb32(50, 50, 54))
-        self.box(top + Vec3(0, 0.25, 0.2), (0.55, 0.36, 0.04), col=color.rgb32(25, 25, 28))
-        if live:   # 這台還亮著，不合併，保持亮
-            Entity(model="quad", position=top + Vec3(0, 0.25, 0.175), scale=(0.5, 0.32), rotation=(0, 0, 0),
-                   texture=self.t["screen"], color=color.rgb(1.4, 1.4, 1.4))
+        self.monitor(top + Vec3(0, 0, 0.2), 0, live=live)
+        if live:
             self.interactables.append(dict(kind="lab_pc", pos=p + Vec3(0, 0, -CELL * 0.5)))
         self.chair(p + Vec3(0, 0, -0.6), self.rng.uniform(-20, 20))
         self.collider(p + Vec3(0, 0.4, 0), (1.4, 0.8, 0.8), occludes=False)
@@ -1670,7 +1687,7 @@ class World:
             self.interactables.append(dict(kind="tape", pos=p + Vec3(0, 0, -CELL * 0.5)))
         else:
             Entity(model="quad", position=top + Vec3(0, 0.28, 0.225), scale=(0.68, 0.4), texture=self.t["screen"])
-        self.egg_seat(p + Vec3(0, 0, -0.65), 180 + self.rng.uniform(-25, 25), color.rgb32(222, 98, 40))
+        self.egg_seat(p + Vec3(0, 0, -0.65), self.rng.uniform(-25, 25), color.rgb32(222, 98, 40))
         self.collider(p + Vec3(0, 0.7, 0), (1.5, 1.4, 0.85), occludes=False)
 
     def egg_seat(self, pos, rot, col):
@@ -1858,7 +1875,7 @@ class World:
             arm.rotation_y = k * 120 + 90
             seat = p + Vec3(math.sin(a + math.pi / 3), 0, math.cos(a + math.pi / 3)) * 1.0
             if self.rng.random() < 0.8:
-                self.shell_chair(seat, math.degrees(a + math.pi / 3) + 180 + self.rng.uniform(-15, 15), color.rgb32(242, 242, 242))
+                self.shell_chair(seat, math.degrees(a + math.pi / 3) + self.rng.uniform(-15, 15), color.rgb32(242, 242, 242))
         self.lamp(top + Vec3(0.1, 0, 0.1))
         self.clutter(top, 0.35)
         self.collider(p + Vec3(0, 0.45, 0), (1.6, 0.9, 1.6), occludes=False)
