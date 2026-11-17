@@ -7,11 +7,11 @@ import math
 from ursina import Button, Entity, Text, camera, color, time, window
 
 DIFFICULTIES = {
-    "簡單": dict(speed=1.6, seconds=300, sight=9, flee=4.6, hits=18, fight_time=7.0,
+    "簡單": dict(help_after=60, speed=1.6, seconds=300, sight=9, flee=4.6, hits=18, fight_time=7.0,
                desc="館員走得慢、看不遠，一天有 5 分鐘。\n室友逃得慢，一下就打趴。"),
-    "普通": dict(speed=2.0, seconds=240, sight=12, flee=5.2, hits=25, fight_time=7.0,
+    "普通": dict(help_after=90, speed=2.0, seconds=240, sight=12, flee=5.2, hits=25, fight_time=7.0,
                desc="原本設計的體驗。\n一天 4 分鐘（18:00–22:00）。"),
-    "困難": dict(speed=2.6, seconds=180, sight=15, flee=5.8, hits=32, fight_time=6.5,
+    "困難": dict(help_after=120, speed=2.6, seconds=180, sight=15, flee=5.8, hits=32, fight_time=6.5,
                desc="館員眼睛很利，室友跑很快。\n手要按得夠快。"),
 }
 
