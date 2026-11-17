@@ -146,22 +146,22 @@ LEVEL_4F = [
     "#.######...n...n...n.....###################",
     "W.######....O....O....O..UD#################",
     "W.........6..................H.H.H.H...H...W",
-    "W...n...n..................................W",
-    "W........................r.................W",
-    "W...n...n..................................W",
+    "W...n...n...n...n..........................W",
+    "Wp.......................r........a.....a..W",
+    "W...n...n...n...n.........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
     "#xxxxxxxxxx...n..................BBBB.BBBB.W",
-    "#xxxxxxxxxxx.....n.......M.................W",
+    "#xxxxxxxxxxx.....n.......M...n.............W",
     "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxx.n.......a................W",
     "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
-    "#xxxxxxxxxxxxxxxxxx..n.....................W",
+    "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
     "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
-    "#xxxxxxxxxxxxxxxxxxxxx......BBBB.BBBB......W",
+    "#xxxxxxxxxxxxxxxxxxxxx......BBBB.BBBB...a.pW",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
@@ -196,21 +196,21 @@ LEVEL_5F = [
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
     "W...n...n...n..n...........................W",
-    "W.........................a................W",
-    "W...n...n..................................W",
+    "Wp........................a.......a.....a..W",
+    "W...n...n...n..n..........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
     "#xxxxxxxxxx...n..................BBBB.BBBB.W",
-    "#xxxxxxxxxxx.....n.......M.................W",
+    "#xxxxxxxxxxx.....n.......M...n.............W",
     "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxx.n.......a................W",
     "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
-    "#xxxxxxxxxxxxxxxxxx..n.....................W",
+    "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
     "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
-    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n........W",
+    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n.....a.pW",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
@@ -241,21 +241,21 @@ LEVEL_6F = [
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
     "W...T...T...n..n...........................W",
-    "W.........................a................W",
-    "W...T...T..................................W",
+    "Wp........................a.......a.....a..W",
+    "W...T...T...T..T..........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
     "#xxxxxxxxxx...n..................BBBB.BBBB.W",
-    "#xxxxxxxxxxx.....n.......M.................W",
+    "#xxxxxxxxxxx.....n.......M...n.............W",
     "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxx.n.......a................W",
     "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
-    "#xxxxxxxxxxxxxxxxxx..n.....................W",
+    "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
     "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
-    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n........W",
+    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n.....a.pW",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
@@ -271,7 +271,7 @@ LEVEL_6F = [
     "###########################........T#T#T#T##",
     "############################WWWWWWW#########",
 ]
-BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnra")
+BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrap")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
 LEVEL_B1 = [
@@ -698,6 +698,8 @@ class World:
                     self.round_sofa(p)
                 elif ch == "a":
                     self.armchairs(p)
+                elif ch == "p":
+                    self.plant(p)
                 elif ch == "x":
                     self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), occludes=False)
         self.curves()
@@ -840,6 +842,14 @@ class World:
                 elif white:   # 白色矮櫃上面一層淺灰檯面
                     Entity(model="cube", position=mid + Vec3(0, h + 0.02, 0), rotation_y=rot,
                            scale=(0.38, 0.04, d.length() + 0.1), color=color.rgb32(205, 208, 212))
+                    if h >= 1.2 and d.length() > 0.5:   # 閱覽區的矮書櫃：兩面都擺書
+                        seg_root = Entity(position=mid, rotation_y=rot)
+                        L = d.length() - 0.1
+                        books = self.t["light_books"]
+                        for side in (1, -1):
+                            Entity(parent=seg_root, model="quad", position=(side * 0.155, h * 0.48, 0), rotation_y=-90 * side,
+                                   scale=(L, h * 0.82), texture=books[(len(self.solids) + side) % len(books)],
+                                   texture_scale=(max(1, round(L / CELL * 2)) / 2, 0.5))
             if not glass:
                 for cell in list(self.walkable):
                     if any(self.seg_dist(cell, p, q) < (0.4 if pane else 0.6) for p, q in zip(spec["pts"], spec["pts"][1:])):
@@ -1896,6 +1906,22 @@ class World:
         Entity(parent=self.group(None), model=Cylinder(resolution=24, radius=1.0, height=0.42), position=p, color=color.rgb32(205, 58, 40))
         Entity(parent=self.group(None), model=Cylinder(resolution=20, radius=0.5, height=0.85), position=p, color=color.rgb32(238, 232, 220))
         self.collider(p + Vec3(0, 0.45, 0), (CELL, 0.9, CELL), occludes=False)
+
+    def plant(self, p):
+        """窗邊、角落的大盆栽：白色圓盆，一叢深淺不同的綠葉。"""
+        g = self.group(None)
+        Entity(parent=g, model=Cylinder(resolution=16, radius=0.32, height=0.55), position=p, color=color.rgb32(240, 240, 238))
+        Entity(parent=g, model=Cylinder(resolution=16, radius=0.3, height=0.02), position=p + Vec3(0, 0.55, 0),
+               color=color.rgb32(70, 52, 40))
+        self.box(p + Vec3(0, 0.85, 0), (0.06, 0.7, 0.06), col=color.rgb32(96, 72, 50))
+        greens = [(58, 110, 52), (76, 132, 60), (46, 92, 44), (90, 146, 70)]
+        for k in range(14):
+            a = self.rng.uniform(0, math.tau)
+            rad = self.rng.uniform(0.05, 0.42)
+            y = self.rng.uniform(0.9, 1.75)
+            Entity(parent=g, model="sphere", position=p + Vec3(math.sin(a) * rad, y, math.cos(a) * rad),
+                   scale=(0.42, 0.3, 0.42), color=color.rgb32(*self.rng.choice(greens)))
+        self.collider(p + Vec3(0, 0.6, 0), (0.7, 1.2, 0.7), occludes=False)
 
     def armchairs(self, p):
         """酒紅色單人沙發兩張，中間一張白色小圓几。"""
