@@ -370,7 +370,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="stripes", banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(level=LEVEL_2F, floor="carpet_2f", stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -396,7 +396,7 @@ FLOORS = {
                        {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
-    "3F": dict(level=LEVEL_3F, floor="stripes3", banks=[], safe=set(), lift_doors=[(23, 10)],
+    "3F": dict(level=LEVEL_3F, floor="carpet_3f", stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
@@ -421,7 +421,7 @@ FLOORS = {
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
-    "4F": dict(level=LEVEL_4F, floor="stripes4", banks=[], safe=set(),
+    "4F": dict(level=LEVEL_4F, floor="carpet_45", stools=8, carts=3, banks=[], safe=set(),
                wall_tex="wallw", ceiling_tex="slats", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["000 總類", "010 目錄學", "100 哲學類", "200 宗教類", "300 科學類",
@@ -456,7 +456,7 @@ _UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=T
               # 中間核心西側的電梯廳：黑色亮面牆、東牆兩部電梯、北牆樓層指引
               elevator=dict(cells=(22, 8, 23, 10), doors=[(24, 8), (24, 10)], buttons=(24, 9), directory=(22, 7)),
               spiral=(31.5, 39.5))    # 南邊研究小間旁的螺旋梯
-FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="stripes4", ceiling_tex="slats",
+FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="carpet_45", stools=8, carts=3, ceiling_tex="slats",
                     shelf_labels=["500 社會科學類", "510 統計", "520 教育", "550 經濟", "570 政治", "580 法律",
                                   "600 中國史地類", "700 世界史地類", "800 語言文學類", "850 中國文學", "900 藝術類"],
                     hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
@@ -552,7 +552,7 @@ class World:
             "wall": t(tx.wall()), "wood": t(tx.wood()), "metal": t(tx.metal()),
             "window": t(tx.window()), "panel": t(tx.light_panel()), "glow": t(tx.glow(), "bilinear"),
             "note": t(tx.note_paper()), "screen": t(tx.screen()),
-            "tile": t(tx.tile()), "wallw": t(tx.white_wall()), "plaster": t(tx.plaster()), "planks": t(tx.planks()),
+            "tile": t(tx.tile_hd()), "wallw": t(tx.white_wall()), "plaster": t(tx.plaster()), "planks": t(tx.planks()),
             "cubbies": t(tx.cubbies(0)), "grid": t(tx.grid()), "grid_white": t(tx.grid((178, 178, 182), (236, 236, 234))),
             "stripes": t(tx.stripes()), "blind": t(tx.blind()),
             "stripes3": t(tx.bands()), "woodslats": t(tx.wood_slats()),
@@ -566,7 +566,8 @@ class World:
         self.t["dvds"] = [t(tx.dvds(i)) for i in range(4)]
         self.t["timeline"] = [t(tx.timeline(i)) for i in range(3)]
         self.t["light_books"] = [t(tx.books_hd(i, rows=6)) for i in range(4)]
-        self.t["carpet_6f"] = t(tx.photo_tile(PHOTOS / "carpet_6f.png", 1024))    # 從 6F 影片截下來的地毯
+        for f in sorted(PHOTOS.glob("carpet_*.png")):     # 從各樓層影片截下來的地毯
+            self.t[f.stem] = t(tx.photo_tile(f, 1024))
         self.t["stripes6"] = t(tx.stripes((160, 158, 152), (72, 70, 70), 23))
         self.t["leaf"] = t(tx.leaf())
         self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]

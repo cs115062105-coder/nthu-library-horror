@@ -695,3 +695,33 @@ def books_hd(seed, light=True, rows=6):
 def photo_tile(path, size=512):
     """讀一張從影片截下來的材質。"""
     return Image.open(path).convert("RGB").resize((size, size), Image.LANCZOS)
+
+
+def tile_hd():
+    """1F 大廳的地磚（512×512 = 一格 2 m）：灰色石材，一塊 1 m × 0.5 m，對齊排列，
+    細細的深色縫，每塊深淺不太一樣、有細小的石材斑點和一點反光（照 1F 影片）。"""
+    import numpy as np
+    from PIL import ImageFilter
+    rng = random.Random(113)
+    S = 1024
+    nrng = np.random.default_rng(113)
+    speck = nrng.normal(0, 7, (S, S))
+    cloud = np.asarray(Image.fromarray(np.uint8(np.clip(nrng.normal(128, 40, (64, 64)), 0, 255)))
+                       .resize((S, S), Image.BICUBIC).filter(ImageFilter.GaussianBlur(20))).astype(float) - 128
+    base = np.zeros((S, S))
+    tw, th = S // 2, S // 4
+    for r in range(4):
+        for c in range(2):
+            g = rng.uniform(96, 116)
+            base[r * th:(r + 1) * th, c * tw:(c + 1) * tw] = g
+            # 斜斜的一點反光
+            yy, xx = np.mgrid[0:th, 0:tw]
+            base[r * th:(r + 1) * th, c * tw:(c + 1) * tw] += 6 * np.sin((xx + yy * 0.6) / tw * math.pi * rng.uniform(0.5, 1.2))
+    a = base + speck + cloud * 0.25
+    for r in range(5):       # 磚縫
+        a[max(0, r * th - 3):r * th + 3, :] = 52
+    for c in range(3):
+        a[:, max(0, c * tw - 3):c * tw + 3] = 52
+    rgb = np.stack([a, a, a * 1.02 + 2], -1)
+    img = Image.fromarray(np.uint8(np.clip(rgb, 0, 255)))
+    return img.resize((512, 512), Image.LANCZOS)
