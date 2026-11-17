@@ -394,6 +394,9 @@ FLOORS = {
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
+               end_style="blue", end_color=(236, 150, 30),     # 第二批影片：側板霧面玻璃配橘黃邊條
+               grid_ceilings=[(27.5, 17.5, 37.5, 26.5, "grid_white")],   # 書架區上方白色鋁格柵
+               wave_chairs=[(38, 13), (40, 13)],                 # 木條牆前的白色波浪躺椅
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
@@ -544,7 +547,7 @@ class World:
             "window": t(tx.window()), "panel": t(tx.light_panel()), "glow": t(tx.glow(), "bilinear"),
             "note": t(tx.note_paper()), "screen": t(tx.screen()),
             "tile": t(tx.tile()), "wallw": t(tx.white_wall()), "plaster": t(tx.plaster()), "planks": t(tx.planks()),
-            "cubbies": t(tx.cubbies(0)), "grid": t(tx.grid()),
+            "cubbies": t(tx.cubbies(0)), "grid": t(tx.grid()), "grid_white": t(tx.grid((178, 178, 182), (236, 236, 234))),
             "stripes": t(tx.stripes()), "blind": t(tx.blind()),
             "stripes3": t(tx.bands()), "woodslats": t(tx.wood_slats()),
             "stripes4": t(tx.stripes((128, 120, 112), (66, 56, 52), 19)), "slats": t(tx.slats()),
@@ -743,6 +746,9 @@ class World:
                 q = cell_pos(c, r) + Vec3(self.rng.uniform(-0.5, 0.5), 0, self.rng.uniform(-0.3, 0.3))
                 Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.24, height=0.42),
                        position=q, color=color.rgb32(242, 242, 240))
+        for c, r in self.spec.get("wave_chairs", []):
+            self.wave_chair(cell_pos(c, r))
+            self.walkable.discard((c, r))
         for (c, r), kind in self.spec.get("draped", []):
             self.draped_table(cell_pos(c, r), kind)
             self.walkable.discard((c, r))
@@ -997,6 +1003,7 @@ class World:
         elif self.spec.get("shelf_fill") == "light":  # 6F 西文書，書背顏色淺
             tex = self.t["light_books"][(c * 7 + r * 3) % 4]
         blue_end = self.spec.get("end_style") == "blue"
+        edge = color.rgb32(*self.spec.get("end_color", (40, 110, 190)))
         white = self.spec.get("white_shelves")    # 3F／4F 是白色的書架，側面一塊黃色的分類牌
         self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62), None if white else self.t["metal"],
                  col=color.rgb32(238, 238, 236) if white else color.white)
@@ -1012,8 +1019,8 @@ class World:
                     face = p + end * (CELL / 2 + 0.032)
                     self.box(face + Vec3(0, 0.85, 0), (0.01, 1.5, 0.58), col=color.rgb32(222, 230, 236))
                     for z in (-0.31, 0.31):
-                        self.box(face + Vec3(0, 1.1, z), (0.02, 2.24, 0.05), col=color.rgb32(40, 110, 190))
-                    self.box(face + Vec3(0, 2.0, 0), (0.02, 0.36, 0.66), col=color.rgb32(40, 110, 190))
+                        self.box(face + Vec3(0, 1.1, z), (0.02, 2.24, 0.05), col=edge)
+                    self.box(face + Vec3(0, 2.0, 0), (0.02, 0.36, 0.66), col=edge)
                 labels = self.spec.get("shelf_labels", CALL_NUMBERS)
                 if "west_labels" in self.spec and c < self.spec["west_labels"][0]:
                     labels = self.spec["west_labels"][1]    # 6F 西北角是中文期刊合訂本
@@ -1166,13 +1173,13 @@ class World:
             leg = self.box((0, 0.04, 0), (0.04, 0.03, 0.6), col=steel, parent=ch)
             leg.rotation_y = k * 72
 
-    def grid_ceiling(self, c0, r0, c1, r1):
+    def grid_ceiling(self, c0, r0, c1, r1, tex="grid"):
         """深色的鋁格柵天花板。"""
         x0, x1 = (c0 - 0.5) * CELL, (c1 - 0.5) * CELL
         z0, z1 = -(r0 - 0.5) * CELL, -(r1 - 0.5) * CELL
         w, d = abs(x1 - x0), abs(z1 - z0)
         Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H - 0.03, (z0 + z1) / 2), scale=(w, d), rotation_x=-90,
-               texture=self.t["grid"], texture_scale=(w / 2, d / 2))
+               texture=self.t[tex], texture_scale=(w / 2, d / 2))
 
     def soffit(self, center, radii, a0, a1):
         """清沙龍上方一圈一圈往下降的白色弧形天花板，每層邊緣一條燈。"""
@@ -1586,11 +1593,19 @@ class World:
                 seg.rotation_x = 0
             q = p + Vec3(math.sin(a0), 0, math.cos(a0)) * (R + 0.055)
             self.box(q + Vec3(0, 0.78, 0), (0.025, 1.5, 0.025), col=seam)
-        Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.75, height=0.42), position=p,
-               color=color.rgb32(120, 112, 140))
-        Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.45, height=0.44), position=p,
-               color=color.rgb32(230, 230, 228))
-        self.box(p + Vec3(0, 1.1, R - 0.12), (0.7, 0.42, 0.04), col=color.rgb32(20, 20, 24))
+        cushions = [(150, 146, 140), (120, 112, 106), (196, 160, 150), (170, 166, 160), (132, 120, 112)]
+        for k in range(5):      # 沿著內牆一圈分段的軟墊：灰、深褐、粉
+            a = math.radians(160 + 210 * (k + 0.5) / 5)
+            q = p + Vec3(math.sin(a), 0, math.cos(a)) * (R - 0.32)
+            seat = Entity(parent=self.group(None), model="cube", position=q + Vec3(0, 0.22, 0),
+                          scale=(0.5, 0.44, 0.62), color=color.rgb32(*cushions[k]))
+            seat.look_at(p + Vec3(0, 0.22, 0))
+            back = Entity(parent=self.group(None), model="cube", position=p + Vec3(math.sin(a), 0, math.cos(a)) * (R - 0.1) + Vec3(0, 0.7, 0),
+                          scale=(0.12, 0.5, 0.6), color=color.rgb32(*cushions[k]))
+            back.look_at(p + Vec3(0, 0.7, 0))
+            back.rotation_y += 90
+        Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.4, height=0.015), position=p + Vec3(0, 0.005, 0),
+               color=color.rgb32(40, 40, 44))       # 中間一塊深色地毯
         self.collider(p + Vec3(0, 1.0, 0), (CELL * 0.95, 2.0, CELL * 0.95), occludes=False)
 
     def draped_table(self, p, kind):
@@ -1625,6 +1640,22 @@ class World:
         self.box(face, (0.75 if not d.x else 0.04, 0.95, 0.04 if not d.x else 0.75), col=color.rgb32(70, 46, 30))
         tex = self.text_tex([char], w=96, h=128, bg=(240, 234, 214), fg=(30, 28, 26), sizes=[72])
         self.quad(face + d * 0.025, (0.6, 0.8), tex, rot=(0, facing_y(d), 0))
+
+    def wave_chair(self, p):
+        """3F 木條牆前的白色波浪造型躺椅：一塊白色板子彎成 S 形，兩張並排。"""
+        for x in (-0.45, 0.45):
+            ch = Entity(parent=self.group(None), position=p + Vec3(x, 0, 0), rotation_y=180)
+            prev = None
+            for k in range(8):       # 從前緣往後彎上去的曲面，用一段段薄板接起來
+                t = k / 7
+                pt = Vec3(0, 0.25 + 0.55 * t * t + 0.12 * math.sin(t * math.pi * 2), -0.45 + 0.85 * t)
+                if prev is not None:
+                    seg = Entity(parent=ch, model="cube", position=(prev + pt) / 2, scale=(0.75, 0.06, (pt - prev).length() + 0.03),
+                                 color=color.rgb32(246, 246, 244))
+                    seg.rotation = (math.degrees(math.atan2(pt.y - prev.y, pt.z - prev.z)), 0, 0)
+                prev = pt
+            Entity(parent=ch, model="cube", position=(0, 0.12, 0), scale=(0.7, 0.24, 0.8), color=color.rgb32(238, 238, 236))
+        self.collider(p + Vec3(0, 0.5, 0), (CELL * 0.9, 1.0, 1.0), occludes=False)
 
     def dvd_rack(self, p, rot):
         """3F 媒體區的黑色斜架：兩面都斜斜地擺著 DVD 封面。"""

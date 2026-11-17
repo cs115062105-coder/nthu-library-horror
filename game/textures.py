@@ -366,13 +366,13 @@ def covers(seed):
     return _noise(img, 3, rng)
 
 
-def grid():
-    """深色鋁格柵天花板：一格一格的方框，透出上面更暗的管線層。"""
-    img = Image.new("RGB", (32, 32), (52, 52, 55))
+def grid(back=(52, 52, 55), bars=(118, 118, 122)):
+    """鋁格柵天花板：一格一格的方框，透出上面的管線層。1F 是深色的，3F 書架區是白色的。"""
+    img = Image.new("RGB", (32, 32), back)
     d = ImageDraw.Draw(img)
     for i in range(0, 32, 4):
-        d.line([(i, 0), (i, 31)], fill=(118, 118, 122))
-        d.line([(0, i), (31, i)], fill=(118, 118, 122))
+        d.line([(i, 0), (i, 31)], fill=bars)
+        d.line([(0, i), (31, i)], fill=bars)
     return img
 
 
