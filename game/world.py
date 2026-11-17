@@ -6,6 +6,7 @@
 5F 中文圖書 500–999；6F 西文圖書；B1 密集書庫。每層是 FLOORS 裡的一張格子圖。
 """
 import math
+from pathlib import Path
 import random
 
 from ursina import Entity, Texture, Vec3, color, destroy, scene
@@ -13,6 +14,8 @@ from ursina.models.procedural.cone import Cone
 from ursina.models.procedural.cylinder import Cylinder
 
 import textures as tx
+
+PHOTOS = Path(__file__).parent / "photos"     # 從組員拍的影片截下來的材質
 
 CELL = 2.0
 WALL_H = 3.2
@@ -464,8 +467,8 @@ FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="stripes4", ceiling_tex="slats
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文圖書", "Oriental Language Books")},
                     posters=[((5, 17), (0, -1), "missing"), ((26, 11), (0, 1), "notice"), ((36, 34), (1, 0), "missing")],
                     art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 I", "Art Wall I"))))
-FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="stripes6", ceiling_tex="plaster", shelf_fill="light", end_style="blue",
-                    stools=10,
+FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plaster", shelf_fill="light", end_style="blue",
+                    stools=14, carts=4,
                     # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
                     label_colors=((40, 110, 190), (245, 248, 252)),
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
@@ -542,7 +545,7 @@ class World:
             self.t, self.book_tex = World._textures
             return
 
-        def t(img, filtering=None):
+        def t(img, filtering="mipmap"):     # 開平滑，不然近看一格一格像 Minecraft
             return Texture(img, filtering=filtering)
         self.t = {
             "carpet": t(tx.carpet()), "stone": t(tx.stone()), "ceiling": t(tx.ceiling()),
@@ -558,11 +561,12 @@ class World:
             "missing": t(tx.poster_missing(self.font_path), "bilinear"),
             "notice": t(tx.poster_notice(self.font_path), "bilinear"),
         }
-        self.book_tex = [t(tx.books(i)) for i in range(6)]
+        self.book_tex = [t(tx.books_hd(i, light=False, rows=5)) for i in range(6)]
         self.t["covers"] = [t(tx.covers(i)) for i in range(4)]
         self.t["dvds"] = [t(tx.dvds(i)) for i in range(4)]
         self.t["timeline"] = [t(tx.timeline(i)) for i in range(3)]
-        self.t["light_books"] = [t(tx.books_light(i)) for i in range(4)]
+        self.t["light_books"] = [t(tx.books_hd(i, rows=6)) for i in range(4)]
+        self.t["carpet_6f"] = t(tx.photo_tile(PHOTOS / "carpet_6f.png", 1024))    # 從 6F 影片截下來的地毯
         self.t["stripes6"] = t(tx.stripes((160, 158, 152), (72, 70, 70), 23))
         self.t["leaf"] = t(tx.leaf())
         self.t["mags"] = [t(tx.magazines(i)) for i in range(4)]
@@ -601,7 +605,7 @@ class World:
         w, d = self.cols * CELL, self.rows * CELL
         center = Vec3((self.cols - 1) * CELL / 2, 0, -(self.rows - 1) * CELL / 2)
         Entity(model="quad", position=center, scale=(w, d), rotation_x=90, texture=self.t[self.spec["floor"]],
-               texture_scale=(self.cols, self.rows), color=color.rgb(SHADE, SHADE, SHADE))
+               texture_scale=(self.cols * self.spec.get("floor_rep", 1), self.rows * self.spec.get("floor_rep", 1)), color=color.rgb(SHADE, SHADE, SHADE))
         ceiling = self.spec.get("ceiling_tex", "ceiling")
         k = 1 if ceiling in ("plaster", "slats") else 3    # 嵌燈兩公尺一盞；礦纖板 60 公分一塊
         Entity(model="quad", position=center + Vec3(0, WALL_H, 0), scale=(w, d), rotation_x=-90,
@@ -745,10 +749,13 @@ class World:
         if self.spec.get("stools"):     # 書架走道上的白色圓形踏凳（踢凳）
             aisles = sorted(cell for cell in self.walkable
                             if self.char(cell[0], cell[1] - 1) == "B" or self.char(cell[0], cell[1] + 1) == "B")
-            for c, r in self.rng.sample(aisles, min(len(aisles), self.spec["stools"])):
+            picks = self.rng.sample(aisles, min(len(aisles), self.spec["stools"] + self.spec.get("carts", 0)))
+            for k, (c, r) in enumerate(picks):
                 q = cell_pos(c, r) + Vec3(self.rng.uniform(-0.5, 0.5), 0, self.rng.uniform(-0.3, 0.3))
-                Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.24, height=0.42),
-                       position=q, color=color.rgb32(242, 242, 240))
+                if k < self.spec["stools"]:
+                    self.kick_stool(q)
+                else:
+                    self.book_cart(cell_pos(c, r) + Vec3(self.rng.uniform(-0.3, 0.3), 0, 0), self.rng.choice((0, 180)))
         if "campus_model" in self.spec:
             c, r = self.spec["campus_model"]
             self.campus_model(Vec3(c * CELL, 0, -r * CELL))
@@ -1523,6 +1530,41 @@ class World:
         for x in (-0.72, 0.72):
             self.box(p + Vec3(x, 0.35, 0), (0.16, 0.5, 0.8), col=col)
         self.collider(p + Vec3(0, 0.4, 0), (1.5, 0.8, 0.8), occludes=False)
+
+    def kick_stool(self, q):
+        """走道上的白色圓形踏凳：上窄下寬，底下一圈深色橡膠，側面有兩個握把孔。"""
+        g, white = self.group(None), color.rgb32(242, 242, 240)
+        Entity(parent=g, model=Cone(resolution=20, radius=0.23, height=0.4, add_bottom=False), position=q,
+               color=white, double_sided=True)
+        Entity(parent=g, model=Cylinder(resolution=20, radius=0.16, height=0.03), position=q + Vec3(0, 0.38, 0),
+               color=color.rgb32(232, 232, 230))
+        Entity(parent=g, model=Cylinder(resolution=20, radius=0.235, height=0.035), position=q,
+               color=color.rgb32(70, 72, 76))
+        for a in (0, 180):
+            d = Vec3(math.sin(math.radians(a)), 0, math.cos(math.radians(a)))
+            self.box(q + d * 0.19 + Vec3(0, 0.22, 0), (0.1, 0.05, 0.02), col=color.rgb32(150, 150, 152)).rotation_y = a
+
+    def book_cart(self, p, rot):
+        """還書車：灰色鐵架，兩層斜斜的書槽，四個輪子，上面堆著待上架的書。"""
+        cart = Entity(parent=self.group(None), position=p, rotation_y=rot)
+        steel, dark = color.rgb32(176, 180, 186), color.rgb32(70, 60, 58)
+        for x in (-0.42, 0.42):
+            self.box((x, 0.5, 0), (0.03, 0.9, 0.45), col=dark, parent=cart)          # 側板（深咖啡）
+            for z in (-0.18, 0.18):
+                self.box((x, 0.04, z), (0.06, 0.08, 0.06), col=color.rgb32(30, 30, 32), parent=cart)
+        for y in (0.3, 0.72):
+            b = self.box((0, y, 0), (0.84, 0.025, 0.42), col=steel, parent=cart)
+            b.rotation_x = 12
+            x = -0.38
+            while x < 0.36:          # 一排書
+                w = self.rng.uniform(0.03, 0.06)
+                h = self.rng.uniform(0.16, 0.26)
+                bk = self.box((x + w / 2, y + h / 2 + 0.02, 0), (w, h, 0.2),
+                              col=color.rgb32(*self.rng.choice(tx.BOOK_COLORS)), parent=cart)
+                bk.rotation_z = self.rng.uniform(-6, 6)
+                x += w + 0.004
+        self.box((0, 0.95, 0.2), (0.86, 0.03, 0.03), col=steel, parent=cart)       # 推把
+        self.collider(p + Vec3(0, 0.5, 0), (0.9, 1.0, 0.5), occludes=False)
 
     def locker(self, c, r, p):
         """自助取書櫃：一格一格小門，每格有編號。"""

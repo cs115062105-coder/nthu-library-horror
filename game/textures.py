@@ -133,29 +133,34 @@ def books(seed):
 
 
 def window():
-    """白天的窗：藍天白雲、成功湖邊的樹、遠處的大樓。"""
+    """白天的窗：從室內看出去，外面亮到有點過曝（跟影片裡一樣），只看得到模糊的樹和遠處的系館。
+    先畫好再整張模糊，最後才畫清楚的窗框。"""
+    from PIL import ImageFilter
     rng = random.Random(7)
-    w, h = 64, 96
+    w, h = 256, 384
     img = Image.new("RGB", (w, h))
-    px = img.load()
-    for y in range(h):
-        for x in range(w):
-            t = y / h
-            px[x, y] = (int(120 + 90 * t), int(175 + 60 * t), int(235 + 15 * t))
     d = ImageDraw.Draw(img)
-    for _ in range(4):   # 雲
-        cx, cy = rng.randint(0, w), rng.randint(6, 36)
-        for k in range(3):
-            d.ellipse([cx - 9 + k * 6, cy - 4, cx + 3 + k * 6, cy + 5], fill=(250, 250, 252))
-    d.rectangle([40, 50, 56, 74], fill=(196, 190, 178))   # 遠處的系館
-    for yy in range(54, 72, 5):
-        d.line([(42, yy), (54, yy)], fill=(150, 170, 190))
-    for _ in range(7):   # 樹
-        cx = rng.randint(0, w)
-        d.ellipse([cx - 12, 60 + rng.randint(-6, 6), cx + 12, 100], fill=(70 + rng.randint(0, 30), 130 + rng.randint(0, 30), 70))
-    d.rectangle([0, 0, w - 1, h - 1], outline=(120, 122, 126), width=2)
-    d.line([(w // 2, 0), (w // 2, h)], fill=(120, 122, 126), width=2)
-    d.line([(0, h // 2), (w, h // 2)], fill=(120, 122, 126), width=2)
+    for y in range(h):
+        t = y / h
+        d.line([(0, y), (w, y)], fill=(int(214 + 30 * t), int(228 + 20 * t), int(242 + 10 * t)))
+    for _ in range(3):   # 遠處的系館，淡淡的
+        x0 = rng.randint(-20, w - 40)
+        top = rng.randint(170, 220)
+        d.rectangle([x0, top, x0 + rng.randint(50, 110), 300], fill=(212, 210, 204))
+        for yy in range(top + 8, 296, 14):
+            d.line([(x0 + 4, yy), (x0 + 100, yy)], fill=(186, 196, 206), width=3)
+    for _ in range(16):  # 成功湖邊的樹：深淺不一的綠，一團一團
+        cx, cy = rng.randint(-20, w + 20), rng.randint(250, 330)
+        r = rng.randint(30, 60)
+        g = rng.randint(0, 40)
+        d.ellipse([cx - r, cy - r, cx + r, cy + r * 2], fill=(110 + g, 150 + g, 104 + g // 2))
+    d.rectangle([0, 330, w, h], fill=(150, 158, 140))
+    img = img.filter(ImageFilter.GaussianBlur(5))
+    d = ImageDraw.Draw(img)
+    frame = (168, 170, 174)
+    d.rectangle([0, 0, w - 1, h - 1], outline=frame, width=6)
+    d.rectangle([w // 2 - 3, 0, w // 2 + 3, h], fill=frame)
+    d.rectangle([0, h // 2 - 3, w, h // 2 + 3], fill=frame)
     return img
 
 
@@ -618,3 +623,75 @@ def painting(seed):
         d.line([(rng.randint(0, 63), rng.randint(0, 47)), (rng.randint(0, 63), rng.randint(0, 47))],
                fill=rng.choice(palette), width=rng.randint(1, 3))
     return _noise(img, 3, rng)
+
+
+def books_hd(seed, light=True, rows=6):
+    """高解析度的書架正面（512×512）：每本書有圓弧的明暗、索書號貼紙、書名色帶，
+    書後面和上一層層板下面有陰影，偶爾一個白色拱形書擋（照 6F 影片）。先畫兩倍大再縮小，邊緣才平滑。"""
+    rng = random.Random(2000 + seed + (0 if light else 500))
+    S = 1024
+    if light:
+        cols = [(238, 236, 228), (226, 218, 198), (176, 196, 218), (198, 202, 208), (146, 166, 194), (236, 236, 240),
+                (116, 136, 168), (56, 66, 92), (150, 62, 60), (208, 188, 148), (90, 110, 80)]
+        weights = [7, 5, 4, 4, 3, 5, 2, 2, 1, 2, 1]
+        back = (214, 214, 212)
+    else:
+        cols = list(BOOK_COLORS)
+        weights = [1] * len(cols)
+        back = (40, 38, 36)
+    img = Image.new("RGB", (S, S), back)
+    d = ImageDraw.Draw(img)
+    rh = S / rows
+    for s in range(rows):
+        top, bottom = int(s * rh), int((s + 1) * rh - 0.012 * S)
+        for y in range(top, bottom):            # 書後面的背板：越上面越暗（上一層層板的影子）
+            k = 0.62 + 0.38 * (y - top) / max(1, bottom - top)
+            d.line([(0, y), (S, y)], fill=tuple(int(v * k) for v in back))
+        x = 4 + rng.randint(0, 20)
+        while x < S - 8:
+            r = rng.random()
+            if r < 0.015:                      # 空位
+                x += rng.randint(16, 40)
+                continue
+            if r < 0.035 and light:             # 白色拱形書擋
+                bw = 30
+                d.rectangle([x, bottom - rh * 0.62, x + bw, bottom], fill=(242, 242, 240))
+                d.rectangle([x + 2, bottom - rh * 0.62, x + 4, bottom], fill=(205, 205, 205))
+                ax0, ax1 = x + 8, x + bw - 8
+                d.rectangle([ax0, bottom - rh * 0.3, ax1, bottom - 2], fill=(150, 150, 152))
+                d.ellipse([ax0, bottom - rh * 0.38, ax1, bottom - rh * 0.22], fill=(150, 150, 152))
+                x += bw + 2
+                continue
+            bw = rng.randint(12, 30)
+            bh = int(rh * rng.uniform(0.58, 0.9))
+            c = rng.choices(cols, weights)[0]
+            j = rng.randint(-16, 16)
+            c = tuple(max(0, min(255, v + j)) for v in c)
+            y0 = bottom - bh
+            for i in range(bw):                 # 書背是圓的：兩邊暗、中間亮
+                t = i / max(1, bw - 1)
+                k = 0.72 + 0.36 * math.sin(math.pi * t) ** 0.6
+                d.line([(x + i, y0), (x + i, bottom)], fill=tuple(min(255, int(v * k)) for v in c))
+            d.line([(x, y0), (x + bw - 1, y0)], fill=tuple(int(v * 0.6) for v in c))
+            if rng.random() < 0.55:             # 書名色帶 + 細細的字
+                band = rng.choice([(30, 30, 34), (240, 236, 220), (170, 140, 60), (120, 30, 30)])
+                by = y0 + int(bh * rng.uniform(0.08, 0.2))
+                d.rectangle([x + 2, by, x + bw - 3, by + int(bh * 0.1)], fill=band)
+            txt = (40, 40, 40) if sum(c) > 450 else (225, 225, 220)
+            for k2 in range(rng.randint(2, 5)):
+                ty = y0 + int(bh * (0.3 + 0.08 * k2))
+                d.line([(x + bw // 2, ty), (x + bw // 2, ty + int(bh * 0.05))], fill=txt, width=2)
+            if bh > rh * 0.5 and rng.random() < 0.85:   # 白色索書號貼紙
+                ly = bottom - int(rh * 0.2)
+                d.rectangle([x + 2, ly, x + bw - 3, ly + int(rh * 0.13)], fill=(246, 246, 240))
+                for k2 in range(3):
+                    d.line([(x + 4, ly + 6 + k2 * 7), (x + bw - 6, ly + 6 + k2 * 7)], fill=(70, 70, 70), width=2)
+            x += bw + rng.choice([0, 0, 0, 1, 2])
+        d.rectangle([0, bottom, S, int((s + 1) * rh)], fill=(150, 150, 150))   # 層板（3D 層板會蓋在上面）
+    img = img.resize((512, 512), Image.LANCZOS)
+    return _noise(img, 3, rng)
+
+
+def photo_tile(path, size=512):
+    """讀一張從影片截下來的材質。"""
+    return Image.open(path).convert("RGB").resize((size, size), Image.LANCZOS)
