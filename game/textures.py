@@ -725,3 +725,53 @@ def tile_hd():
     rgb = np.stack([a, a, a * 1.02 + 2], -1)
     img = Image.fromarray(np.uint8(np.clip(rgb, 0, 255)))
     return img.resize((512, 512), Image.LANCZOS)
+
+
+def screen_hd(font_path, kind=0):
+    """電腦螢幕畫面（512×320）：館藏查詢系統。藍色標題列、搜尋框、一筆一筆的查詢結果。
+    kind 換不同的畫面，免得每台都一樣。"""
+    rng = random.Random(300 + kind)
+    w, h = 512, 320
+    img = Image.new("RGB", (w, h), (246, 247, 249))
+    d = ImageDraw.Draw(img)
+    d.rectangle([0, 0, w, 14], fill=(222, 224, 228))                    # 視窗標題列
+    for i, c in enumerate([(236, 96, 90), (240, 190, 70), (98, 196, 90)]):
+        d.ellipse([6 + i * 14, 3, 14 + i * 14, 11], fill=c)
+    d.rectangle([0, 14, w, 58], fill=(36, 74, 140))                     # 網站標題
+    f_big, f_mid, f_small = _font(font_path, 20), _font(font_path, 14), _font(font_path, 11)
+    d.text((16, 24), "館藏查詢  Library Catalog", font=f_big, fill=(250, 250, 252))
+    d.rectangle([16, 70, 400, 96], fill=(255, 255, 255), outline=(170, 176, 186))
+    q = rng.choice(["微積分 考古題", "演算法", "線性代數", "期中考 解答", "資料結構"])
+    d.text((24, 75), q, font=f_mid, fill=(40, 40, 46))
+    d.rectangle([408, 70, 496, 96], fill=(226, 102, 31))
+    d.text((430, 75), "搜尋", font=f_mid, fill=(255, 255, 255))
+    titles = ["微積分（第十版）", "演算法導論", "線性代數及其應用", "資料結構：使用 C++", "機率與統計",
+              "離散數學", "計算機組織", "作業系統概論", "普通物理學", "工程數學"]
+    rng.shuffle(titles)
+    for i in range(5):
+        y = 110 + i * 41
+        d.rectangle([16, y, 46, y + 34], fill=rng.choice([(70, 110, 170), (170, 60, 60), (60, 130, 90), (200, 160, 60)]))
+        d.text((56, y), titles[i], font=f_mid, fill=(30, 60, 130))
+        d.text((56, y + 18), f"QA{rng.randint(100, 999)}.{rng.randint(1, 99)}  ·  {rng.choice(['4F', '5F', '6F'])} 書庫  ·  "
+               + rng.choice(["可借閱", "已借出", "可借閱"]), font=f_small, fill=(110, 112, 120))
+        d.line([(16, y + 38), (w - 16, y + 38)], fill=(226, 228, 232))
+    d.rectangle([0, h - 16, w, h], fill=(30, 32, 38))                   # 工作列
+    for i in range(6):
+        d.rectangle([180 + i * 26, h - 13, 198 + i * 26, h - 3], fill=rng.choice([(70, 130, 220), (230, 230, 235), (240, 170, 60)]))
+    return img
+
+
+def keyboard():
+    """鍵盤上面：深灰底，一排排淺灰鍵帽（256×80）。"""
+    w, h = 256, 80
+    img = Image.new("RGB", (w, h), (34, 34, 38))
+    d = ImageDraw.Draw(img)
+    rows = [15, 14, 13, 12]
+    for r, n in enumerate(rows):
+        kw = (w - 12) / (n + 0.5 * r)
+        x = 6 + r * kw * 0.25
+        for k in range(n):
+            d.rounded_rectangle([x + 1, 5 + r * 15, x + kw - 2, 17 + r * 15], radius=2, fill=(70, 70, 76))
+            x += kw
+    d.rounded_rectangle([60, 66, 196, 76], radius=2, fill=(70, 70, 76))   # 空白鍵
+    return img
