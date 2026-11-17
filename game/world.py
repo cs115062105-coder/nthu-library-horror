@@ -550,7 +550,7 @@ class World:
         self.t = {
             "carpet": t(tx.carpet()), "stone": t(tx.stone()), "ceiling": t(tx.ceiling()),
             "wall": t(tx.wall()), "wood": t(tx.wood()), "metal": t(tx.metal()),
-            "window": t(tx.window()), "panel": t(tx.light_panel()), "glow": t(tx.glow(), "bilinear"),
+            "window": t(tx.window()), "windows": [t(im) for im in tx.window_panorama()], "panel": t(tx.light_panel()), "glow": t(tx.glow(), "bilinear"),
             "note": t(tx.note_paper()), "screen": t(tx.screen()),
             "tile": t(tx.tile_hd()), "wallw": t(tx.white_wall()), "plaster": t(tx.plaster()), "planks": t(tx.planks()),
             "cubbies": t(tx.cubbies(0)), "grid": t(tx.grid()), "grid_white": t(tx.grid((178, 178, 182), (236, 236, 234))),
@@ -833,7 +833,8 @@ class World:
                     continue
                 seg = Entity(model="cube", position=mid + Vec3(0, h / 2, 0), rotation_y=rot,
                              scale=(0.2 if glass else 0.3, h, d.length() + 0.08), collider="box",
-                             texture=self.t["window"] if glass else (None if white else self.t["wood"]),
+                             texture=self.t["windows"][self.next_glass()] if glass
+                             else (None if white else self.t["wood"]),
                              texture_scale=(d.length() / CELL, 1) if glass else (1, 1),
                              color=color.rgb(SHADE, SHADE, SHADE) if glass else
                              (color.rgb32(238, 238, 236) if white else color.rgb32(200, 190, 170)))
@@ -883,7 +884,7 @@ class World:
             return
         self.box(p + Vec3(0, 0.45, 0), (CELL, 0.9, CELL), self.t["wall"], tscale=(1, 0.3))
         self.box(p + Vec3(0, WALL_H - 0.15, 0), (CELL, 0.3, CELL), self.t["wall"], tscale=(1, 0.1))
-        self.box(p + Vec3(0, 1.85, 0), (CELL, 1.9, CELL * 0.6), self.t["window"])
+        self.box(p + Vec3(0, 1.85, 0), (CELL, 1.9, CELL * 0.6), self.view(c, r))
         for side in self.open_sides(c, r):
             self.box(p + side * (CELL / 2) + Vec3(0, 0.92, 0), (CELL if side.z else 0.3, 0.05, 0.3 if side.z else CELL),
                      col=color.rgb32(170, 165, 150))
@@ -891,12 +892,23 @@ class World:
                              self.t["glow"], col=color.rgba32(255, 240, 200, 90), rot=(90, 0, 0))   # 窗邊的陽光
         self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
 
+    def next_glass(self):
+        """弧形落地窗一段接一段，用全景圖的下一片。"""
+        self.glass_k = getattr(self, "glass_k", -1) + 1
+        return self.glass_k % len(self.t["windows"])
+
+    def view(self, c, r):
+        """這格窗戶看出去的那一片風景：沿著窗戶那一排接著同一張全景圖，十幾格才會重複。"""
+        across_x = any(side.x for side in self.open_sides(c, r))     # 窗戶朝東西：沿著 z 排
+        views = self.t["windows"]
+        return views[(r if across_x else c) % len(views)]
+
     def full_window(self, c, r, p):
         """1F 輕學區那種從地板到天花板的整面落地窗：黑色窗框，中間一條橫框。"""
         frame = color.rgb32(50, 52, 56)
         sides = list(self.open_sides(c, r))
         across_x = any(side.x for side in sides)     # 窗戶朝東西：玻璃沿著 z 方向排
-        self.box(p + Vec3(0, WALL_H / 2, 0), (0.3, WALL_H, CELL) if across_x else (CELL, WALL_H, 0.3), self.t["window"])
+        self.box(p + Vec3(0, WALL_H / 2, 0), (0.3, WALL_H, CELL) if across_x else (CELL, WALL_H, 0.3), self.view(c, r))
         for side in sides:
             face = p + side * (CELL * 0.16)
             along = Vec3(side.z, 0, side.x)
@@ -916,7 +928,7 @@ class World:
         thin = (lambda t, h, y: self.box(p + Vec3(0, y, 0), (t, h, CELL) if across_x else (CELL, h, t)))
         self.box(p + Vec3(0, 0.4, 0), (0.5, 0.8, CELL) if across_x else (CELL, 0.8, 0.5), self.t["wallw"], tscale=(1, 0.3))
         self.box(p + Vec3(0, WALL_H - 0.2, 0), (0.5, 0.4, CELL) if across_x else (CELL, 0.4, 0.5), col=color.rgb32(240, 240, 240))
-        self.box(p + Vec3(0, 1.85, 0), (0.1, 2.1, CELL) if across_x else (CELL, 2.1, 0.1), self.t["window"])
+        self.box(p + Vec3(0, 1.85, 0), (0.1, 2.1, CELL) if across_x else (CELL, 2.1, 0.1), self.view(c, r))
         for side in sides:
             face = p + side * 0.12
             along = Vec3(side.z, 0, side.x)

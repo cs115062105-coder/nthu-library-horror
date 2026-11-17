@@ -20,6 +20,7 @@ from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
+from intro import Intro
 from minimap import Minimap, bang_texture, triangle
 from npc import Librarian, Roommate, to_cell
 from player import Player
@@ -160,6 +161,8 @@ class Game:
                                  double_sided=True)
         self.goal_bang = Entity(parent=self.ui_left, model="quad", texture=bang_texture(), position=(0.022, 0.413),
                                 scale=0.03, enabled=False)
+        self.intro = Intro(self)     # 開場動畫：每次打開遊戲第一次按「開始遊戲」時播
+        self.intro_seen = False
         self.bob = 0.0
         self.step_timer = 0.0
         self.time_left = 0
@@ -293,6 +296,11 @@ class Game:
 
     # ---------- 大廳與開局 ----------
     def start(self, cfg, name):
+        if not self.intro_seen:
+            self.intro_seen = True
+            self.state = "intro"
+            self.intro.play(on_done=lambda: self.start(cfg, name))
+            return
         self.session += 1
         self.cfg, self.difficulty = cfg, name
         self.read_notes.clear()
@@ -874,6 +882,9 @@ game.to_lobby()
 
 
 def handle_input(key):
+    if game.state == "intro":
+        game.intro.input(key)
+        return
     if game.state == "menu":
         if key == "escape":
             lobby.hide_panel()
