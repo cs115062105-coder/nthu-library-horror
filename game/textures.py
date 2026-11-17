@@ -531,6 +531,22 @@ def photo(seed):
     return _noise(img, 6, rng)
 
 
+def ink(word, font_path):
+    """白底上幾道紫色水墨筆刷，中間直排一個大大的書法詞。"""
+    rng = random.Random(len(word) * 7 + ord(word[0]))
+    w, h = 160, 240
+    img = Image.new("RGB", (w, h), (248, 248, 250))
+    d = ImageDraw.Draw(img)
+    for _ in range(26):       # 淡紫色的暈染
+        x, y, r = rng.randrange(w), rng.randrange(h // 2, h), rng.randint(6, 26)
+        c = rng.choice([(150, 120, 190), (190, 170, 220), (110, 80, 160), (220, 210, 236)])
+        d.ellipse([x - r, y - r // 2, x + r, y + r // 2], fill=c)
+    f = _font(font_path, 64)
+    for i, ch in enumerate(word):
+        d.text((w // 2 - 32, 18 + i * 74), ch, font=f, fill=(34, 30, 44))
+    return img
+
+
 def slats():
     """4F 的深色木條天花板：一條條深咖啡木條，縫裡看得到上面黑黑的管線。"""
     rng = random.Random(17)

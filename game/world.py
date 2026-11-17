@@ -371,6 +371,9 @@ FLOORS = {
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
+               # 照 2F 影片：論文書架側面的大紅牌、白黃兩色的多角形扶手椅、校史區的藍色校園模型和紫色水墨展板
+               end_style="board", facet_chairs=True, white_shelves=True, shelf_fill="light", campus_model=(9.6, 17.4),
+               ink_panels=[(11.0, 19.0, -30, "校史"), (16.4, 24.4, -42, "精神")],
                hanging={(21, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (9, 3): ("電腦教室", "Computer Lab II"),
                         (8, 8): ("電腦共學區", "Computer Lab I"), (15, 12): ("討論室", "Discussion Rooms"),
                         (16, 15): ("資訊島", "Information Retrieval"), (30, 13): ("熱門書刊區", "Popular Books and Periodicals"),
@@ -746,6 +749,11 @@ class World:
                 q = cell_pos(c, r) + Vec3(self.rng.uniform(-0.5, 0.5), 0, self.rng.uniform(-0.3, 0.3))
                 Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.24, height=0.42),
                        position=q, color=color.rgb32(242, 242, 240))
+        if "campus_model" in self.spec:
+            c, r = self.spec["campus_model"]
+            self.campus_model(Vec3(c * CELL, 0, -r * CELL))
+        for c, r, rot, word in self.spec.get("ink_panels", []):
+            self.ink_panel(Vec3(c * CELL, 0, -r * CELL), rot, word)
         for c, r in self.spec.get("wave_chairs", []):
             self.wave_chair(cell_pos(c, r))
             self.walkable.discard((c, r))
@@ -948,7 +956,23 @@ class World:
         self.collider(p + Vec3(0, 0.45, 0), (0.9, 0.9, CELL * 0.98), occludes=False)
 
     def tub_chairs(self, p):
-        """期刊區的白色桶狀單人椅，兩張對坐，中間一張鍍鉻小圓桌。"""
+        """期刊區的白色桶狀單人椅，兩張對坐，中間一張鍍鉻小圓桌。2F 照影片換成白色／黃色的多角形扶手椅。"""
+        if self.spec.get("facet_chairs"):
+            for side in (1, -1):
+                col = color.rgb32(*self.rng.choice([(244, 244, 242), (244, 244, 242), (240, 200, 40)]))
+                ch = Entity(parent=self.group(None), position=p + Vec3(side * 0.62, 0, 0), rotation_y=90 * side + self.rng.uniform(-20, 20))
+                Entity(parent=ch, model="cube", position=(0, 0.36, 0), scale=(0.8, 0.22, 0.72), color=col)
+                back = Entity(parent=ch, model="cube", position=(0, 0.68, 0.3), scale=(0.84, 0.5, 0.16), color=col)
+                back.rotation_x = -12
+                for x in (-0.42, 0.42):
+                    arm = Entity(parent=ch, model="cube", position=(x, 0.52, 0.05), scale=(0.12, 0.3, 0.7), color=col)
+                    arm.rotation_z = 12 if x < 0 else -12
+                Entity(parent=ch, model="cube", position=(0, 0.12, 0), scale=(0.05, 0.24, 0.05), color=color.rgb32(190, 192, 196))
+            Entity(parent=self.group(None), model=Cylinder(resolution=14, radius=0.3, height=0.03), position=p + Vec3(0, 0.55, 0),
+                   color=color.rgb32(246, 246, 246))
+            self.box(p + Vec3(0, 0.27, 0), (0.05, 0.55, 0.05), col=color.rgb32(246, 246, 246))
+            self.collider(p + Vec3(0, 0.4, 0), (CELL * 0.9, 0.8, 1.0), occludes=False)
+            return
         for side in (1, -1):
             ch = Entity(parent=self.group(None), position=p + Vec3(side * 0.6, 0, 0), rotation_y=90 * side + self.rng.uniform(-15, 15))
             Entity(parent=ch, model=Cylinder(resolution=12, radius=0.38, height=0.42), color=color.rgb32(242, 242, 242))
@@ -1015,6 +1039,17 @@ class World:
                 end = Vec3(dc, 0, 0)
                 self.box(p + end * (CELL / 2) + Vec3(0, 1.1, 0), (0.06, 2.24, 0.66),
                          col=color.rgb32(240, 240, 238) if white else color.rgb32(90, 96, 100))
+                if self.spec.get("end_style") == "board":   # 2F 學位論文：側面一大塊紅色牌子，白字印區號
+                    face = p + end * (CELL / 2 + 0.035)
+                    self.box(face + Vec3(0, 1.45, 0), (0.02, 0.9, 0.62), col=color.rgb32(196, 36, 40))
+                    code = f"{'TR'[run % 2]}{(run * 37 + c) % 400 + 1:03d}"
+                    self.quad(face + end * 0.015 + Vec3(0, 1.62, 0), (0.56, 0.3),
+                              self.text_tex([code], w=160, h=86, bg=(196, 36, 40), fg=(255, 255, 255), sizes=[58]),
+                              rot=(0, facing_y(end), 0))
+                    self.quad(face + end * 0.015 + Vec3(0, 1.25, 0), (0.5, 0.36),
+                              self.text_tex(["碩士論文", "博士論文"], w=140, h=100, bg=(250, 250, 250), fg=(60, 40, 40), sizes=[22, 22]),
+                              rot=(0, facing_y(end), 0))
+                    continue
                 if blue_end:   # 6F：側板是霧面玻璃，兩邊鑲藍色邊條，上面一塊藍框的索書號牌
                     face = p + end * (CELL / 2 + 0.032)
                     self.box(face + Vec3(0, 0.85, 0), (0.01, 1.5, 0.58), col=color.rgb32(222, 230, 236))
@@ -1640,6 +1675,28 @@ class World:
         self.box(face, (0.75 if not d.x else 0.04, 0.95, 0.04 if not d.x else 0.75), col=color.rgb32(70, 46, 30))
         tex = self.text_tex([char], w=96, h=128, bg=(240, 234, 214), fg=(30, 28, 26), sizes=[72])
         self.quad(face + d * 0.025, (0.6, 0.8), tex, rot=(0, facing_y(d), 0))
+
+    def campus_model(self, p):
+        """2F 校史展示區中間的清華校園模型：藍色圓台上一片白色的小房子。"""
+        Entity(parent=self.group(None), model=Cylinder(resolution=24, radius=0.9, height=0.55), position=p,
+               color=color.rgb32(40, 70, 170))
+        Entity(parent=self.group(None), model=Cylinder(resolution=24, radius=0.86, height=0.02), position=p + Vec3(0, 0.55, 0),
+               color=color.rgb32(90, 120, 210))
+        for _ in range(40):
+            a, rr = self.rng.uniform(0, 2 * math.pi), 0.75 * math.sqrt(self.rng.random())
+            h = self.rng.uniform(0.04, 0.16)
+            self.box(p + Vec3(math.cos(a) * rr, 0.57 + h / 2, math.sin(a) * rr),
+                     (self.rng.uniform(0.08, 0.2), h, self.rng.uniform(0.08, 0.2)), col=color.rgb32(240, 240, 244))
+        self.collider(p + Vec3(0, 0.3, 0), (1.8, 0.6, 1.8), occludes=False)
+
+    def ink_panel(self, p, rot, word):
+        """2F 校史展示區的白色展板：紫色水墨書法大字。"""
+        b = Entity(position=p, rotation_y=rot)
+        Entity(parent=b, model="cube", position=(0, 1.2, 0), scale=(1.6, 2.4, 0.12), color=color.rgb32(246, 246, 248))
+        tex = Texture(tx.ink(word, self.font_path), filtering="bilinear")
+        for z, ry in ((-0.065, 0), (0.065, 180)):
+            Entity(parent=b, model="quad", position=(0, 1.2, z), rotation_y=ry, scale=(1.5, 2.25), texture=tex)
+        self.collider(p + Vec3(0, 1.2, 0), (1.6, 2.4, 0.15), occludes=False).rotation_y = rot
 
     def wave_chair(self, p):
         """3F 木條牆前的白色波浪造型躺椅：一塊白色板子彎成 S 形，兩張並排。"""
