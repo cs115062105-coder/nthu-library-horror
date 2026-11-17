@@ -775,3 +775,102 @@ def keyboard():
             x += kw
     d.rounded_rectangle([60, 66, 196, 76], radius=2, fill=(70, 70, 76))   # 空白鍵
     return img
+
+
+def window_panorama(n=12, seed=11):
+    """窗外的校園全景：切成 n 片，相鄰的窗戶接著同一張大圖，走過一整排窗才會重複。
+    遠山、白雲、紅磚和白色的系館、成功湖、各種不同的樹、草地和小路；白天有點過曝，稍微模糊。"""
+    from PIL import ImageFilter
+    rng = random.Random(seed)
+    sw, h = 256, 384
+    w = sw * n
+    img = Image.new("RGB", (w, h))
+    d = ImageDraw.Draw(img)
+    for y in range(h):      # 天空：上面藍，靠近地平線發白
+        t = y / h
+        d.line([(0, y), (w, y)], fill=(int(150 + 100 * t), int(190 + 60 * t), int(235 + 15 * t)))
+    for _ in range(n * 3):    # 白雲
+        cx, cy = rng.randint(0, w), rng.randint(20, 140)
+        for k in range(rng.randint(4, 8)):
+            r = rng.randint(14, 34)
+            x, y = cx + rng.randint(-50, 50), cy + rng.randint(-10, 12)
+            d.ellipse([x - r * 1.6, y - r, x + r * 1.6, y + r], fill=(250, 251, 253))
+
+    def ridge(base, amp, col, step):
+        pts = [(0, h)]
+        y = base
+        for x in range(0, w + step, step):
+            y = max(base - amp, min(base + amp // 3, y + rng.randint(-amp // 4, amp // 4)))
+            pts.append((x, y))
+        pts.append((w, h))
+        d.polygon(pts, fill=col)
+    ridge(205, 40, (168, 190, 200), 40)     # 遠山
+    ridge(222, 26, (140, 168, 160), 30)
+    x = rng.randint(0, 60)
+    while x < w:            # 系館：紅磚或白色，高矮胖瘦都不一樣
+        bw, bh = rng.randint(70, 190), rng.randint(40, 120)
+        top = 250 - bh
+        brick = rng.random() < 0.55
+        wall = (186, 104, 84) if brick else rng.choice([(236, 234, 228), (220, 222, 224), (230, 226, 210)])
+        d.rectangle([x, top, x + bw, 262], fill=wall)
+        d.rectangle([x - 3, top - 5, x + bw + 3, top], fill=(120, 80, 70) if brick else (190, 192, 196))
+        win = (150, 175, 195) if not brick else (110, 130, 150)
+        for yy in range(top + 9, 252, 13):
+            for xx in range(x + 7, x + bw - 8, 12):
+                d.rectangle([xx, yy, xx + 6, yy + 6], fill=win)
+        x += bw + rng.randint(10, 120)
+    d.rectangle([0, 258, w, h], fill=(126, 162, 96))         # 草地
+    lake0 = rng.randint(0, w // 3)
+    for k in range(2):      # 成功湖：一段一段的水面，倒映著天空
+        lx = (lake0 + k * w // 2) % w
+        lw = rng.randint(sw * 2, sw * 3)
+        d.ellipse([lx, 270, lx + lw, 330], fill=(150, 186, 200))
+        d.ellipse([lx + 30, 282, lx + lw - 30, 318], fill=(176, 206, 218))
+    d.polygon([(0, 345), (w, 330), (w, 350), (0, 362)], fill=(214, 206, 188))   # 小路
+
+    def tree(cx, base):
+        kind = rng.random()
+        g = rng.randint(-20, 25)
+        if kind < 0.45:        # 圓圓的大樹
+            r = rng.randint(28, 52)
+            d.rectangle([cx - 4, base - r, cx + 4, base], fill=(96, 76, 58))
+            for _ in range(5):
+                ox, oy, rr = rng.randint(-r // 2, r // 2), rng.randint(-r // 2, 0), rng.randint(r // 2, r)
+                d.ellipse([cx + ox - rr, base - r * 1.6 + oy - rr * 0.8, cx + ox + rr, base - r * 1.6 + oy + rr * 0.8],
+                          fill=(80 + g, 130 + g, 70 + g // 2))
+        elif kind < 0.7:       # 尖尖的松樹
+            hh = rng.randint(60, 110)
+            d.rectangle([cx - 3, base - 14, cx + 3, base], fill=(90, 70, 52))
+            d.polygon([(cx, base - hh), (cx - hh // 4, base - 10), (cx + hh // 4, base - 10)], fill=(56 + g, 104 + g, 66 + g))
+        elif kind < 0.9:       # 椰子樹
+            hh = rng.randint(80, 120)
+            d.line([(cx, base), (cx + 6, base - hh)], fill=(130, 110, 80), width=5)
+            for a in range(0, 360, 45):
+                ex = cx + 6 + 34 * math.cos(math.radians(a))
+                ey = base - hh + 16 * math.sin(math.radians(a)) + 8
+                d.line([(cx + 6, base - hh), (ex, ey)], fill=(70 + g, 130 + g, 60), width=6)
+        else:                   # 開花的樹（粉紅、黃）
+            r = rng.randint(24, 40)
+            d.rectangle([cx - 3, base - r, cx + 3, base], fill=(100, 80, 60))
+            d.ellipse([cx - r, base - r * 2.2, cx + r, base - r * 0.6], fill=rng.choice([(236, 170, 190), (240, 210, 90)]))
+    xs = sorted(rng.randint(0, w) for _ in range(n * 6))
+    for cx in xs:
+        tree(cx, rng.randint(262, 300))
+    for cx in sorted(rng.randint(0, w) for _ in range(n * 3)):
+        tree(cx, rng.randint(320, 375))     # 比較近的樹，畫在前面
+    for _ in range(n * 2):    # 路上的小人
+        px = rng.randint(0, w)
+        py = 346 - px * 15 // w
+        d.rectangle([px, py - 14, px + 4, py], fill=rng.choice([(60, 60, 70), (200, 60, 50), (40, 90, 160), (230, 200, 60)]))
+        d.ellipse([px - 1, py - 20, px + 5, py - 14], fill=(230, 200, 170))
+    img = img.filter(ImageFilter.GaussianBlur(2.2))
+    img = Image.blend(img, Image.new("RGB", img.size, (250, 252, 255)), 0.18)    # 從室內看出去有點過曝
+    out = []
+    for i in range(n):
+        piece = img.crop((i * sw, 0, (i + 1) * sw, h))
+        pd = ImageDraw.Draw(piece)
+        frame = (168, 170, 174)
+        pd.rectangle([0, 0, sw - 1, h - 1], outline=frame, width=5)
+        pd.rectangle([0, h // 2 - 2, sw, h // 2 + 2], fill=frame)
+        out.append(piece)
+    return out
