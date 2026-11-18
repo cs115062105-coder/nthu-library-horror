@@ -82,7 +82,7 @@ class Person:
         self.root = Entity()
         self.hip = Entity(parent=self.root, y=0.85)
         self.torso = Entity(parent=self.hip)
-        Entity(parent=self.torso, model="cube", y=0.35, scale=(0.45, 0.7, 0.25), color=shirt)
+        self.shirt_parts = [Entity(parent=self.torso, model="cube", y=0.35, scale=(0.45, 0.7, 0.25), color=shirt)]
         self.head = Entity(parent=self.torso, y=0.86)
         Entity(parent=self.head, model="sphere", scale=0.3, color=skin)
         Entity(parent=self.head, model="cube", position=(0, 0.1, -0.02), scale=(0.31, 0.13, 0.3), color=hair)
@@ -92,13 +92,36 @@ class Person:
         self.arms, self.legs = [], []
         for x in (-0.29, 0.29):
             arm = Entity(parent=self.torso, position=(x, 0.65, 0))
-            Entity(parent=arm, model="cube", y=-0.3, scale=(0.12, 0.6, 0.12), color=shirt)
+            self.shirt_parts.append(Entity(parent=arm, model="cube", y=-0.3, scale=(0.12, 0.6, 0.12), color=shirt))
             self.arms.append(arm)
         for x in (-0.11, 0.11):
             leg = Entity(parent=self.hip, position=(x, 0, 0))
             Entity(parent=leg, model="cube", y=-0.42, scale=(0.16, 0.85, 0.16), color=pants)
             self.legs.append(leg)
         self.walk_t = 0.0
+        self.hat = self.bag = None
+
+    def dress(self, jacket=None, hat=None, bag=None):
+        """換穿著：外套顏色、帽子（"cap" 棒球帽／"beanie" 毛帽／None）、書包顏色（None 就不背）。"""
+        if jacket is not None:
+            for part in self.shirt_parts:
+                part.color = color.rgb32(*jacket)
+        for e in (self.hat, self.bag):
+            if e:
+                e.enabled = False
+        self.hat = self.bag = None
+        if hat:
+            col = color.rgb32(*hat[1])
+            self.hat = Entity(parent=self.head)
+            if hat[0] == "cap":
+                Entity(parent=self.hat, model="cube", position=(0, 0.13, -0.01), scale=(0.33, 0.12, 0.32), color=col)
+                Entity(parent=self.hat, model="cube", position=(0, 0.08, 0.2), scale=(0.28, 0.03, 0.16), color=col)
+            else:
+                Entity(parent=self.hat, model="sphere", position=(0, 0.1, -0.01), scale=(0.34, 0.24, 0.34), color=col)
+                Entity(parent=self.hat, model="sphere", position=(0, 0.25, -0.01), scale=0.08, color=color.white)
+        if bag:
+            self.bag = Entity(parent=self.torso, model="cube", position=(0, 0.4, -0.2), scale=(0.38, 0.5, 0.16),
+                              color=color.rgb32(*bag))
 
     def walk_anim(self, rate):
         self.walk_t += time.dt * rate
@@ -199,8 +222,7 @@ class Roommate(Person):
     def __init__(self, game):
         super().__init__(shirt=color.rgb32(120, 125, 135), pants=color.rgb32(40, 60, 100), hair=color.rgb32(25, 22, 20))
         self.game = game
-        Entity(parent=self.torso, model="cube", position=(0, 0.4, -0.2), scale=(0.38, 0.5, 0.16),
-               color=color.rgb32(170, 50, 45))    # 書包
+        self.dress(bag=(170, 50, 45))    # 書包；每局開始時 game 會照「今天的穿著」重新換
         self.book = Entity(parent=self.arms[1], model="cube", position=(-0.15, -0.6, 0.15), scale=(0.25, 0.04, 0.32),
                            color=color.rgb32(40, 90, 160))
         self.alarm = Entity(parent=self.root, model="quad", y=2.0, scale=(0.5, 0.5), billboard=True,
@@ -308,3 +330,79 @@ class Roommate(Person):
             self.walk_anim(14)
             if arrived or nxt == self.root.position:
                 self.sit_at(self.spot)
+
+
+class Hunter(Person):
+    """第二階段（5F、6F）：被打完、頭上包著繃帶的室友在樓層裡巡來巡去。
+    被他看到你在偷讀書就完了（隔天重來）；聽到你跑步會走過去看。躲在桌子底下他看不到。"""
+
+    def __init__(self, game):
+        super().__init__(shirt=color.rgb32(120, 125, 135), pants=color.rgb32(40, 60, 100), hair=color.rgb32(25, 22, 20))
+        self.game = game
+        Entity(parent=self.head, model="cube", position=(0, 0.06, 0), scale=(0.32, 0.06, 0.32), color=color.rgb32(245, 245, 245))   # 繃帶
+        Entity(parent=self.head, model="cube", position=(0.1, -0.06, 0.15), scale=(0.08, 0.06, 0.01), color=color.rgb32(240, 200, 200))
+        self.alarm = Entity(parent=self.root, model="quad", y=2.0, scale=(0.5, 0.5), billboard=True,
+                            texture=bubble("！", game.font_path, (220, 30, 30), bg=(255, 245, 160)), enabled=False)
+        self.root.enabled = False
+        self.target = self.lookout = None
+        self.pause = 0.0
+        self.cooldown = 0.0
+
+    @property
+    def active(self):
+        return self.root.enabled
+
+    @property
+    def position(self):
+        return self.root.position
+
+    def spawn(self, pos):
+        self.root.enabled = True
+        self.root.position = pos
+        self.target = self.lookout = None
+        self.pause, self.cooldown = 2.0, 3.0
+        self.alarm.enabled = False
+        self.stand()
+
+    def hide(self):
+        self.root.enabled = False
+
+    def sees_player(self):
+        g = self.game
+        if g.hidden:
+            return False
+        dist = 5 if g.sneaking else 10
+        eye = self.root.position + Vec3(0, 1.6, 0)
+        target = g.player.position + Vec3(0, 1.0 if g.sneaking else 1.4, 0)
+        return can_see(eye, self.root.forward, target, dist, 55, g.solids, (self.root, g.player))
+
+    def update(self):
+        g = self.game
+        self.cooldown -= time.dt
+        if self.pause > 0:
+            self.pause -= time.dt
+            self.root.rotation_y += math.sin(self.pause * 2) * 50 * time.dt
+            self.stand()
+        else:
+            goal = self.lookout or self.target
+            if goal is None:
+                cells = [c for c in g.librarian_walkable if (cell_pos(*c) - self.root.position).length() > 8]
+                goal = self.target = cell_pos(*random.choice(cells or sorted(g.librarian_walkable)))
+            nxt = next_step(g.librarian_walkable, self.root.position, goal)
+            speed = g.cfg["speed"] * (1.4 if self.lookout else 0.9)
+            if nxt == self.root.position or (step_toward(self.root, nxt, speed) and to_cell(nxt) == to_cell(goal)):
+                if self.lookout:
+                    g.show_hint("室友：「……是我聽錯了嗎？」", 2)
+                self.target = self.lookout = None
+                self.pause = random.uniform(1.5, 3.0)
+            self.walk_anim(7)
+        if self.cooldown > 0:
+            return
+        if g.running and (g.player.position - self.root.position).length() < 9 and not self.lookout:
+            self.lookout = Vec3(g.player.position.x, 0, g.player.position.z)
+            self.pause = 0
+        if self.sees_player():
+            self.alarm.enabled = True
+            self.root.look_at_2d(g.player.position, "y")
+            self.cooldown = 5.0
+            g.hunter_spotted()
