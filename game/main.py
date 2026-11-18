@@ -671,7 +671,7 @@ class Game:
             far = [c for c in self.librarian_walkable if (cell_pos(*c) - self.player.position).length() > 14]
             if far:
                 self.hunter.spawn(cell_pos(*random.choice(sorted(far))))
-        crowd = {"1F": (4, 3), "2F": (3, 3), "3F": (2, 3), "4F": (3, 2), "5F": (2, 3), "6F": (2, 3)}.get(floor, (0, 0))
+        crowd = {"1F": (9, 9), "2F": (7, 8), "3F": (6, 7), "4F": (6, 4), "5F": (6, 8), "6F": (6, 8)}.get(floor, (0, 0))
         self.crowd.spawn(self.world, self.talkers(), walkers=crowd[0], readers=crowd[1], taken=taken)
         if self.roommate.active:
             self.crowd.seat_decoys(self.world, self.roommate, self.outfit)

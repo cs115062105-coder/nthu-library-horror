@@ -7,6 +7,7 @@
 """
 import math
 import random
+from collections import deque
 
 from ursina import Entity, Vec3, color, destroy, time
 
@@ -30,6 +31,31 @@ BARKS = {
     "教授": ["同學，報告的參考文獻要寫格式喔。", "現在的學生都好認真。", "我的書怎麼又被借走了。"],
     "市民": ["清大圖書館好漂亮。", "這裡可以借書嗎？我是附近的居民。", "年輕人讀書真辛苦。"],
 }
+
+
+def path_to(walkable, start, goal):
+    """走道格子上的 BFS，回傳整條路（格子中心點）。路人每換一次目的地才算一次，不用每一幀都算。"""
+    s, g = to_cell(start), to_cell(goal)
+    if g not in walkable:
+        return []
+    prev = {s: None}
+    queue = deque([s])
+    while queue:
+        cur = queue.popleft()
+        if cur == g:
+            break
+        c, r = cur
+        for nxt in ((c + 1, r), (c - 1, r), (c, r + 1), (c, r - 1)):
+            if nxt in walkable and nxt not in prev:
+                prev[nxt] = cur
+                queue.append(nxt)
+    if g not in prev:
+        return []
+    out, cell = [], g
+    while cell is not None and cell != s:
+        out.append(cell_pos(*cell))
+        cell = prev[cell]
+    return out[::-1]
 
 
 def random_outfit(rng, avoid=None):
@@ -67,6 +93,10 @@ class NPC(Person):
         self.t = rng.uniform(0, 10)
         self.mark = None
         self.font_path = font_path
+        self.seat = None
+        self.path = []
+        self.timer = None        # 坐著的人：還要讀多久才起來走走（None = 一直坐著）
+        self.trips = rng.randint(1, 3)
 
     @property
     def position(self):
@@ -82,6 +112,7 @@ class NPC(Person):
 
     def sit_at(self, spot):
         self.mode = "read"
+        self.seat = spot
         self.root.position = spot[0]
         self.face = spot[2]
         self.root.rotation_y = self.face
@@ -93,25 +124,47 @@ class NPC(Person):
         self.root.rotation_y = face
         self.stand()
 
-    def update(self, game, walkable):
+    def update(self, game, walkable, crowd):
         self.t += time.dt
-        if self.mode == "walk":
+        if self.mode in ("walk", "to_seat"):
             if self.pause > 0:
                 self.pause -= time.dt
                 self.stand()
             else:
-                if self.goal is None or to_cell(self.root.position) == to_cell(self.goal):
-                    cells = sorted(walkable)
-                    self.goal = cell_pos(*self.rng.choice(cells))
+                if self.goal is None or not self.path:
+                    if self.mode == "to_seat" and self.goal is not None:     # 走到位子旁邊：坐下來讀一陣子
+                        self.sit_at(self.seat)
+                        self.timer = self.rng.uniform(25, 70)
+                        return
+                    self.trips -= 1
+                    if self.trips <= 0 and self.rng.random() < 0.6:
+                        self.seat = crowd.claim(self.root.position)
+                        if self.seat:
+                            self.mode, self.goal = "to_seat", cell_pos(*self.seat[1])
+                            self.path = path_to(walkable, self.root.position, self.goal)
+                            if not self.path:      # 走不到那個位子：直接放回去
+                                crowd.release(self.seat)
+                                self.seat, self.mode, self.goal = None, "walk", None
+                            return
+                    near = [c for c in crowd.cells if 4 < abs(c[0] - to_cell(self.root.position)[0]) + abs(c[1] - to_cell(self.root.position)[1]) < 18]
+                    self.goal = cell_pos(*self.rng.choice(near or crowd.cells))
+                    self.path = path_to(walkable, self.root.position, self.goal)
                     self.pause = self.rng.uniform(1.0, 4.0)
                     return
-                nxt = next_step(walkable, self.root.position, self.goal)
-                if nxt == self.root.position:
-                    self.goal = None
-                else:
-                    step_toward(self.root, nxt, 1.3)
-                    self.walk_anim(6)
-        elif self.mode in ("read", "decoy"):
+                if step_toward(self.root, self.path[0], 1.3):
+                    self.path.pop(0)
+                self.walk_anim(6)
+        elif self.mode == "read" and self.timer is not None:
+            self.timer -= time.dt
+            if self.timer <= 0:      # 讀累了：起來走一走、去找書、去廁所……
+                crowd.release(self.seat)
+                self.seat = None
+                self.root.position = cell_pos(*to_cell(self.root.position)) if to_cell(self.root.position) in walkable \
+                    else crowd.near_walk(self.root.position)
+                self.mode, self.goal, self.trips, self.path = "walk", None, self.rng.randint(1, 3), []
+                self.stand()
+                return
+        if self.mode in ("read", "decoy"):
             self.root.rotation_y = self.face + (math.sin(self.t * 0.7) * 50 if math.sin(self.t * 0.31) > 0.85 else 0)
             self.torso.rotation_x = 15
             self.head.rotation = (22 + math.sin(self.t * 5) * 2, 0, 0)
@@ -129,6 +182,8 @@ class Crowd:
     def __init__(self, game):
         self.game = game
         self.npcs = []
+        self.free = []
+        self.cells = []
         self.rng = random.Random()
         self.global_cd = 0.0
 
@@ -142,6 +197,7 @@ class Crowd:
         self.clear()
         rng, fp = self.rng, self.game.font_path
         walk = sorted(world.walkable)
+        self.cells = walk
         if not walk:
             return
         for _ in range(walkers):
@@ -153,7 +209,9 @@ class Crowd:
         for spot in spots[:readers]:
             n = NPC(rng.choice(["學生", "學生", "學生", "市民"]), rng, fp)
             n.sit_at(spot)
+            n.timer = rng.uniform(8, 60)
             self.npcs.append(n)
+        self.free = spots[readers:]
         for spec in talkers:
             n = NPC(spec["who"], rng, fp)
             pos = self.stand_spot(world, spec["anchor"])
@@ -162,6 +220,21 @@ class Crowd:
             n.set_mark(spec.get("mark", "？"))
             self.npcs.append(n)
 
+    def claim(self, pos):
+        """找一個空位子（離 pos 近一點的優先），拿走。"""
+        if not self.free:
+            return None
+        self.free.sort(key=lambda s: (s[0] - pos).length() + self.rng.uniform(0, 10))
+        return self.free.pop(0)
+
+    def release(self, spot):
+        if spot is not None:
+            self.free.append(spot)
+
+    def near_walk(self, pos):
+        cells = sorted(self.game.world.walkable, key=lambda c: (cell_pos(*c) - pos).length())
+        return cell_pos(*cells[0]) if cells else pos
+
     def stand_spot(self, world, anchor, near=3.5):
         """離 anchor 大約 near 公尺、站得到的走道格子。"""
         cells = sorted(world.walkable, key=lambda c: abs((cell_pos(*c) - anchor).length() - near))
@@ -169,7 +242,9 @@ class Crowd:
 
     def seat_decoys(self, world, roommate, outfit, n=7):
         """4F：在室友附近的桌子坐滿學生，穿著跟室友很像但不完全一樣。回傳被坐走的位置。"""
-        spots = [s for s in roommate.spots if s is not roommate.spot]
+        busy = [n.seat[0] for n in self.npcs if n.seat is not None] + \
+               [n.goal for n in self.npcs if n.mode == "to_seat" and n.goal is not None]
+        spots = [s for s in roommate.spots if s is not roommate.spot and all((s[0] - b).length() > 1.2 for b in busy)]
         spots.sort(key=lambda s: (s[0] - roommate.position).length())
         used = []
         for spot in spots[:n]:
@@ -188,6 +263,7 @@ class Crowd:
             self.npcs.append(d)
             used.append(spot)
         roommate.spots = [s for s in roommate.spots if s not in used]
+        self.free = [s for s in self.free if all((s[0] - u[0]).length() > 1.2 for u in used + [roommate.spot])]
         return used
 
     def targets(self):
@@ -204,7 +280,7 @@ class Crowd:
         walkable = g.world.walkable
         self.global_cd -= time.dt
         for n in self.npcs:
-            n.update(g, walkable)
+            n.update(g, walkable, self)
             if n.mode == "walk":
                 n.bark_cd -= time.dt
                 d = g.player.position - n.position
