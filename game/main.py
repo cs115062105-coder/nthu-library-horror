@@ -20,9 +20,12 @@ from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera
 import sfx
 from events import Scares
 from menu import DIFFICULTIES, Lobby
+from crowd import BAGS, HATS, JACKETS, Crowd, dress_outfit, random_outfit
+from dialog import Dialog
 from intro import Intro
+from quiz import LOCKER_RIDDLES, pick as pick_quiz
 from minimap import Minimap, bang_texture, triangle
-from npc import Librarian, Roommate, to_cell
+from npc import Hunter, Librarian, Roommate, to_cell
 from player import Player
 from shading import light_scene
 from ursina.shaders import unlit_shader
@@ -43,6 +46,7 @@ NOTES = {
 # 樓梯間的門鎖：(樓層, 方向) → (需要的東西, 沒有時的提示)。白天的樓梯大家都能走，只有這兩扇不行
 LOCKS = {
     ("1F", "down"): ("b1", "B1 密集書庫：館員專用。（室友不可能在這裡）"),
+    ("4F", "up"): ("phase2", "先在 4F 抓到室友再說！"),
     ("6F", "up"): ("7f", "7F 是行政中心，不對外開放。"),
 }
 READABLE = {
@@ -53,6 +57,17 @@ CLUES = {
     "book": (1, "《物種原始》裡夾著一張便條：\n「第二碼：{d}」\n下面還寫著：「他一定想不到我在這裡。」"),
     "whiteboard": (2, "白板寫滿了微積分算式，角落圈著一個數字：{d}\n旁邊寫著：「讀書會成員：只有我。」"),
 }
+# 第二階段：5F、6F 的考試用書（書名, 題庫分類）
+EXAM_BOOKS = {"calc": ("微積分 精選 500 題", "5F"), "linalg": ("線性代數 一次搞懂", "5F"), "prog": ("程式設計 考前衝刺", "6F")}
+TRANSCRIPT = [
+    ("旁白", "室友縮在地上求饒，書包裡滑出一張紙。"),
+    ("你", "……這是什麼？期中考模擬考成績單？"),
+    ("旁白", "微積分 98。線性代數 100。程式設計 A+。"),
+    ("你", "（腦袋一片空白）……所以全宿舍只有我一個人在擺爛？"),
+    ("室友", "你、你不要跟過來喔！我要上樓繼續讀……啊不是，我要回宿舍！"),
+    ("你", "完了完了完了。我也要讀。可是絕對不能讓他知道。"),
+    ("旁白", "第二階段：換你偷卷！上 5F、6F 找到 3 本考試用書，坐下來偷偷讀完。\n頭包繃帶的室友會在樓上巡，被他看到你在讀書就前功盡棄。"),
+]
 FIGHT_LINES = ["我只是剛好路過！", "我真的沒讀啦！", "這本是幫你借的！", "不要打臉！明天要考試！",
                "我錯了我錯了！", "是書自己跳到我手上的！", "你小聲點！館員會來！"]
 
@@ -110,7 +125,7 @@ class Game:
         self.setup_audio()
         self.ui_left = Entity(parent=camera.ui)   # 貼著畫面左緣的介面，螢幕比例不同也不會被切掉
         self.hud_bg = Entity(parent=self.ui_left, model="quad", origin=(-0.5, 0.5), position=(0.02, 0.49),
-                             scale=(1.25, 0.09), color=color.rgba32(255, 255, 255, 150), z=0.6)
+                             scale=(1.25, 0.125), color=color.rgba32(255, 255, 255, 150), z=0.6)
         self.clock_text = Text(parent=self.ui_left, position=(0.04, 0.47), scale=1.2, color=color.rgb32(40, 40, 50))
         self.goal_text = Text(parent=self.ui_left, position=(0.04, 0.425), scale=1.0, color=color.rgb32(150, 70, 20))
         self.prompt = Text(position=(0, -0.06), origin=(0, 0), scale=1.1, color=color.white)
@@ -161,6 +176,14 @@ class Game:
                                  double_sided=True)
         self.goal_bang = Entity(parent=self.ui_left, model="quad", texture=bang_texture(), position=(0.022, 0.413),
                                 scale=0.03, enabled=False)
+        self.dialog = Dialog()        # 跟路人、櫃臺對話和答題
+        self.crowd = Crowd(self)      # 每層樓的路人
+        self.hunter = Hunter(self)    # 第二階段在 5F、6F 巡邏的室友
+        self.outfit = ("紅色", "黑色棒球帽", "紅色")   # 室友今天的穿著，每局重抽
+        self.studied = set()          # 第二階段讀完的書
+        self.reading = 0.0            # 正在偷讀書的倒數
+        self.reading_book = None
+        self.look_text = Text(parent=self.ui_left, position=(0.04, 0.385), scale=0.85, color=color.rgb32(40, 90, 150))
         self.intro = Intro(self)     # 開場動畫：每次打開遊戲第一次按「開始遊戲」時播
         self.intro_seen = False
         self.bob = 0.0
@@ -227,6 +250,9 @@ class Game:
     # ---------- 卡關提示 ----------
     def stage_id(self):
         """現在卡在哪一步（跟在哪一層無關，換樓層不會重算時間）。"""
+        if "phase2" in self.items:
+            picked = sum(f"book_{b}" in self.items for b in EXAM_BOOKS)
+            return f"phase2-{picked}-{len(self.studied)}"
         for key in ("trail4", "trail3", "trail2", "locker_known"):
             if key in self.items:
                 return key
@@ -239,7 +265,9 @@ class Game:
     def help_target(self):
         """下一步要去的位置；目標在別層就回傳往那層的樓梯。"""
         items, w = self.items, self.world
-        if "trail4" in items:
+        if "phase2" in items:
+            want, target = self.phase2_target()
+        elif "trail4" in items:
             want = "4F"
             target = self.roommate.position if self.roommate.active else None
         elif "trail3" in items:
@@ -257,6 +285,19 @@ class Game:
             stair = w.stairs.get(way)
             return stair["pos"] if stair else None
         return target
+
+    def phase2_target(self):
+        """第二階段：還沒拿的書在哪層哪裡；拿了沒讀就去最近的桌子。"""
+        w = self.world
+        for name, (_, floor) in EXAM_BOOKS.items():
+            if f"book_{name}" not in self.items:
+                if w.floor == floor:
+                    return floor, next((t.get("look", t["pos"]) for t in w.interactables
+                                        if t["kind"] == "exam_book" and t["data"] == name), None)
+                return floor, None
+        if w.floor in ("5F", "6F") and w.hides:
+            return w.floor, min(w.hides, key=lambda p: (p - self.player.position).length())
+        return "5F", None
 
     def update_help(self):
         stage = self.stage_id()
@@ -294,6 +335,187 @@ class Game:
         self.bang.enabled = self.goal_bang.enabled = self.edge_bang.enabled = False
         self.minimap.mark(None)
 
+    # ---------- 劇情：路人、線索、第二階段 ----------
+    def clue_text(self):
+        """左上角：目前查到的室友穿著。"""
+        jacket, hat, bag = self.outfit
+        got = lambda key, v: v if key in self.items else "？"
+        return (f"室友今天：外套 {got('clue_jacket', jacket)}　帽子 {got('clue_hat', hat)}　"
+                f"書包 {got('clue_bag', bag)}")
+
+    def anchor(self, kind, data=None):
+        it = next((t for t in self.world.interactables if t["kind"] == kind and (data is None or t.get("data") == data)), None)
+        return it["pos"] if it else self.world.start
+
+    def talkers(self):
+        """這層樓會主動找你講話的人：說什麼、出什麼題、答對給什麼。"""
+        floor, phase2 = self.world.floor, "phase2" in self.items
+        out = []
+
+        def quiz_talk(n, key, intro, kind, reward_lines, done_line):
+            if key in self.items:
+                self.dialog.talk([(n.who, done_line)])
+                return
+
+            def right():
+                self.items.add(key)
+                n.set_mark("")
+                self.play("page")
+                self.dialog.talk([(n.who, line) for line in reward_lines()])
+
+            def wrong():
+                self.mistake()
+                self.dialog.talk([(n.who, "哈哈，答錯了。再想想，想好再來找我。")])
+            self.dialog.talk([(n.who, line) for line in intro], quiz=pick_quiz(kind), on_right=right, on_wrong=wrong)
+
+        if floor == "1F" and not phase2:
+            out.append(dict(who="學生", anchor=self.anchor("locker", self.locker_no), label="跟同學說話",
+                            action=lambda n: quiz_talk(
+                                n, "clue_bag",
+                                ["你在找人？剛剛有個人鬼鬼祟祟地在自助取書櫃拿書，還一直回頭看。",
+                                 "他背的書包我記得很清楚……想知道？先猜猜我的謎語。"], "riddle",
+                                lambda: [f"他背一個{self.outfit[2]}的書包！拿了三本微積分就往樓上衝。"],
+                                f"就是那個背{self.outfit[2]}書包的人。加油啊！")))
+        elif floor == "2F" and not phase2:
+            out.append(dict(who="教授", anchor=self.anchor("lab_pc"), label="跟教授說話",
+                            action=lambda n: quiz_talk(
+                                n, "prof_hint",
+                                ["同學，你也是來找報告文獻的？現在的學生，報告都拖到最後一天。",
+                                 "考你一題清華的常識，答對我就告訴你一件事。"], "nthu",
+                                lambda: ["不錯！剛剛有個學生在電腦教室最裡面那台電腦，一直在輸入密碼。",
+                                         "我瞄到他在試「建校那一年」……現在的學生，密碼都設這種。"],
+                                "電腦教室最裡面那台，密碼跟建校那年有關。快去吧。")))
+        elif floor == "3F" and not phase2:
+            out.append(dict(who="市民", anchor=self.anchor("tape"), label="跟阿伯說話",
+                            action=lambda n: quiz_talk(
+                                n, "clue_jacket",
+                                ["少年仔，你在找人喔？剛剛有個同學在那邊聽錄音帶，聽得好認真。",
+                                 "阿伯考你一個謎語，猜對我就跟你說他穿什麼。"], "riddle",
+                                lambda: [f"他穿一件{self.outfit[0]}的外套，聽完錄音帶就往 4F 跑了。"],
+                                f"穿{self.outfit[0]}外套的那個啦，往 4F 去了。")))
+        elif floor == "4F" and not phase2:
+            out.append(dict(who="學生", anchor=self.world.stairs["down"]["pos"], label="跟同學說話", mark="…",
+                            action=lambda n: self.dialog.talk([
+                                (n.who, "今天 4F 好多人在讀書，全部都穿得差不多……你在找誰？"),
+                                ("你", self.clue_text().replace("室友今天：", "我在找一個人：")),
+                                (n.who, "那你要看清楚喔，認錯人館員會過來罵人的。")])))
+        elif floor in ("5F", "6F") and phase2:
+            out.append(dict(who="學生", anchor=self.world.stairs["down"]["pos"], label="跟同學說話",
+                            action=lambda n: quiz_talk(
+                                n, f"tip_{floor}",
+                                ["……你也是來偷偷讀書的吧？我懂。頭包繃帶那個人一直在找你喔。",
+                                 "考你一題，答對我就告訴你考試用書放在哪。"], "prog",
+                                lambda: self.book_tip(),
+                                "書架那邊有發光的書，就是你要的。小心繃帶男。")))
+        return out
+
+    def book_tip(self):
+        self.helping = True      # 直接開黃色驚嘆號，標出書的位置
+        left = [EXAM_BOOKS[b][0] for b in EXAM_BOOKS if f"book_{b}" not in self.items]
+        if not left:
+            return ["你書都拿齊了？那就找張桌子坐下來讀吧，記得躲著繃帶男。"]
+        return [f"你要的是《{left[0]}》吧？我幫你在地圖上標起來了，跟著黃色驚嘆號走。"]
+
+    def place_books(self):
+        """第二階段：在 5F、6F 的書架上放發光的考試用書。"""
+        if "phase2" not in self.items:
+            return
+        w = self.world
+        placed = {t["data"] for t in w.interactables if t["kind"] == "exam_book"}
+        names = [b for b, (_, fl) in EXAM_BOOKS.items() if fl == w.floor and f"book_{b}" not in self.items and b not in placed]
+        if not names:
+            return
+        rng = random.Random(hash((self.code, w.floor)))
+        faces = []
+        for (c, r) in sorted(w.walkable):
+            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                if w.char(c + dc, r + dr) == "B":
+                    faces.append(((c, r), (dc, dr)))
+        rng.shuffle(faces)
+        chosen = []
+        for cell, d in faces:
+            if all((cell_pos(*cell) - cell_pos(*o)).length() > 16 for o, _ in chosen):
+                chosen.append((cell, d))
+            if len(chosen) == len(names):
+                break
+        for name, (cell, (dc, dr)) in zip(names, chosen):
+            p = cell_pos(*cell)
+            look = p + Vec3(dc, 0, -dr) * 0.75 + Vec3(0, 1.25, 0)
+            book = Entity(model="cube", position=look, scale=(0.08, 0.3, 0.22) if dc else (0.22, 0.3, 0.08),
+                          color=color.rgb(0.6, 1.0, 1.6))
+            glow = Entity(model="quad", position=look + Vec3(0, 0.45, 0), billboard=True, scale=0.35,
+                          texture=bang_texture(), color=color.rgb(1.2, 1.2, 1.2))
+            w.owned += [book, glow]
+            w.interactables.append(dict(kind="exam_book", pos=p, look=look, data=name, ents=(book, glow)))
+
+    def take_book(self, thing):
+        name = thing["data"]
+        if f"book_{name}" in self.items:
+            return
+        self.items.add(f"book_{name}")
+        for e in thing["ents"]:
+            e.enabled = False
+        self.world.interactables.remove(thing)
+        self.play("page")
+        self.show_hint(f"拿到《{EXAM_BOOKS[name][0]}》！找張桌子坐下來偷偷讀（按 E）。", 3)
+
+    def unread(self):
+        return [b for b in EXAM_BOOKS if f"book_{b}" in self.items and b not in self.studied]
+
+    def study(self):
+        books = self.unread()
+        if not books or self.reading > 0:
+            return
+        self.reading_book = books[0]
+        self.reading = 3.0
+        self.player.speed = 0
+        self.show_hint(f"你翻開《{EXAM_BOOKS[books[0]][0]}》，偷偷讀了起來……（別被室友看到）", 3)
+
+    def finish_reading(self):
+        name = self.reading_book
+        kind = {"calc": "calc", "linalg": "linalg", "prog": "prog"}[name]
+
+        def right():
+            self.studied.add(name)
+            self.play("page")
+            if len(self.studied) == len(EXAM_BOOKS):
+                self.dialog.talk([("你", "……讀完了。三本都讀完了。"), ("旁白", "期中考當天。")], on_done=self.ending)
+            else:
+                self.show_hint(f"讀懂了！（{len(self.studied)}/{len(EXAM_BOOKS)}）", 3)
+
+        def wrong():
+            self.mistake()
+            self.noise = 1.0
+            self.show_hint("算錯了！你翻書翻得太用力，整層都聽到了。（再讀一次）", 3)
+        self.dialog.talk([("旁白", f"《{EXAM_BOOKS[name][0]}》的習題：")], quiz=pick_quiz(kind),
+                         on_right=right, on_wrong=wrong)
+
+    def grab_wrong(self, npc):
+        self.mistake()
+        self.show_hint("認錯人了！那位同學嚇了一跳：「你誰啊？」", 3)
+        npc.mode = "read"
+        self.later(lambda: setattr(npc, "mode", "decoy"), 6)
+        self.warn()
+
+    def hunter_spotted(self):
+        if self.dead:
+            return
+        self.spotted += 1
+        self.reading = 0.0
+        self.play("sting", volume=0.35)
+        self.show_hint("室友：「你在讀書？！你不是說要擺爛？」", 3)
+        self.end_day("被室友抓包了，你假裝在找漫畫……", color.rgba32(30, 20, 20, 255))
+
+    def start_phase2(self):
+        def go():
+            self.items.add("phase2")
+            self.roommate.hide()
+            self.cleared = False
+            self.player.mouse_sensitivity = Vec2(40, 40)
+            self.spawn_roommate()
+            self.show_hint("第二階段：上 5F、6F 找 3 本考試用書，坐下偷偷讀。小心頭包繃帶的室友！", 5)
+        self.dialog.talk(TRANSCRIPT, on_done=go, lock=1.5)   # 剛痛扁完還在狂按 E，等一下才吃按鍵
+
     # ---------- 大廳與開局 ----------
     def start(self, cfg, name):
         if not self.intro_seen:
@@ -308,6 +530,10 @@ class Game:
         self.items.clear()
         self.code = "".join(random.choice("123456789") for _ in range(3))   # 每局密碼都不同
         self.locker_no = random.randint(1, 6)
+        self.outfit = random_outfit(random)
+        dress_outfit(self.roommate, self.outfit)
+        self.studied.clear()
+        self.reading = 0.0
         self.stage = None
         self.day = 1
         self.total_warnings = self.spotted = 0
@@ -331,6 +557,10 @@ class Game:
         self.hint_bg.enabled = False
         self.note_bg.enabled = False
         self.hide_help()
+        self.dialog.root.enabled = False
+        self.crowd.clear()
+        self.hunter.hide()
+        self.look_text.text = ""
         self.update_prompt(off=True)
         self.flash_fade()
         self.close_entry()
@@ -400,7 +630,7 @@ class Game:
                "6F": "6F。西文圖書區，安靜到聽得見翻頁聲。",
                "B1": "B1。你怎麼進來的？"}.get(self.world.floor, f"{self.world.floor}。")
         if self.world.floor == "4F" and self.roommate.active:
-            msg += "\n他就在這層某張桌子。趁他低頭時靠近，他抬頭時躲好！"
+            msg += "\n這層坐滿了讀書的同學。照線索認出室友，趁他低頭時靠近！"
         self.show_hint(wrap(msg, 26), 5)
 
     def new_day(self, first=False, why=""):
@@ -416,8 +646,8 @@ class Game:
         self.scares.reset()
         self.note_text.text = ""
         if first:
-            msg = ("18:00。室友說今天要在宿舍睡一整天，IG 限動卻拍到總圖的窗戶。\n"
-                   "說好一起擺爛，結果你偷卷？今天一定要抓到你。")
+            msg = ("18:00。你抱著逾期的書走進總圖。先去左邊的櫃臺還書，\n"
+                   "順便查查室友在搞什麼。頭上有「？」的路人可以問線索。")
         else:
             msg = f"{why}\n第 {self.day} 天 18:00，你又來到總圖 {self.world.floor}。查到的線索都還記得。"
         self.show_hint(wrap(msg, 26), 6)
@@ -428,10 +658,24 @@ class Game:
         self.player.camera_pivot.rotation_x = 0
 
     def spawn_roommate(self):
-        if self.world.floor == "4F" and "trail4" in self.items:
+        """室友和這層的路人。第一階段室友坐在 4F（旁邊坐滿長得很像的同學）；第二階段他在 5F、6F 巡邏。"""
+        floor, phase2 = self.world.floor, "phase2" in self.items
+        taken = []
+        self.hunter.hide()
+        if floor == "4F" and "trail4" in self.items and not phase2:
             self.roommate.spawn(self.world, self.player.position)
+            taken = [self.roommate.spot[0]]
         else:
             self.roommate.hide()
+        if phase2 and floor in ("5F", "6F"):
+            far = [c for c in self.librarian_walkable if (cell_pos(*c) - self.player.position).length() > 14]
+            if far:
+                self.hunter.spawn(cell_pos(*random.choice(sorted(far))))
+        crowd = {"1F": (4, 3), "2F": (3, 3), "3F": (2, 3), "4F": (3, 2), "5F": (2, 3), "6F": (2, 3)}.get(floor, (0, 0))
+        self.crowd.spawn(self.world, self.talkers(), walkers=crowd[0], readers=crowd[1], taken=taken)
+        if self.roommate.active:
+            self.crowd.seat_decoys(self.world, self.roommate, self.outfit)
+        self.place_books()
 
     def end_day(self, why, tint):
         if self.dead:
@@ -528,7 +772,7 @@ class Game:
             self.fight_line.text = "室友：「" + random.choice(FIGHT_LINES) + "」"
         if f["hp"] <= 0:
             self.end_fight_ui()
-            self.ending()
+            self.start_phase2()
 
     def update_fight(self):
         f = self.fight
@@ -584,6 +828,10 @@ class Game:
             out.append((look, pos, label, lambda n=name: self.read_clue(n)))
         for thing in self.world.interactables:
             out.append((thing.get("look", thing["pos"]), thing["pos"], self.label(thing), lambda t=thing: self.use(t)))
+        out += self.crowd.targets()
+        if "phase2" in self.items and self.unread() and self.world.floor in ("5F", "6F"):
+            for p in self.world.hides:
+                out.append((p + Vec3(0, 0.8, 0), p, "坐下來偷偷讀書", self.study))
         for direction, stair in self.world.stairs.items():
             out.append((stair["door"].position, stair["pos"], "上樓" if direction == "up" else "下樓",
                         lambda d=direction: self.take_stairs(d)))
@@ -633,8 +881,8 @@ class Game:
         kind = thing["kind"]
         if kind == "locker":
             return f"打開 A{thing['data']:02d} 櫃"
-        return {"read": "閱讀", "counter_pc": "查櫃臺電腦", "lab_pc": "使用電腦", "tape": "聽錄音帶",
-                "case": "打開展示櫃"}.get(kind, "查看")
+        return {"read": "閱讀", "counter_pc": "到櫃臺還書", "lab_pc": "使用電腦", "tape": "聽錄音帶",
+                "case": "打開展示櫃", "exam_book": "拿這本書"}.get(kind, "查看")
 
     def update_prompt(self, off=False):
         """準心下方顯示現在按 E 會做什麼。"""
@@ -657,9 +905,24 @@ class Game:
             text = data.split(":", 1)[1] if data.startswith("history:") else READABLE[data]
             self.show_note(text)
         elif kind == "counter_pc":
-            self.items.add("locker_known")
-            self.show_note(f"預約取書紀錄\n讀者：陳○○（你的室友）\n書名：《微積分　精選 500 題》等 3 本\n"
-                           f"取書櫃：A{self.locker_no:02d}　狀態：待取件\n……說好的擺爛呢？")
+            if "locker_known" in self.items:
+                self.show_note(self.reservation())
+                return
+
+            def right():
+                self.items.add("locker_known")
+                self.show_note(self.reservation())
+
+            def wrong():
+                self.mistake()
+                self.dialog.talk([("櫃臺館員", "……同學，你真的有來過圖書館嗎？再想想看。")])
+            self.dialog.talk([("你", "還書。這三本……逾期了一點點。（為了報告借的參考文獻）"),
+                              ("櫃臺館員", "逾期三天喔。好，已經還了。還有什麼事嗎？"),
+                              ("你", "那個……可以幫我查我室友今天預約了什麼書嗎？我要找他。"),
+                              ("櫃臺館員", "查別人的預約？不行喔……除非你先答對這題館規，證明你是好讀者。")],
+                             quiz=pick_quiz("rule"), on_right=right, on_wrong=wrong)
+        elif kind == "exam_book":
+            self.take_book(thing)
         elif kind == "locker":
             if data != self.locker_no:
                 self.show_hint(f"A{data:02d}：別人的書，不要亂開。", 2)
@@ -691,13 +954,19 @@ class Game:
             else:
                 self.open_entry("清華書房　展示櫃", f"三碼密碼鎖　你記得的：{self.code_hint()}", 3, self.case_open)
 
+    def reservation(self):
+        return (f"預約取書紀錄\n讀者：陳○○（你的室友）\n書名：《微積分　精選 500 題》等 3 本\n"
+                f"取書櫃：A0?　櫃號提示：{LOCKER_RIDDLES[self.locker_no]}\n……說好的擺爛呢？")
+
     def lab_login(self, code):
         if code != "1956":
             self.show_hint("密碼錯誤。", 2)
             self.mistake()
             return
         self.items.add("trail3")
-        self.show_note("登入成功。室友的搜尋紀錄：\n「怎麼偷讀書不被室友發現」\n「偷卷 被抓到 怎麼辦」\n「3F 視聽區 線代錄音」")
+        self.items.add("clue_hat")
+        self.show_note("登入成功。室友的搜尋紀錄：\n「怎麼偷讀書不被室友發現」「3F 視聽區 線代錄音」\n"
+                       f"雲端相簿最新一張：今天的自拍，戴著{self.outfit[1]}（臉用貼圖遮住了）")
 
     def play_tape(self):
         """3F 視聽座位的錄音帶：嗶幾聲就是第一碼。"""
@@ -764,11 +1033,18 @@ class Game:
     def goal(self):
         """左上角的目標：依樓層和已經查到的線索決定下一步。"""
         floor, items = self.world.floor, self.items
+        if "phase2" in items:
+            missing = [b for b in EXAM_BOOKS if f"book_{b}" not in items]
+            if self.unread():
+                return f"找張桌子坐下，偷偷讀《{EXAM_BOOKS[self.unread()[0]][0]}》（{len(self.studied)}/3）"
+            if missing:
+                return f"到 {EXAM_BOOKS[missing[0]][1]} 找《{EXAM_BOOKS[missing[0]][0]}》（書架上發光的那本，{len(self.studied)}/3）"
+            return "讀完了！"
         if "trail4" in items:
             if floor != "4F":
                 return "室友在 4F 中文書區！從樓梯間上去"
             extra = "" if "notes" in items else "（清華書房的展示櫃好像藏著什麼）"
-            return f"趁室友低頭讀書，按住 Ctrl 靠近，按 E 抓住他{extra}"
+            return f"從一堆讀書的同學裡認出室友，趁他低頭時靠近按 E 抓住他{extra}"
         if "trail3" in items:
             return "到 3F 視聽區最裡面那台（螢幕亮著）聽錄音帶" if floor == "3F" else "上 3F，找視聽區還在播的那台錄音機"
         if "trail2" in items:
@@ -777,8 +1053,8 @@ class Game:
         if floor != "1F":
             return "線索在 1F：回去查室友今天預約了什麼"
         if "locker_known" in items:
-            return f"到最裡面（北邊）的自助取書區，打開 A{self.locker_no:02d} 櫃"
-        return "到左邊的聯合櫃臺，用電腦查室友的預約"
+            return f"到北邊的自助取書區，打開謎語說的那一櫃：「{LOCKER_RIDDLES[self.locker_no]}」"
+        return "先到左邊的聯合櫃臺還書，順便查室友的預約"
 
     def ending(self):
         self.update_prompt(off=True)
@@ -790,11 +1066,11 @@ class Game:
         self.play("page")
         self.note_bg.enabled = True
         if "notes" in self.items:
-            story = ("你把他打到求饒。他從書包拿出另一本筆記：\n「這……本來要考前一天給你的。我怕你被當，才偷偷讀。」\n"
-                     "你的拳頭停在半空中。\n\n—— 真結局：偷卷是為了你 ——")
+            story = ("成績公布：你 92，他 100。他翻出那本展示櫃裡的筆記：\n「這本來就是要給你的。我怕你被當，才偷偷讀。」\n"
+                     "你們決定期末不擺爛了，一起去總圖。\n\n—— 真結局：偷卷聯盟 ——")
         else:
-            story = ("他鼻青臉腫地承認：「我只是想偷偷考 100 分……」\n隔週成績公布：他 100 分，你 38 分。\n"
-                     "你默默決定明天也來總圖。\n\n—— 結局：擺爛聯盟解散 ——")
+            story = ("成績公布：你 85，他 100。\n兩個人在宿舍對看三秒，同時大喊：「你偷卷！」\n"
+                     "擺爛聯盟，正式解散。\n\n—— 結局：大家都在偷卷 ——")
         self.note_text.text = (f"{story}\n{self.difficulty}·第 {self.day} 天·被室友發現 {self.spotted} 次·"
                                f"館員警告 {self.total_warnings} 次\n按 Enter 回到大廳")
 
@@ -822,7 +1098,25 @@ class Game:
         self.clock_text.text = (f"{minutes // 60:02d}:{minutes % 60:02d}　第 {self.day} 天　{self.world.floor}　"
                                 f"館員警告 {self.warnings}/3")
         self.goal_text.text = "目標：" + self.goal()
+        self.look_text.text = "" if "phase2" in self.items else self.clue_text()
         self.update_help()
+        self.crowd.update()
+        if self.dialog.active:
+            if self.note_bg.enabled:
+                self.hide_note()
+            self.update_prompt(off=True)
+            self.player.speed = 0
+            return
+        if self.reading > 0:
+            self.reading -= time.dt
+            self.player.speed = 0
+            self.player.camera_pivot.y += (1.1 - self.player.camera_pivot.y) * min(1, time.dt * 8)
+            if self.hunter.active:
+                self.hunter.update()
+            self.librarian.update()
+            if self.reading <= 0 and not self.dead:
+                self.finish_reading()
+            return
         self.update_prompt()
         if self.time_left <= 0:
             self.play("chime")
@@ -834,6 +1128,8 @@ class Game:
         self.librarian.update()
         if self.roommate.active and not self.dead:
             self.roommate.update()
+        if self.hunter.active and not self.dead:
+            self.hunter.update()
         self.scares.update()
         self.update_body()
 
@@ -888,6 +1184,9 @@ def handle_input(key):
     if game.state == "menu":
         if key == "escape":
             lobby.hide_panel()
+        return
+    if game.dialog.active:
+        game.dialog.input(key)
         return
     if game.entry:
         game.entry_key(key)
