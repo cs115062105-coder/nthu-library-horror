@@ -77,8 +77,15 @@ class NPC(Person):
         shirts, pants, hair, hat_p, bag_p = LOOKS[who]
         style = rng.choice(["short", "short", "side", "bangs", "long", "bun"] if who != "教授" else ["short", "side"])
         skin = rng.choice([(235, 200, 170), (225, 188, 155), (240, 210, 185), (205, 165, 130)])
+        if who == "學生":
+            hair = rng.choice([hair, hair, (55, 38, 28), (95, 62, 40), (140, 100, 70)])
+            pants = rng.choice([pants, (40, 45, 60), (70, 95, 140), (150, 135, 105), (30, 30, 34)])
         super().__init__(shirt=color.rgb32(*rng.choice(shirts)), pants=pants, hair=hair, skin=skin, style=style,
-                         shoes=rng.choice([(60, 50, 45), (235, 235, 235), (40, 40, 45), (120, 80, 50)]))
+                         shoes=rng.choice([(60, 50, 45), (235, 235, 235), (40, 40, 45), (120, 80, 50)]),
+                         glasses=rng.random() < (0.7 if who == "教授" else 0.45))
+        self.root.scale = rng.uniform(0.92, 1.05)       # 高矮胖瘦不一樣
+        if who == "學生" and rng.random() < 0.4:
+            self.hoodie()
         self.who = who
         if outfit:
             dress_outfit(self, outfit)

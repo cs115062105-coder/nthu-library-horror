@@ -211,7 +211,7 @@ def body_shape(skin, pants):
     return cached(("body", skin, pants), build)
 
 
-def head_shape(skin, hair, style="short", glasses=True):
+def head_shape(skin, hair, style="short"):
     def build():
         s = Shape()
         C = (0, 0.05, 0)
@@ -229,18 +229,38 @@ def head_shape(skin, hair, style="short", glasses=True):
         s.ellipsoid((0, 0.018, 0.134), (0.011, 0.02, 0.013), dark, seg=8, rings=5)                    # 鼻子
         s.ellipsoid((0, -0.037, 0.131), (0.019, 0.005, 0.004), (150, 85, 80), seg=8, rings=4)        # 嘴巴
         _hair(s, C, hair, style)
-        if glasses:
-            g = (25, 25, 30)
-            for x in (-1, 1):
-                cx = x * 0.044
-                s.box((cx, 0.071, 0.142), (0.056, 0.005, 0.005), g)
-                s.box((cx, 0.03, 0.142), (0.056, 0.005, 0.005), g)
-                s.box((cx - 0.028, 0.0505, 0.142), (0.005, 0.046, 0.005), g)
-                s.box((cx + 0.028, 0.0505, 0.142), (0.005, 0.046, 0.005), g)
-                s.box((x * 0.1, 0.064, 0.07), (0.005, 0.005, 0.145), g, rot=(0, -x * 13, 0))   # 鏡腳
-            s.box((0, 0.062, 0.142), (0.026, 0.005, 0.005), g)
         return s
-    return cached(("head", skin, hair, style, glasses), build)
+    return cached(("head", skin, hair, style), build)
+
+
+def glasses_shape():
+    """細框眼鏡（另外一塊，可以每局換戴不戴）。"""
+    def build():
+        s = Shape()
+        g = (25, 25, 30)
+        for x in (-1, 1):
+            cx = x * 0.044
+            s.box((cx, 0.071, 0.142), (0.056, 0.005, 0.005), g)
+            s.box((cx, 0.03, 0.142), (0.056, 0.005, 0.005), g)
+            s.box((cx - 0.028, 0.0505, 0.142), (0.005, 0.046, 0.005), g)
+            s.box((cx + 0.028, 0.0505, 0.142), (0.005, 0.046, 0.005), g)
+            s.box((x * 0.1, 0.064, 0.07), (0.005, 0.005, 0.145), g, rot=(0, -x * 13, 0))   # 鏡腳
+        s.box((0, 0.062, 0.142), (0.026, 0.005, 0.005), g)
+        return s
+    return cached(("glasses",), build)
+
+
+def hood_shape():
+    """帽T：背後的帽子（染色）和胸前兩條抽繩。"""
+    def build():
+        s = Shape()
+        s.ellipsoid((0, 0.66, -0.07), (0.15, 0.08, 0.1), (255, 255, 255), seg=14, rings=8,
+                    deform=lambda x, y, z: (x, y, min(z, 0.06)))
+        s.loft([(0.62, 0.17, 0.112), (0.7, 0.1, 0.08)], (255, 255, 255), seg=16)        # 領口一圈
+        for x in (-1, 1):
+            s.box((x * 0.04, 0.55, torso_front(0.55) + 0.006), (0.008, 0.16, 0.006), (245, 245, 245))
+        return s
+    return cached(("hood",), build)
 
 
 def _hair(s, C, hair, style):

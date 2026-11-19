@@ -93,7 +93,9 @@ class Person:
         self.shirt_parts = [self._part(self.torso, body.shirt_shape(), shirt)]
         self._part(self.torso, body.body_shape(skin, pants))
         self.head = Entity(parent=self.torso, y=0.79, scale=0.8)     # 頭約身高的 1/7
-        self._part(self.head, body.head_shape(skin, hair, style, glasses))
+        self._part(self.head, body.head_shape(skin, hair, style))
+        self.glasses = self._part(self.head, body.glasses_shape())
+        self.glasses.enabled = glasses
         self.arms, self.elbows, self.hands, self.legs, self.knees = [], [], [], [], []
         for side in (-1, 1):
             arm = Entity(parent=self.torso, position=(side * 0.255, 0.6, 0))
@@ -126,6 +128,12 @@ class Person:
             e.set_shader_input("fog_end", fog[1])
         self.parts.append(e)
         return e
+
+    def set_glasses(self, on):
+        self.glasses.enabled = on
+
+    def hoodie(self):
+        self.shirt_parts.append(self._part(self.torso, body.hood_shape(), self.shirt_parts[0].color))
 
     def dress(self, jacket=None, hat=None, bag=None):
         """換穿著：外套顏色、帽子（"cap" 棒球帽／"beanie" 毛帽／None）、書包顏色（None 就不背）。"""

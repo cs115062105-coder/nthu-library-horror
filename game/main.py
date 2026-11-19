@@ -532,6 +532,9 @@ class Game:
         self.locker_no = random.randint(1, 6)
         self.outfit = random_outfit(random)
         dress_outfit(self.roommate, self.outfit)
+        specs = random.random() < 0.45          # 室友今天有沒有戴眼鏡也是隨機的（路人也有一半戴）
+        self.roommate.set_glasses(specs)
+        self.hunter.set_glasses(specs)
         self.studied.clear()
         self.reading = 0.0
         self.stage = None
