@@ -149,7 +149,7 @@ class Intro:
         self.you.root.rotation_y = 90
         self.mate.root.position = BASE + Vec3(0.7, 0, -0.6)
         self.mate.root.rotation_y = -90
-        self.phone_prop = Entity(parent=self.you.arms[1], model="cube", position=(0, -0.62, 0.12),
+        self.phone_prop = Entity(parent=self.you.hands[1], model="cube", position=(0, -0.02, 0.1),
                                  scale=(0.08, 0.14, 0.02), color=color.rgb32(20, 20, 24), enabled=False)
 
     def clear_dorm(self):
