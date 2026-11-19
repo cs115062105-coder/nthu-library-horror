@@ -98,7 +98,7 @@ class Person:
         self.glasses.enabled = glasses
         self.arms, self.elbows, self.hands, self.legs, self.knees = [], [], [], [], []
         for side in (-1, 1):
-            arm = Entity(parent=self.torso, position=(side * 0.255, 0.6, 0))
+            arm = Entity(parent=self.torso, position=(side * 0.2, 0.56, 0))
             self.shirt_parts.append(self._part(arm, body.upper_sleeve_shape(), shirt))
             elbow = Entity(parent=arm, y=-0.33)
             self.shirt_parts.append(self._part(elbow, body.fore_sleeve_shape(), shirt))
