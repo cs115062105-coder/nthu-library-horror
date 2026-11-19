@@ -92,21 +92,26 @@ class Person:
         self.parts = []
         self.shirt_parts = [self._part(self.torso, body.shirt_shape(), shirt)]
         self._part(self.torso, body.body_shape(skin, pants))
-        self.head = Entity(parent=self.torso, y=0.86)
+        self.head = Entity(parent=self.torso, y=0.79, scale=0.8)     # 頭約身高的 1/7
         self._part(self.head, body.head_shape(skin, hair, style, glasses))
-        self.arms, self.legs, self.knees = [], [], []
-        for x in (-0.245, 0.245):
-            arm = Entity(parent=self.torso, position=(x, 0.64, 0), rotation_z=-4 if x < 0 else 4)
-            self.shirt_parts.append(self._part(arm, body.sleeve_shape(), shirt))
-            self._part(arm, body.hand_shape(skin))
+        self.arms, self.elbows, self.hands, self.legs, self.knees = [], [], [], [], []
+        for side in (-1, 1):
+            arm = Entity(parent=self.torso, position=(side * 0.255, 0.6, 0))
+            self.shirt_parts.append(self._part(arm, body.upper_sleeve_shape(), shirt))
+            elbow = Entity(parent=arm, y=-0.33)
+            self.shirt_parts.append(self._part(elbow, body.fore_sleeve_shape(), shirt))
+            self._part(elbow, body.hand_shape(skin, side))      # 掌心朝身體
             self.arms.append(arm)
-        for x in (-0.1, 0.1):
+            self.elbows.append(elbow)
+            self.hands.append(Entity(parent=elbow, y=-0.34))           # 手上拿東西就掛在這裡
+        for x in (-0.088, 0.088):
             leg = Entity(parent=self.hip, position=(x, 0, 0))
             self._part(leg, body.thigh_shape(pants))
             knee = Entity(parent=leg, y=-0.42)
             self._part(knee, body.shin_shape(pants, shoes))
             self.legs.append(leg)
             self.knees.append(knee)
+        self.rest()
         self.walk_t = 0.0
         self.hat = self.bag = None
 
@@ -137,31 +142,47 @@ class Person:
         if bag:
             self.bag = self._part(self.torso, body.backpack_shape(bag), z=-0.17, y=0.1)
 
+    def rest(self):
+        """手自然垂下：稍微離開身體、手肘微彎。"""
+        for i, arm in enumerate(self.arms):
+            arm.rotation_z = 7 if i == 0 else -7
+            self.elbows[i].rotation_x = -12
+
     def walk_anim(self, rate):
         self.walk_t += time.dt * rate
-        swing = math.sin(self.walk_t) * 32
+        swing = math.sin(self.walk_t) * 30
         for i, leg in enumerate(self.legs):
             leg.rotation_x = swing if i else -swing
-            self.knees[i].rotation_x = max(0.0, leg.rotation_x) * 1.1 + 4     # 往後擺的那隻腳膝蓋彎
+            self.knees[i].rotation_x = max(0.0, leg.rotation_x) * 1.3 + 5     # 往後擺的那隻腳膝蓋彎
         for i, arm in enumerate(self.arms):
-            arm.rotation_x = -swing * 0.7 if i else swing * 0.7
+            arm.rotation_x = -swing * 0.65 if i else swing * 0.65
+            self.elbows[i].rotation_x = -12 - max(0.0, -arm.rotation_x) * 0.8     # 手往前擺時手肘彎多一點
         self.hip.y = 0.85 - abs(math.cos(self.walk_t)) * 0.025 + 0.012       # 走路時身體上下輕輕晃
+        self.hip.rotation_y = swing * 0.18                                   # 臀部跟著腳轉
+        self.torso.rotation_y = -swing * 0.42                                # 肩膀反方向轉
+        self.torso.rotation_z = math.sin(self.walk_t) * 1.5
 
     def stand(self):
         self.hip.y = 0.85
-        self.torso.rotation_x = 0
+        self.hip.rotation_y = 0
+        self.torso.rotation = (0, 0, 0)
         self.head.rotation = (0, 0, 0)
         for part in self.legs + self.arms + self.knees:
             part.rotation_x = 0
+        self.rest()
 
     def sit(self):
         self.hip.y = 0.5
+        self.hip.rotation_y = 0
+        self.torso.rotation_y = self.torso.rotation_z = 0
         for leg in self.legs:
             leg.rotation_x = -85      # 大腿往前平放
         for knee in self.knees:
             knee.rotation_x = 85      # 小腿垂下來
-        for arm in self.arms:
-            arm.rotation_x = -48      # 手放在桌上
+        for i, arm in enumerate(self.arms):
+            arm.rotation_x = -25      # 上臂往前、前臂放在桌上
+            arm.rotation_z = 0
+            self.elbows[i].rotation_x = -60
 
 
 class Librarian(Person):
@@ -171,7 +192,7 @@ class Librarian(Person):
         self.game = game
         self._part(self.torso, body.tie_shape((30, 80, 60)))
         self._part(self.torso, body.vest_shape((40, 110, 80)))          # 圖書館的綠色背心、名牌
-        self.books = self._part(self.arms[0], body.book_stack(), position=(0.02, -0.5, 0.1), rotation=(80, 0, 90))
+        self.books = self._part(self.hands[0], body.book_stack(), position=(0.05, 0.03, 0.04), rotation=(80, 0, 90))
         self.shh = Entity(parent=self.root, model="quad", y=2.35, scale=(0.8, 0.4), billboard=True,
                           texture=bubble("噓！", game.font_path, (30, 30, 30)), enabled=False)
         self.target = None
@@ -241,7 +262,7 @@ class Roommate(Person):
         super().__init__(shirt=color.rgb32(120, 125, 135), pants=color.rgb32(40, 60, 100), hair=color.rgb32(25, 22, 20))
         self.game = game
         self.dress(bag=(170, 50, 45))    # 書包；每局開始時 game 會照「今天的穿著」重新換
-        self.book = Entity(parent=self.arms[1], model="cube", position=(-0.15, -0.6, 0.15), scale=(0.25, 0.04, 0.32),
+        self.book = Entity(parent=self.hands[1], model="cube", position=(-0.15, 0.0, 0.12), scale=(0.25, 0.04, 0.32),
                            color=color.rgb32(40, 90, 160))
         self.alarm = Entity(parent=self.root, model="quad", y=2.0, scale=(0.5, 0.5), billboard=True,
                             texture=bubble("！", game.font_path, (220, 30, 30), bg=(255, 245, 160)), enabled=False)
