@@ -11,6 +11,7 @@ from collections import deque
 
 from ursina import Entity, Vec3, color, destroy, time
 
+import body
 from npc import Person, bubble, next_step, step_toward, to_cell
 from world import cell_pos
 
@@ -74,7 +75,10 @@ def dress_outfit(person, outfit):
 class NPC(Person):
     def __init__(self, who, rng, font_path, outfit=None):
         shirts, pants, hair, hat_p, bag_p = LOOKS[who]
-        super().__init__(shirt=color.rgb32(*rng.choice(shirts)), pants=color.rgb32(*pants), hair=color.rgb32(*hair))
+        style = rng.choice(["short", "short", "side", "bangs", "long", "bun"] if who != "教授" else ["short", "side"])
+        skin = rng.choice([(235, 200, 170), (225, 188, 155), (240, 210, 185), (205, 165, 130)])
+        super().__init__(shirt=color.rgb32(*rng.choice(shirts)), pants=pants, hair=hair, skin=skin, style=style,
+                         shoes=rng.choice([(60, 50, 45), (235, 235, 235), (40, 40, 45), (120, 80, 50)]))
         self.who = who
         if outfit:
             dress_outfit(self, outfit)
@@ -83,7 +87,7 @@ class NPC(Person):
             bag = rng.choice(list(BAGS.values())) if rng.random() < bag_p else None
             self.dress(hat=hat, bag=bag)
         if who == "教授":     # 教授：領帶和一本厚厚的書
-            Entity(parent=self.torso, model="cube", position=(0, 0.45, 0.13), scale=(0.07, 0.4, 0.01), color=color.rgb32(150, 40, 40))
+            self._part(self.torso, body.tie_shape((150, 40, 40)))
         self.rng = rng
         self.mode = "walk"
         self.goal = None

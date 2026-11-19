@@ -144,8 +144,7 @@ class Intro:
 
         self.you = Person(shirt=color.rgb32(230, 120, 30), pants=color.rgb32(50, 50, 60), hair=color.rgb32(40, 30, 25))
         self.mate = Person(shirt=color.rgb32(120, 125, 135), pants=color.rgb32(40, 60, 100), hair=color.rgb32(25, 22, 20))
-        Entity(parent=self.mate.torso, model="cube", position=(0, 0.4, -0.2), scale=(0.38, 0.5, 0.16),
-               color=color.rgb32(170, 50, 45))     # 室友的紅書包
+        self.mate.dress(bag=(170, 50, 45))     # 室友的紅書包
         self.you.root.position = BASE + Vec3(-0.7, 0, -0.6)
         self.you.root.rotation_y = 90
         self.mate.root.position = BASE + Vec3(0.7, 0, -0.6)
