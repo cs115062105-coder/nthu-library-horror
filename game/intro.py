@@ -9,7 +9,7 @@ Esc：整段跳過
 import math
 
 from PIL import Image, ImageDraw
-from ursina import Entity, Text, Texture, Vec3, camera, color, destroy, time, window
+from ursina import Cylinder, Entity, Text, Texture, Vec3, camera, color, destroy, time, window
 
 from npc import Person
 
@@ -139,7 +139,7 @@ class Intro:
         Entity(parent=root, model="quad", position=(-2.93, 1.6, 0.9), rotation_y=-90, scale=(0.4, 0.15),
                color=color.rgb32(250, 240, 200))
         box((0, 0.2, -1.2), (1.2, 0.4, 0.7), color.rgb32(110, 90, 70))   # 中間的小茶几
-        Entity(parent=root, model="cylinder", position=(0.3, 0.4, -1.2), scale=(0.12, 0.2, 0.12),
+        Entity(parent=root, model=Cylinder(12), position=(0.3, 0.4, -1.2), scale=(0.12, 0.2, 0.12),
                color=color.rgb32(200, 40, 40))      # 泡麵
 
         self.you = Person(shirt=color.rgb32(230, 120, 30), pants=color.rgb32(50, 50, 60), hair=color.rgb32(40, 30, 25))
