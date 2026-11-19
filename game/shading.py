@@ -95,3 +95,57 @@ def light_scene():
         e.shader = lit_shader           # 換 shader 會把材質的重複次數洗掉，要補回去
         for k, v in keep.items():
             e.set_shader_input(k, v)
+
+
+# 人物用：模型自己帶平滑的法線，看起來圓圓的，不會一格一格；另外加一點輪廓光讓人從背景跳出來。
+person_shader = Shader(name="person_lit", language=Shader.GLSL, vertex="""\
+#version 140
+uniform mat4 p3d_ModelViewProjectionMatrix;
+uniform mat4 p3d_ModelMatrix;
+in vec4 p3d_Vertex;
+in vec3 p3d_Normal;
+in vec4 p3d_Color;
+out vec4 vertex_color;
+out vec3 world_pos;
+out vec3 world_normal;
+
+void main() {
+    gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
+    vertex_color = p3d_Color;
+    world_pos = (p3d_ModelMatrix * p3d_Vertex).xyz;
+    world_normal = normalize(mat3(p3d_ModelMatrix) * p3d_Normal);
+}
+""", fragment="""\
+#version 140
+uniform vec4 p3d_ColorScale;
+uniform vec3 camera_world_position;
+uniform vec4 fog_color;
+uniform float fog_start;
+uniform float fog_end;
+in vec4 vertex_color;
+in vec3 world_pos;
+in vec3 world_normal;
+out vec4 color;
+
+void main() {
+    color = p3d_ColorScale * vertex_color;
+    vec3 n = normalize(world_normal);
+    vec3 to_cam = camera_world_position - world_pos;
+    vec3 v = normalize(to_cam);
+    vec3 key = normalize(vec3(0.35, 1.0, 0.25));
+    vec3 fill = normalize(vec3(-0.5, 0.3, -0.8));
+    float wrap = max((dot(n, key) + 0.4) / 1.4, 0.0);           // 柔和一點的主光
+    float light = 0.52 + 0.1 * n.y + 0.42 * wrap + 0.14 * max(dot(n, fill), 0.0);
+    float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
+    float spec = pow(max(dot(n, normalize(key + v)), 0.0), 24.0);
+    color.rgb = color.rgb * light + vec3(0.10) * rim + vec3(0.06) * spec;
+    float t = clamp(length(to_cam) / (fog_end - fog_start), 0.0, 1.0);
+    color.rgb = mix(color.rgb, fog_color.rgb, t * fog_color.a);
+}
+""", default_input={
+    "fog_color": color.clear,
+    "fog_start": 10,
+    "fog_end": 100,
+    "camera_world_position": Vec3.zero,
+})
+person_shader.continuous_input["camera_world_position"] = _camera_position

@@ -9,7 +9,10 @@ import math
 import random
 from collections import deque
 
-from ursina import Entity, Texture, Vec3, color, raycast, time
+from ursina import Entity, Texture, Vec3, color, raycast, scene, time
+
+import body
+from shading import person_shader
 
 import textures as tx
 from world import CELL, cell_pos
@@ -76,30 +79,48 @@ def bubble(text, font_path, fg, bg=(255, 255, 255)):
 
 
 class Person:
-    """方塊小人：hip 底下掛身體、頭、手腳，坐下時只要調 hip 高度和腳的角度。"""
+    """小人：hip 底下掛身體、頭、手腳（模型在 body.py 捏），坐下時只要調 hip 高度和腳、膝蓋的角度。"""
 
-    def __init__(self, shirt, pants, hair, skin=color.rgb32(235, 200, 170)):
+    def __init__(self, shirt, pants, hair, skin=color.rgb32(235, 200, 170), style="short", glasses=True,
+                 shoes=(60, 50, 45)):
+        rgb = lambda c: c if isinstance(c, tuple) else (int(round(c[0] * 255)), int(round(c[1] * 255)), int(round(c[2] * 255)))
+        skin, pants, hair = rgb(skin), rgb(pants), rgb(hair)
+        self.skin = skin
         self.root = Entity()
         self.hip = Entity(parent=self.root, y=0.85)
         self.torso = Entity(parent=self.hip)
-        self.shirt_parts = [Entity(parent=self.torso, model="cube", y=0.35, scale=(0.45, 0.7, 0.25), color=shirt)]
+        self.parts = []
+        self.shirt_parts = [self._part(self.torso, body.shirt_shape(), shirt)]
+        self._part(self.torso, body.body_shape(skin, pants))
         self.head = Entity(parent=self.torso, y=0.86)
-        Entity(parent=self.head, model="sphere", scale=0.3, color=skin)
-        Entity(parent=self.head, model="cube", position=(0, 0.1, -0.02), scale=(0.31, 0.13, 0.3), color=hair)
-        for x in (-0.06, 0.06):   # 眼鏡
-            Entity(parent=self.head, model="cube", position=(x, 0.01, 0.15), scale=(0.08, 0.06, 0.01),
-                   color=color.rgb32(30, 30, 30))
-        self.arms, self.legs = [], []
-        for x in (-0.29, 0.29):
-            arm = Entity(parent=self.torso, position=(x, 0.65, 0))
-            self.shirt_parts.append(Entity(parent=arm, model="cube", y=-0.3, scale=(0.12, 0.6, 0.12), color=shirt))
+        self._part(self.head, body.head_shape(skin, hair, style, glasses))
+        self.arms, self.legs, self.knees = [], [], []
+        for x in (-0.245, 0.245):
+            arm = Entity(parent=self.torso, position=(x, 0.64, 0), rotation_z=-4 if x < 0 else 4)
+            self.shirt_parts.append(self._part(arm, body.sleeve_shape(), shirt))
+            self._part(arm, body.hand_shape(skin))
             self.arms.append(arm)
-        for x in (-0.11, 0.11):
+        for x in (-0.1, 0.1):
             leg = Entity(parent=self.hip, position=(x, 0, 0))
-            Entity(parent=leg, model="cube", y=-0.42, scale=(0.16, 0.85, 0.16), color=pants)
+            self._part(leg, body.thigh_shape(pants))
+            knee = Entity(parent=leg, y=-0.42)
+            self._part(knee, body.shin_shape(pants, shoes))
             self.legs.append(leg)
+            self.knees.append(knee)
         self.walk_t = 0.0
         self.hat = self.bag = None
+
+    def _part(self, parent, mesh, tint=None, **kw):
+        """掛一塊人物 mesh 上去，換成人物用的 shader（並跟上現在的霧）。"""
+        e = Entity(parent=parent, model=mesh, color=tint if tint is not None else color.white, **kw)
+        e.shader = person_shader
+        e.set_shader_input("fog_color", scene.fog_color)
+        fog = scene.fog_density
+        if isinstance(fog, tuple):
+            e.set_shader_input("fog_start", fog[0])
+            e.set_shader_input("fog_end", fog[1])
+        self.parts.append(e)
+        return e
 
     def dress(self, jacket=None, hat=None, bag=None):
         """換穿著：外套顏色、帽子（"cap" 棒球帽／"beanie" 毛帽／None）、書包顏色（None 就不背）。"""
@@ -111,49 +132,46 @@ class Person:
                 e.enabled = False
         self.hat = self.bag = None
         if hat:
-            col = color.rgb32(*hat[1])
-            self.hat = Entity(parent=self.head)
-            if hat[0] == "cap":
-                Entity(parent=self.hat, model="cube", position=(0, 0.13, -0.01), scale=(0.33, 0.12, 0.32), color=col)
-                Entity(parent=self.hat, model="cube", position=(0, 0.08, 0.2), scale=(0.28, 0.03, 0.16), color=col)
-            else:
-                Entity(parent=self.hat, model="sphere", position=(0, 0.1, -0.01), scale=(0.34, 0.24, 0.34), color=col)
-                Entity(parent=self.hat, model="sphere", position=(0, 0.25, -0.01), scale=0.08, color=color.white)
+            shape = body.cap_shape(hat[1]) if hat[0] == "cap" else body.beanie_shape(hat[1])
+            self.hat = self._part(self.head, shape)
         if bag:
-            self.bag = Entity(parent=self.torso, model="cube", position=(0, 0.4, -0.2), scale=(0.38, 0.5, 0.16),
-                              color=color.rgb32(*bag))
+            self.bag = self._part(self.torso, body.backpack_shape(bag), z=-0.17, y=0.1)
 
     def walk_anim(self, rate):
         self.walk_t += time.dt * rate
-        swing = math.sin(self.walk_t) * 35
+        swing = math.sin(self.walk_t) * 32
         for i, leg in enumerate(self.legs):
             leg.rotation_x = swing if i else -swing
+            self.knees[i].rotation_x = max(0.0, leg.rotation_x) * 1.1 + 4     # 往後擺的那隻腳膝蓋彎
         for i, arm in enumerate(self.arms):
             arm.rotation_x = -swing * 0.7 if i else swing * 0.7
+        self.hip.y = 0.85 - abs(math.cos(self.walk_t)) * 0.025 + 0.012       # 走路時身體上下輕輕晃
 
     def stand(self):
         self.hip.y = 0.85
         self.torso.rotation_x = 0
         self.head.rotation = (0, 0, 0)
-        for part in self.legs + self.arms:
+        for part in self.legs + self.arms + self.knees:
             part.rotation_x = 0
 
     def sit(self):
         self.hip.y = 0.5
         for leg in self.legs:
-            leg.rotation_x = -80      # 腳往前伸到桌子底下
+            leg.rotation_x = -85      # 大腿往前平放
+        for knee in self.knees:
+            knee.rotation_x = 85      # 小腿垂下來
         for arm in self.arms:
-            arm.rotation_x = -60      # 手放在桌上
+            arm.rotation_x = -48      # 手放在桌上
 
 
 class Librarian(Person):
     def __init__(self, game):
-        super().__init__(shirt=color.rgb32(235, 235, 230), pants=color.rgb32(50, 52, 60), hair=color.rgb32(60, 60, 60))
+        super().__init__(shirt=color.rgb32(240, 240, 236), pants=(50, 52, 60), hair=(70, 68, 66), style="side",
+                         skin=(228, 192, 160), shoes=(30, 28, 28))
         self.game = game
-        Entity(parent=self.torso, model="cube", position=(0, 0.33, 0), scale=(0.47, 0.6, 0.27),
-               color=color.rgb32(40, 110, 80))     # 圖書館的綠色背心
-        Entity(parent=self.torso, model="cube", position=(0.1, 0.5, 0.14), scale=(0.1, 0.05, 0.01),
-               color=color.rgb32(250, 250, 250))   # 名牌
+        self._part(self.torso, body.tie_shape((30, 80, 60)))
+        self._part(self.torso, body.vest_shape((40, 110, 80)))          # 圖書館的綠色背心、名牌
+        self.books = self._part(self.arms[0], body.book_stack(), position=(0.02, -0.5, 0.1), rotation=(80, 0, 90))
         self.shh = Entity(parent=self.root, model="quad", y=2.35, scale=(0.8, 0.4), billboard=True,
                           texture=bubble("噓！", game.font_path, (30, 30, 30)), enabled=False)
         self.target = None
@@ -339,8 +357,7 @@ class Hunter(Person):
     def __init__(self, game):
         super().__init__(shirt=color.rgb32(120, 125, 135), pants=color.rgb32(40, 60, 100), hair=color.rgb32(25, 22, 20))
         self.game = game
-        Entity(parent=self.head, model="cube", position=(0, 0.06, 0), scale=(0.32, 0.06, 0.32), color=color.rgb32(245, 245, 245))   # 繃帶
-        Entity(parent=self.head, model="cube", position=(0.1, -0.06, 0.15), scale=(0.08, 0.06, 0.01), color=color.rgb32(240, 200, 200))
+        self._part(self.head, body.bandage_shape())      # 繃帶
         self.alarm = Entity(parent=self.root, model="quad", y=2.0, scale=(0.5, 0.5), billboard=True,
                             texture=bubble("！", game.font_path, (220, 30, 30), bg=(255, 245, 160)), enabled=False)
         self.root.enabled = False
