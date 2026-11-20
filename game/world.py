@@ -29,7 +29,7 @@ SHADE = 0.95    # 白天的圖書館：燈全開，只稍微壓一點亮度避�
 # k  可移動的密集書架（由 banks 決定哪一道走道是開的）  x  斜面落地窗外面（只有看不見的碰撞，外觀由 curves 的玻璃牆負責）
 # N  報紙／期刊架  E  展覽看板  Y  沙發  L  自助取書櫃  H  校史展板  Q  電腦桌  q  還開著的那台電腦
 # V  視聽座位  v  還在播的那台  Z  小舞台  X  清華書房展示櫃  t  圓桌（輕學區）  h  一排排的椅子（清沙龍）
-# k  白色電腦桌（電腦共學區）  m  整面期刊架  d  窗邊閱覽桌  c  白色圓沙發  J  影印機
+# k  白色電腦桌（電腦共學區）  m  整面期刊架  d  窗邊閱覽桌  c  白色圓沙發  J  影印機  w  深色木框玻璃櫃  g  電子看板
 ORDER = ["B1", "1F", "2F", "3F", "4F", "5F", "6F"]
 
 # 各層格子圖照圖書館官網的樓層平面圖排：西南邊是弧形落地窗，北邊一整排是公務區，樓梯間在北邊中間、電梯右邊（每層同一個位置）。
@@ -45,7 +45,7 @@ LEVEL_1F = [
     "#.S..O....O....O....O....W",
     "#.S...............JJ...t.W",
     "#.S......M...............W",
-    "#.....................t..W",
+    "#..g..................t..W",
     "x..N.....................W",
     "xx...O....O.........O..t.W",
     "xxx............E.........W",
@@ -111,7 +111,7 @@ LEVEL_3F = [
     "########....####.###########################",
     "########....####.########UD#################",
     "##########.#####.#####.....#################",
-    "#..........................................W",
+    "#..............................w...........W",
     "#.............................S............W",
     "#.u.u..u..u.u..u..............S............W",
     "#.............................S........e...W",
@@ -272,7 +272,7 @@ LEVEL_6F = [
     "###########################........T#T#T#T##",
     "############################WWWWWWW#########",
 ]
-BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrapJ")
+BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrapJwg")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
 LEVEL_B1 = [
@@ -702,6 +702,10 @@ class World:
                     self.plant(p)
                 elif ch == "J":
                     self.copier(p)
+                elif ch == "w":
+                    self.wood_cabinet(c, r, p)
+                elif ch == "g":
+                    self.signage(c, r, p)
                 elif ch == "x":
                     self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), occludes=False)
         self.curves()
@@ -1968,6 +1972,43 @@ class World:
         self.box(p + Vec3(-0.55, 0.7, 0), (0.18, 0.04, 0.4), col=color.rgb32(214, 212, 206))   # 出紙匣
         self.box(p + Vec3(-0.55, 0.73, 0), (0.15, 0.02, 0.3), col=color.white)                 # 印好的紙
         self.collider(p + Vec3(0, 0.5, 0), (1.1, 1.0, 0.8), occludes=False)
+
+    def facing(self, c, r):
+        """這格旁邊哪一邊是可以走的地方（東西要朝那邊放）。"""
+        sides = [s for s in self.open_sides(c, r) if self.char(c + int(s.x), r - int(s.z)) not in BLOCKED]
+        back_to_wall = [s for s in sides if self.char(c - int(s.x), r + int(s.z)) in "#W"]   # 背靠牆的那一面優先
+        return (back_to_wall or sides or [Vec3(0, 0, -1)])[0]
+
+    def wood_cabinet(self, c, r, p):
+        """3F 服務台旁：一人多高的深色木框玻璃門櫃，裡面幾層擺著 CD、DVD 盒。"""
+        f = self.facing(c, r)
+        side = Vec3(f.z, 0, -f.x)
+        wood = color.rgb32(70, 48, 34)
+        back = p - f * 0.55
+        self.box(back + Vec3(0, 1.15, 0), (CELL if f.z else 0.6, 2.3, 0.6 if f.z else CELL), col=wood)
+        for k in range(4):     # 一層層的東西：深色玻璃後面一排排盒子
+            y = 0.35 + k * 0.5
+            self.box(back + f * 0.22 + Vec3(0, y, 0), (1.7 if f.z else 0.2, 0.3, 0.2 if f.z else 1.7),
+                     col=color.rgb32(*self.rng.choice(((150, 140, 120), (120, 90, 80), (200, 196, 186)))))
+        glass = self.box(back + f * 0.31 + Vec3(0, 1.15, 0), (1.9 if f.z else 0.02, 2.15, 0.02 if f.z else 1.9),
+                         col=color.rgba32(60, 60, 64, 110))
+        self.box(back + f * 0.32 + Vec3(0, 1.15, 0), (0.05 if f.z else 0.03, 2.2, 0.03 if f.z else 0.05), col=wood)   # 中間門縫
+        for s_ in (-1, 1):
+            self.box(back + f * 0.33 + side * 0.1 * s_ + Vec3(0, 1.1, 0), (0.02, 0.25, 0.02), col=color.rgb32(190, 190, 190))
+        self.collider(back + Vec3(0, 1.15, 0), (CELL if f.z else 0.6, 2.3, 0.6 if f.z else CELL))
+
+    def signage(self, c, r, p):
+        """1F 服務台邊的電子看板：銀色立架上一面直立的螢幕，下面一個放傳單的小架子。"""
+        f = self.facing(c, r)
+        steel = color.rgb32(190, 192, 196)
+        self.box(p + Vec3(0, 0.02, 0), (0.6, 0.04, 0.45), col=steel)
+        self.box(p + Vec3(0, 0.55, 0), (0.08, 1.1, 0.08), col=steel)
+        self.box(p + Vec3(0, 1.35, 0), (0.62 if f.z else 0.06, 1.05, 0.06 if f.z else 0.62), col=color.rgb32(30, 30, 34))
+        k = self.rng.randrange(len(self.t["screens"]))
+        self.quad(p + f * 0.035 + Vec3(0, 1.35, 0), (0.56, 0.98), self.t["screens"][k], col=color.rgb(1.3, 1.3, 1.3),
+                  rot=(0, facing_y(f), 0))
+        self.box(p + f * 0.12 + Vec3(0, 0.65, 0), (0.4 if f.z else 0.2, 0.3, 0.2 if f.z else 0.4), col=steel)
+        self.collider(p + Vec3(0, 0.9, 0), (0.6, 1.8, 0.6), occludes=False)
 
     def island_terminals(self, center, a, b, rot):
         """資訊島：橢圓矮櫃上面一圈查詢用的電腦，螢幕朝外，人站在外面查書。"""
