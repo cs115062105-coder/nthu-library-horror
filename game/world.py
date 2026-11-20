@@ -76,7 +76,7 @@ LEVEL_2F = [
     "####.kk...kk.#G..G######################",
     "####.........#GGGG######################",
     "####..t.O..t.########UD#################",
-    "####.........#..........mmmmmmmmmmmmmm.W",
+    "####.........#..........mmmmmmmmmmmmll.W",
     "####.kk...kk...........................W",
     "####.....................N.N.N.N.....d.W",
     "####.........#.........................W",
@@ -272,7 +272,7 @@ LEVEL_6F = [
     "###########################........T#T#T#T##",
     "############################WWWWWWW#########",
 ]
-BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrapJwg")
+BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrapJwgl")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
 LEVEL_B1 = [
@@ -708,6 +708,8 @@ class World:
                     self.wood_cabinet(c, r, p)
                 elif ch == "g":
                     self.signage(c, r, p)
+                elif ch == "l":
+                    self.wall_bench(c, r, p)
                 elif ch == "x":
                     self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), occludes=False)
         self.curves()
@@ -2006,6 +2008,15 @@ class World:
         for s_ in (-1, 1):
             self.box(back + f * 0.33 + side * 0.1 * s_ + Vec3(0, 1.1, 0), (0.02, 0.25, 0.02), col=color.rgb32(190, 190, 190))
         self.collider(back + Vec3(0, 1.15, 0), (CELL if f.z else 0.6, 2.3, 0.6 if f.z else CELL))
+
+    def wall_bench(self, c, r, p):
+        """2F 期刊牆尾端：靠白牆的米色長條軟墊椅（影片 IMG_5326_5），一格一段。"""
+        f = self.facing(c, r)
+        q = p - f * 0.6
+        along = (1.85, 0.5) if f.z else (0.5, 1.85)
+        self.box(q + Vec3(0, 0.08, 0), (along[0] - 0.1, 0.16, along[1] - 0.1), col=color.rgb32(70, 64, 58))
+        self.box(q + Vec3(0, 0.3, 0), (along[0], 0.28, along[1]), col=color.rgb32(196, 172, 132))
+        self.collider(q + Vec3(0, 0.25, 0), (along[0], 0.5, along[1]), occludes=False)
 
     def signage(self, c, r, p):
         """1F 服務台邊的電子看板：銀色立架上一面直立的螢幕，下面一個放傳單的小架子。"""
