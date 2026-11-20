@@ -420,6 +420,8 @@ FLOORS = {
                floor_regions=[("wood", 8, 7, 12, 11)], practice_room=(8, 7, 11, 10),
                bell_lights=[(15, 18), (18, 21), (21, 23), (24, 24), (24, 27)],
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
+                       {'kind': 'darkglass', 'pts': [(38.45, 17.4), (38.45, 20.6)]},    # 影片：媒體區和發呆區中間的深色玻璃牆
+                       {'kind': 'darkglass', 'pts': [(38.45, 22.4), (38.45, 27.6)]},    # 中間留一個門口
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
     "4F": dict(level=LEVEL_4F, floor="carpet_45", stools=8, carts=3, banks=[], safe=set(),
@@ -834,6 +836,14 @@ class World:
                            scale=(d.length() + 0.04, h * 0.85), double_sided=True,
                            texture=self.t["timeline"][(len(self.solids) + 1) % 3], color=color.rgb(1.05, 1.05, 1.05))
                     self.collider(mid + Vec3(0, h / 2, 0), (0.12, h, d.length()), occludes=False).rotation_y = rot
+                    continue
+                if spec["kind"] == "darkglass":   # 3F 媒體區東側：整面深色玻璃牆，映出對面的書架
+                    Entity(model="cube", position=mid + Vec3(0, WALL_H / 2, 0), rotation_y=rot,
+                           scale=(0.06, WALL_H, d.length() + 0.02), collider="box", color=color.rgba32(28, 30, 34, 225))
+                    Entity(model="cube", position=mid + Vec3(0, 0.05, 0), rotation_y=rot,
+                           scale=(0.12, 0.1, d.length() + 0.02), color=color.rgb32(20, 20, 22))
+                    Entity(model="cube", position=mid + Vec3(0, WALL_H - 0.08, 0), rotation_y=rot,
+                           scale=(0.14, 0.16, d.length() + 0.02), color=color.rgb32(36, 30, 26))
                     continue
                 if spec["kind"] == "glow":   # 2F 校史展示區：整面會發光的白色弧牆
                     Entity(model="cube", position=mid + Vec3(0, h / 2, 0), rotation_y=rot, scale=(0.25, h, d.length() + 0.08),
