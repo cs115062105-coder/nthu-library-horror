@@ -478,7 +478,9 @@ FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="carpet_45", stools=8, carts=3
 FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plaster", shelf_fill="light", end_style="blue",
                     stools=14, carts=4,
                     # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
-                    label_colors=((40, 110, 190), (245, 248, 252)),
+                    label_colors=((40, 110, 190), (245, 248, 252)), bay_prefix="60",
+                    # 1 秒一張的影片：電梯廳出來的休息區有一張酒紅色的弧形長椅；研究小間走廊牆邊一台黑色飲水機
+                    red_benches=[(28.6, 13.3, 1.2, 150, 330)], water=[((37, 37), (0, 1))],
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
                                   "Q Science", "QA Math", "T Technology"],
                     west_labels=(22, ["期刊 中文合訂本"]),
@@ -790,6 +792,12 @@ class World:
             self.walkable.discard((c, r))
         for c, r, rot in self.spec.get("banners", []):
             self.rollup_banner(Vec3(c * CELL, 0, -r * CELL), rot, ["WELCOME", "教師指定參考書", "Course Reserved Books"])
+        for c, r, R, a0, a1 in self.spec.get("red_benches", []):
+            self.red_bench(Vec3(c * CELL, 0, -r * CELL), R, a0, a1)
+            self.walkable.discard((round(c), round(r)))
+        for (c, r), d in self.spec.get("water", []):
+            self.water_dispenser(cell_pos(c, r), Vec3(d[0], 0, -d[1]))
+            self.walkable.discard((c, r))
         if "hss" in self.spec:
             self.hss_exhibit(self.spec["hss"])
         for c, r in self.spec.get("plinths", []):
@@ -1145,9 +1153,11 @@ class World:
                     labels = self.spec["west_labels"][1]    # 6F 西北角是中文期刊合訂本
                 label = labels[(run - 1) % len(labels)]
                 code, name = label.split(" ")
+                if "bay_prefix" in self.spec:   # 6F：藍牌上方印大大的架號 60xx，下面才是索書號（影片裡的 6039、6051…）
+                    code, name = f"{self.spec['bay_prefix']}{39 + (run * 2) % 24:02d}", f"{code} {name}"
                 bg, fg = self.spec.get("label_colors", ((245, 200, 40), (40, 36, 30)) if white else ((30, 34, 40), (235, 235, 225)))
                 self.quad(p + end * (CELL / 2 + 0.045) + Vec3(0, 2.0 if blue_end else 1.75, 0), (0.6 if blue_end else 0.5, 0.28 if blue_end else 0.26),
-                          self.text_tex([code, name], w=160, h=80, bg=bg, fg=fg, sizes=[30, 20]),
+                          self.text_tex([code, name], w=160, h=80, bg=bg, fg=fg, sizes=[44 if "bay_prefix" in self.spec else 30, 16 if "bay_prefix" in self.spec else 20]),
                           rot=(0, facing_y(end), 0))
         self.collider(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62))
 
@@ -1520,6 +1530,28 @@ class World:
             seg.rotation_y = math.degrees(a)
             leg = self.box(q + Vec3(0, 0.1, 0), (0.04, 0.2, 0.04), col=color.rgb32(170, 172, 176))
         self.collider(p + Vec3(0, 0.25, 0), (2.4, 0.5, 2.4), occludes=False)
+
+    def red_bench(self, p, R, a0, a1):
+        """6F 休息區：酒紅色的弧形長椅，上面一層淺色坐墊。"""
+        n = 10
+        for k in range(n):
+            a = math.radians(a0 + (a1 - a0) * (k + 0.5) / n)
+            q = p + Vec3(math.sin(a), 0, math.cos(a)) * R
+            w = 2 * math.pi * R * abs(a1 - a0) / 360 / n + 0.03
+            seg = self.box(q + Vec3(0, 0.2, 0), (w, 0.4, 0.5), col=color.rgb32(128, 34, 42))
+            seg.rotation_y = math.degrees(a)
+            top = self.box(q + Vec3(0, 0.43, 0), (w, 0.06, 0.48), col=color.rgb32(196, 92, 92))
+            top.rotation_y = math.degrees(a)
+        self.collider(p + Vec3(0, 0.25, 0), (R * 2 + 0.5, 0.5, R * 2 + 0.5), occludes=False)
+
+    def water_dispenser(self, p, d):
+        """黑色的飲水機，靠牆放。"""
+        q = p - d * 0.7
+        self.box(q + Vec3(0, 0.65, 0), (0.42, 1.3, 0.42), col=color.rgb32(28, 28, 30))
+        self.box(q + d * 0.2 + Vec3(0, 0.95, 0), (0.3, 0.3, 0.04), col=color.rgb32(60, 62, 66))
+        self.box(q + d * 0.2 + Vec3(0, 1.2, 0), (0.12, 0.05, 0.03), col=color.rgb(0.3, 1.3, 1.6))
+        self.box(q + d * 0.2 + Vec3(0, 0.78, 0), (0.24, 0.02, 0.1), col=color.rgb32(150, 152, 156))
+        self.collider(q + Vec3(0, 0.65, 0), (0.45, 1.3, 0.45), occludes=False)
 
     def glass(self, c, r, p):
         along_x = self.char(c - 1, r) == "G" or self.char(c + 1, r) == "G"
