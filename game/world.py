@@ -371,7 +371,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="carpet_2f", stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -563,6 +563,7 @@ class World:
         self.t["dvds"] = [t(tx.dvds(i)) for i in range(4)]
         self.t["timeline"] = [t(tx.timeline(i)) for i in range(3)]
         self.t["light_books"] = [t(tx.books_hd(i, rows=6)) for i in range(4)]
+        self.t["light_books5"] = [t(tx.books_hd(i + 4, rows=5)) for i in range(3)]   # 3F：跟 DVD 架一樣五層
         for f in sorted(PHOTOS.glob("carpet_*.png")):     # 從各樓層影片截下來的地毯
             self.t[f.stem] = t(tx.photo_tile(f, 1024))
         self.t["stripes6"] = t(tx.stripes((160, 158, 152), (72, 70, 70), 23))
@@ -605,7 +606,8 @@ class World:
         w, d = self.cols * CELL, self.rows * CELL
         center = Vec3((self.cols - 1) * CELL / 2, 0, -(self.rows - 1) * CELL / 2)
         Entity(model="quad", position=center, scale=(w, d), rotation_x=90, texture=self.t[self.spec["floor"]],
-               texture_scale=(self.cols * self.spec.get("floor_rep", 1), self.rows * self.spec.get("floor_rep", 1)), color=color.rgb(SHADE, SHADE, SHADE))
+               texture_scale=(self.cols * self.spec.get("floor_rep", 1), self.rows * self.spec.get("floor_rep", 1)),
+               color=color.rgb(*[SHADE * self.spec.get("floor_shade", 1.0)] * 3))
         ceiling = self.spec.get("ceiling_tex", "ceiling")
         k = 1 if ceiling in ("plaster", "slats") else 3    # 嵌燈兩公尺一盞；礦纖板 60 公分一塊
         Entity(model="quad", position=center + Vec3(0, WALL_H, 0), scale=(w, d), rotation_x=-90,
@@ -1058,8 +1060,9 @@ class World:
     def shelf(self, c, r, p, run):
         self.shelf_runs.setdefault(run, []).append((c, r))
         tex = self.book_tex[(c * 7 + r * 3) % len(self.book_tex)]
-        if self.spec.get("shelf_fill") == "dvd":      # 3F 媒體區擺的是 DVD
-            tex = self.t["dvds"][(c * 7 + r * 3) % 4]
+        if self.spec.get("shelf_fill") == "dvd":      # 3F：影片裡大多是米白色的書，每三格夾一格 DVD
+            k = c * 7 + r * 3
+            tex = self.t["dvds"][k % 4] if k % 3 == 0 else self.t["light_books5"][k % 3]
         elif self.spec.get("shelf_fill") == "light":  # 6F 西文書，書背顏色淺
             tex = self.t["light_books"][(c * 7 + r * 3) % 4]
         blue_end = self.spec.get("end_style") == "blue"
@@ -2096,18 +2099,23 @@ class World:
             self.box(p + Vec3(x, 2.95, 0), (0.015, 0.3, 0.015), col=color.rgb32(60, 60, 60))
 
     def ceiling_lights(self):
+        strip = self.spec.get("ceiling_tex") in ("plaster", "slats")     # 1F 以上是細長的線型燈
         for (c, r) in sorted(self.walkable | self.bank_cells()):
-            if (c + r) % 2 or self.level[r][c] == "R":
+            if self.level[r][c] == "R":
+                continue
+            # 線型燈：影片裡是一整條一整條平行的長燈，隔一欄一條、整欄連起來；方形燈板還是棋盤排
+            if (c % 2 if strip else (c + r) % 2):
                 continue
             p = cell_pos(c, r)
             safe = (c, r) in self.spec["safe"]     # 夜讀區的燈比較暖
             state = "on"                           # 白天：燈全部是好的
-            strip = self.spec.get("ceiling_tex") in ("plaster", "slats")     # 1F 以上是細長的線型燈
-            panel = Entity(model="quad", position=p + Vec3(0, WALL_H - 0.01, 0), scale=(0.12, 1.8) if strip else (0.6, 1.2),
-                           rotation=(-90, 0, 0), texture=self.t["panel"])
-            pool = Entity(model="quad", position=p + Vec3(0, 0.02, 0), scale=4.2 if safe else 3.2,
-                          rotation=(90, 0, 0), texture=self.t["glow"],
-                          color=color.rgba32(255, 230, 180, 90) if safe else color.rgba32(220, 235, 255, 50))
+            panel = Entity(model="quad", position=p + Vec3(0, WALL_H - 0.01, 0), scale=(0.1, CELL) if strip else (0.6, 1.2),
+                           rotation=(-90, 0, 0), texture=None if strip else self.t["panel"])
+            pool = None
+            if not strip or r % 2 == 0:      # 線型燈每格都有，地上的光暈只留一半
+                pool = Entity(model="quad", position=p + Vec3(0, 0.02, 0), scale=4.2 if safe else 3.2,
+                              rotation=(90, 0, 0), texture=self.t["glow"],
+                              color=color.rgba32(255, 230, 180, 90) if safe else color.rgba32(220, 235, 255, 50))
             light = [panel, pool, state]
             self.set_light(light, state != "dead")
             self.lights.append(light)
@@ -2115,8 +2123,9 @@ class World:
     @staticmethod
     def set_light(light, on):
         panel, pool, _ = light
-        panel.color = color.white if on else color.rgb32(70, 70, 70)
-        pool.enabled = on
+        panel.color = color.rgb(1.4, 1.4, 1.36) if on else color.rgb32(70, 70, 70)   # 比 1 亮 = 自己發光
+        if pool:
+            pool.enabled = on
 
 
     # ---------- 可移動的密集書架 ----------

@@ -52,6 +52,8 @@ void main() {
     vec3 key = normalize(vec3(0.35, 1.0, 0.25));
     vec3 fill = normalize(vec3(-0.5, 0.3, -0.8));
     float light = 0.74 + 0.12 * abs(n.y) + 0.20 * max(dot(n, key), 0.0) + 0.08 * max(dot(n, fill), 0.0);
+    if (n.y < -0.5) light += 0.12;     // 天花板：被白色地板和牆反射的光照亮，不要灰灰的
+    else if (abs(n.y) < 0.5) light += 0.05;   // 牆面也亮一點，影片裡是乾淨的白牆
 
     if (abs(n.y) < 0.5) {      // 牆、書架側面：靠地板和天花板的地方暗一點
         float y = world_pos.y;
@@ -62,7 +64,7 @@ void main() {
     if (glow > 1.01) light = 1.0;      // 燈和螢幕本身會發光
     color.rgb *= light;
 
-    float t = clamp(length(to_cam) / (fog_end - fog_start), 0.0, 1.0);
+    float t = clamp((length(to_cam) - fog_start) / (fog_end - fog_start), 0.0, 1.0);   // 霧從 fog_start 才開始
     color.rgb = mix(color.rgb, fog_color.rgb, t * fog_color.a);
 }
 """, default_input={
@@ -167,7 +169,7 @@ void main() {
     float rim = pow(1.0 - max(dot(n, v), 0.0), 3.0);
     float spec = pow(max(dot(n, normalize(key + v)), 0.0), 24.0);
     color.rgb = color.rgb * light + vec3(0.10) * rim + vec3(0.06) * spec;
-    float t = clamp(length(to_cam) / (fog_end - fog_start), 0.0, 1.0);
+    float t = clamp((length(to_cam) - fog_start) / (fog_end - fog_start), 0.0, 1.0);   // 霧從 fog_start 才開始
     color.rgb = mix(color.rgb, fog_color.rgb, t * fog_color.a);
 }
 """, default_input={})

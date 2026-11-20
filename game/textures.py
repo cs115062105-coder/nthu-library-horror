@@ -6,7 +6,7 @@
 import math
 import random
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageEnhance, ImageFont
 
 
 def _noise(img, amount, rng):
@@ -309,11 +309,11 @@ def white_wall():
 
 
 def plaster():
-    """1F 的白色平頂天花板，一格一盞圓形嵌燈。"""
-    img = Image.new("RGB", (32, 32), (238, 238, 240))
+    """白色平頂天花板，一格一盞圓形嵌燈：細細的銀色外框、整片發亮的燈面。"""
+    img = Image.new("RGB", (64, 64), (240, 240, 242))
     d = ImageDraw.Draw(img)
-    d.ellipse([12, 12, 19, 19], fill=(200, 200, 205))
-    d.ellipse([14, 14, 17, 17], fill=(255, 255, 250))
+    d.ellipse([25, 25, 38, 38], fill=(190, 192, 198))
+    d.ellipse([26, 26, 37, 37], fill=(255, 255, 252))
     return img
 
 
@@ -864,7 +864,8 @@ def window_panorama(n=12, seed=11):
         d.rectangle([px, py - 14, px + 4, py], fill=rng.choice([(60, 60, 70), (200, 60, 50), (40, 90, 160), (230, 200, 60)]))
         d.ellipse([px - 1, py - 20, px + 5, py - 14], fill=(230, 200, 170))
     img = img.filter(ImageFilter.GaussianBlur(2.2))
-    img = Image.blend(img, Image.new("RGB", img.size, (250, 252, 255)), 0.18)    # 從室內看出去有點過曝
+    img = ImageEnhance.Color(img).enhance(0.55)     # 影片裡窗外顏色很淡
+    img = Image.blend(img, Image.new("RGB", img.size, (250, 252, 255)), 0.4)    # 從室內看出去過曝
     out = []
     for i in range(n):
         piece = img.crop((i * sw, 0, (i + 1) * sw, h))
