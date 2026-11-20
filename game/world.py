@@ -78,17 +78,17 @@ LEVEL_2F = [
     "####..t.O..t.########UD#################",
     "####.........#..........mmmmmmmmmmmmmm.W",
     "####.kk...kk...........................W",
-    "####.................N.N.N.N.N.N.....d.W",
+    "####.....................N.N.N.N.....d.W",
     "####.........#.........................W",
     "##############....O....O....O....O....OW",
-    "######.................................W",
+    "######.............BBB..........BBB....W",
     "######....................c...c....c.d.W",
-    "####xxxx......H.2...N.N.N....N.N.N...d.W",
+    "####xxxx......H.2...BBB......BBB.....d.W",
     "####xxxxxx...............M.............W",
     "####xxxxxxx....H..O....O....O....O....OW",
     "####xxxxxxxxx..........................W",
     "####xxxxxxxxxx...H........c...c......d.W",
-    "####xxxxxxxxxxx.........N....N.N.N...d.W",
+    "####xxxxxxxxxxx........BBB......BBB..d.W",
     "####xxxxxxxxxxxx.......................W",
     "####xxxxxxxxxxxxx.O....O....O....O....OW",
     "####xxxxxxxxxxxxxx........BBBBBB.......W",
@@ -246,14 +246,14 @@ LEVEL_6F = [
     "W...T...T...T..T..........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
-    "#xxxxxxxxxx...n..................BBBB.BBBB.W",
-    "#xxxxxxxxxxx.....n.......M...n.............W",
-    "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
+    "#xxxxxxxxxx...n.............BBBB.BBBB.BBBB.W",
+    "#xxxxxxxxxxx.....n.......M.................W",
+    "#xxxxxxxxxxxxx..............BBBB.BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxx.n.......a................W",
-    "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
-    "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
-    "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxxx..........BBBB.BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxxxx..n.....................W",
+    "#xxxxxxxxxxxxxxxxxxx........BBBB.BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
     "#xxxxxxxxxxxxxxxxxxxxx......n..n..n.....a.pW",
@@ -371,7 +371,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -1100,6 +1100,8 @@ class World:
                     face = p + end * (CELL / 2 + 0.035)
                     self.box(face + Vec3(0, 1.45, 0), (0.02, 0.9, 0.62), col=color.rgb32(196, 36, 40))
                     code = f"{'TR'[run % 2]}{(run * 37 + c) % 400 + 1:03d}"
+                    if r < 26:     # 北邊現期期刊區的架子：紅牌印 2001、2002…（影片裡的樣子）
+                        code = f"20{(run * 5 + c) % 12 + 1:02d}"
                     self.quad(face + end * 0.015 + Vec3(0, 1.62, 0), (0.56, 0.3),
                               self.text_tex([code], w=160, h=86, bg=(196, 36, 40), fg=(255, 255, 255), sizes=[58]),
                               rot=(0, facing_y(end), 0))
@@ -1472,6 +1474,27 @@ class World:
             Entity(parent=self.group(self.t["wall"]), model=fastops.cylinder(resolution=14, radius=0.5, height=WALL_H),
                    position=p, texture=self.t["wall"], texture_scale=(3, 1))
         self.collider(p + Vec3(0, WALL_H / 2, 0), (0.9, WALL_H, 0.9))
+        self.pillars = getattr(self, "pillars", 0) + 1
+        if self.pillars % 3 == 1:      # 影片裡很多柱子腳邊都有一支紅色滅火器
+            d = Vec3(*self.rng.choice(((0, 0, 1), (0, 0, -1), (1, 0, 0), (-1, 0, 0))))
+            q = p + d * 0.62
+            Entity(model=fastops.cylinder(resolution=10, radius=0.085, height=0.5), position=q, color=color.rgb32(200, 30, 30))
+            self.box(q + Vec3(0, 0.55, 0), (0.07, 0.1, 0.07), col=color.rgb32(30, 30, 32))
+            self.box(q + Vec3(0.06, 0.58, 0), (0.12, 0.02, 0.03), col=color.rgb32(30, 30, 32))
+            self.quad(q + d * 0.087 + Vec3(0, 0.28, 0), (0.1, 0.14), col=color.rgb32(245, 235, 200), rot=(0, facing_y(d), 0))
+        if (round(p.x / CELL), round(-p.z / CELL)) in self.spec.get("pillar_benches", ()):
+            self.pillar_bench(p)
+
+    def pillar_bench(self, p):
+        """2F 學位論文區：繞著柱子半圈的橘色波浪長椅。"""
+        orange = color.rgb32(238, 150, 30)
+        for k in range(9):
+            a = math.radians(-90 + k * 22.5)
+            q = p + Vec3(math.sin(a), 0, math.cos(a)) * 0.82
+            seg = self.box(q + Vec3(0, 0.22 + 0.05 * math.sin(k * 1.4), 0), (0.42, 0.14, 0.34), col=orange)
+            seg.rotation_y = math.degrees(a)
+            leg = self.box(q + Vec3(0, 0.1, 0), (0.04, 0.2, 0.04), col=color.rgb32(170, 172, 176))
+        self.collider(p + Vec3(0, 0.25, 0), (2.4, 0.5, 2.4), occludes=False)
 
     def glass(self, c, r, p):
         along_x = self.char(c - 1, r) == "G" or self.char(c + 1, r) == "G"
