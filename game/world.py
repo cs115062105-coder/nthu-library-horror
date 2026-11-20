@@ -29,7 +29,7 @@ SHADE = 0.95    # 白天的圖書館：燈全開，只稍微壓一點亮度避�
 # k  可移動的密集書架（由 banks 決定哪一道走道是開的）  x  斜面落地窗外面（只有看不見的碰撞，外觀由 curves 的玻璃牆負責）
 # N  報紙／期刊架  E  展覽看板  Y  沙發  L  自助取書櫃  H  校史展板  Q  電腦桌  q  還開著的那台電腦
 # V  視聽座位  v  還在播的那台  Z  小舞台  X  清華書房展示櫃  t  圓桌（輕學區）  h  一排排的椅子（清沙龍）
-# k  白色電腦桌（電腦共學區）  m  整面期刊架  d  窗邊閱覽桌  c  白色圓沙發
+# k  白色電腦桌（電腦共學區）  m  整面期刊架  d  窗邊閱覽桌  c  白色圓沙發  J  影印機
 ORDER = ["B1", "1F", "2F", "3F", "4F", "5F", "6F"]
 
 # 各層格子圖照圖書館官網的樓層平面圖排：西南邊是弧形落地窗，北邊一整排是公務區，樓梯間在北邊中間、電梯右邊（每層同一個位置）。
@@ -43,13 +43,13 @@ LEVEL_1F = [
     "#.S....N............######",
     "#.S.......QQQQ......######",
     "#.S..O....O....O....O....W",
-    "#.S....................t.W",
-    "#.S......M...............W",
-    "#.....................t..W",
+    "#.S...............JJ...t.W",
+    "#.S...Y..M...............W",
+    "#..........t..........t..W",
     "x..N.....................W",
     "xx...O....O.........O..t.W",
     "xxx............E.........W",
-    "xxxx...................1.W",
+    "xxxx....Y..............1.W",
     "xxxx..................t..W",
     "xxxxx..P.................W",
     "xxxxxx....O....O....O..t.W",
@@ -78,17 +78,17 @@ LEVEL_2F = [
     "####..t.O..t.########UD#################",
     "####.........#..........mmmmmmmmmmmmmm.W",
     "####.kk...kk...........................W",
-    "####.....................N.N.N.N.....d.W",
-    "####.........#.........................W",
+    "####.................N...N.N.N.N.....d.W",
+    "####.........#.....................c...W",
     "##############....O....O....O....O....OW",
     "######.................................W",
     "######....................c...c....c.d.W",
-    "####xxxx......H.2....................d.W",
+    "####xxxx......H.2...N.N.N.......N....d.W",
     "####xxxxxx...............M.............W",
     "####xxxxxxx....H..O....O....O....O....OW",
     "####xxxxxxxxx..........................W",
     "####xxxxxxxxxx...H........c...c......d.W",
-    "####xxxxxxxxxxx......................d.W",
+    "####xxxxxxxxxxx.....N.N.N....N.N.N...d.W",
     "####xxxxxxxxxxxx.......................W",
     "####xxxxxxxxxxxxx.O....O....O....O....OW",
     "####xxxxxxxxxxxxxx........BBBBBB.......W",
@@ -113,19 +113,19 @@ LEVEL_3F = [
     "##########.#####.#####.....#################",
     "#..........................................W",
     "#.............................S............W",
-    "#.u.u..u..u.u..u..............S............W",
-    "#.............................S............W",
+    "#.u.u..u..u.u..u.........e....S............W",
+    "#.............................S........e...W",
     "#CCC5CCC.C..O....O....O....O....O....O.....W",
-    "###########..............M...............e.W",
+    "###########...Y..........M...............e.W",
     "#xxxxxxxxxx.................BBBB.BBBB......W",
-    "#xxxxxxxxxxx...VV.VV.....................e.W",
-    "#xxxxxxxxxxxxx..............BBBB.BBBB......W",
+    "#xxxxxxxxxxx...VV.VV....Y................e.W",
+    "#xxxxxxxxxxxxx..............BBBB.BBBB..Y...W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxx..VV..VV................e.W",
     "#xxxxxxxxxxxxxxxxx..........BBBB.BBBB......W",
     "#xxxxxxxxxxxxxxxxxx......................e.W",
     "#xxxxxxxxxxxxxxxxxxx..VV.VV.BBBB.BBBB......W",
-    "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
+    "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O..e..W",
     "#xxxxxxxxxxxxxxxxxxxxx.....................W",
     "#xxxxxxxxxxxxxxxxxxxxx..VV.v.............e.W",
     "#xxxxxxxxxxxxxxxxxxxxxx......j..j..O.......W",
@@ -143,26 +143,26 @@ LEVEL_4F = [
     "#.##########################################",
     "#.######.................###################",
     "#.######...n...n...n.....###################",
-    "#.######.................###################",
+    "#.######.....a.......n...###################",
     "#.######...n...n...n.....###################",
     "W.######....O....O....O..UD#################",
     "W.........6..................H.H.H.H...H...W",
     "W...n...n...n...n..........................W",
-    "Wp.......................r........a.....a..W",
+    "Wp....n.......n..........r....a...a.....a..W",
     "W...n...n...n...n.........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
-    "#xxxxxxxxxx...n..................BBBB.BBBB.W",
+    "#xxxxxxxxxx...n............a.....BBBB.BBBB.W",
     "#xxxxxxxxxxx.....n.......M...n.............W",
-    "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
+    "#xxxxxxxxxxxxx.....a.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
-    "#xxxxxxxxxxxxxxxx.n.......a................W",
-    "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxx.n.......a...a............W",
+    "#xxxxxxxxxxxxxxxxx.....n.........BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
     "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
-    "#xxxxxxxxxxxxxxxxxxxxx......BBBB.BBBB...a.pW",
+    "#xxxxxxxxxxxxxxxxxxxxx...a..BBBB.BBBB...a.pW",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
@@ -172,7 +172,7 @@ LEVEL_4F = [
     "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
     "###########################GGGGGGGGG.#######",
     "###########################................#",
-    "###########################..............Y.#",
+    "###########################.........n....Y.#",
     "###########################..X.X..X....X...#",
     "###########################..............Y.#",
     "###########################................#",
@@ -188,7 +188,7 @@ LEVEL_5F = [
     "#T.#######................GGGGGGGGGGGGGGGGG#",
     "##.#######..n..n..n..n..n.........BBB.BBBB.#",
     "#..#######..................n..n...........#",
-    "#T.#######........................BBB.BBBB.#",
+    "#T.#######....n.....n.............BBB.BBBB.#",
     "##.#######..O....O....###########....O.....#",
     "#..#####..............###########..........#",
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
@@ -196,28 +196,28 @@ LEVEL_5F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
-    "W...n...n...n..n...........................W",
-    "Wp........................a.......a.....a..W",
+    "W...n...n...n..n..n...................n....W",
+    "Wp....n...a...............a...a...a.....a..W",
     "W...n...n...n..n..........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
-    "#xxxxxxxxxx...n..................BBBB.BBBB.W",
+    "#xxxxxxxxxx...n............a.....BBBB.BBBB.W",
     "#xxxxxxxxxxx.....n.......M...n.............W",
-    "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
+    "#xxxxxxxxxxxxx.....a.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
-    "#xxxxxxxxxxxxxxxx.n.......a................W",
-    "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxx.n.......a...a............W",
+    "#xxxxxxxxxxxxxxxxx.....n.........BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
     "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
-    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n.....a.pW",
+    "#xxxxxxxxxxxxxxxxxxxxx...a..n..n..n.....a.pW",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
-    "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
+    "#xxxxxxxxxxxxxxxxxxxxxxx......n............W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx....n....n..#######",
-    "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxxx.....a.....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
     "###########################O....O....#######",
     "###########################..n....n.......##",
@@ -233,7 +233,7 @@ LEVEL_6F = [
     "#T.#######................GGGGGGGGGGGGGGGGG#",
     "##.#######..n..n..n..n..n.........BBB.BBBB.#",
     "#..#######..................n..n...........#",
-    "#T.#######........................BBB.BBBB.#",
+    "#T.#######....n.....n.............BBB.BBBB.#",
     "##.#######..O....O....###########....O.....#",
     "#..#####..............###########..........#",
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
@@ -241,28 +241,28 @@ LEVEL_6F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
-    "W...T...T...n..n...........................W",
-    "Wp........................a.......a.....a..W",
+    "W...T...T...n..n..n...................n....W",
+    "Wp....n...a...............a...a...a.....a..W",
     "W...T...T...T..T..........................pW",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########.................a..............W",
-    "#xxxxxxxxxx...n..................BBBB.BBBB.W",
+    "#xxxxxxxxxx...n............a.....BBBB.BBBB.W",
     "#xxxxxxxxxxx.....n.......M...n.............W",
-    "#xxxxxxxxxxxxx...................BBBB.BBBB.W",
+    "#xxxxxxxxxxxxx.....a.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
-    "#xxxxxxxxxxxxxxxx.n.......a................W",
-    "#xxxxxxxxxxxxxxxxx...............BBBB.BBBB.W",
+    "#xxxxxxxxxxxxxxxx.n.......a...a............W",
+    "#xxxxxxxxxxxxxxxxx.....n.........BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxx..n.......n.............W",
     "#xxxxxxxxxxxxxxxxxxx.............BBBB.BBBB.W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O.....W",
     "#xxxxxxxxxxxxxxxxxxxxxn....................W",
-    "#xxxxxxxxxxxxxxxxxxxxx......n..n..n.....a.pW",
+    "#xxxxxxxxxxxxxxxxxxxxx...a..n..n..n.....a.pW",
     "#xxxxxxxxxxxxxxxxxxxxxx.............P......W",
-    "#xxxxxxxxxxxxxxxxxxxxxxx...................W",
+    "#xxxxxxxxxxxxxxxxxxxxxxx......n............W",
     "#xxxxxxxxxxxxxxxxxxxxxxx...O....O....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx............#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxx....n....n..#######",
-    "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
+    "#xxxxxxxxxxxxxxxxxxxxxxxxx.....a.....#######",
     "#xxxxxxxxxxxxxxxxxxxxxxxxx...........#######",
     "###########################O....O....#######",
     "###########################..n....n.......##",
@@ -272,7 +272,7 @@ LEVEL_6F = [
     "###########################........T#T#T#T##",
     "############################WWWWWWW#########",
 ]
-BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrap")
+BLOCKED = set("#WBKTCSOGDUkNEYLHQqVvZXxthmdcuejnrapJ")
 
 # B1 地下書庫：兩區可移動的密集書架。轉書架尾端的手輪，你站的那一道走道就會打開。
 LEVEL_B1 = [
@@ -371,7 +371,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -397,7 +397,7 @@ FLOORS = {
                        {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
-    "3F": dict(level=LEVEL_3F, floor="carpet_3f", stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10)],
+    "3F": dict(level=LEVEL_3F, floor="carpet_3f", island=((21.08, 15.79), 2.3, 1.4, 25), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
@@ -436,7 +436,7 @@ FLOORS = {
                # 照 4F 實景照片：深色木條天花板、灰褐條紋地毯、白書架黃色側牌、NTHU 字母書牆、雲朵閱覽桌
                wall_texts=[((29, 12), (0, -1), ("清華圖書館 百年物語", "Visit the Library. Read a Story"))],
                nthu_wall=(27, 35, 36),
-               halo=dict(center=(21.04, 15.47), radius=2.4),
+               halo=dict(center=(21.04, 15.47), radius=2.4), island=((21.04, 15.47), 2.3, 1.6, 25),
                curves=[{'kind': 'glass', 'pts': [(10.5, 17.5), (10.83, 18.04), (12.07, 18.68), (13.28, 19.37), (14.46, 20.12), (15.59, 20.93), (16.69, 21.79), (17.75, 22.71), (18.76, 23.67), (19.72, 24.68), (20.63, 25.74), (21.49, 26.84), (22.3, 27.98), (23.05, 29.15), (23.74, 30.36), (24.38, 31.61), (24.95, 32.88), (25.46, 34.18), (25.91, 35.5)]},
                        {'kind': 'low', 'h': 1.3, 'pts': [(12.53, 16.46), (17.14, 16.46), (19.09, 17.77)]},     # 閱覽區的矮書櫃隔間
                        {'kind': 'low', 'h': 1.3, 'pts': [(20.51, 18.84), (22.11, 20.61), (24.23, 22.91), (25.48, 24.51), (25.65, 27.17)]},
@@ -453,6 +453,7 @@ FLOORS = {
 # 5F、6F 的弧形落地窗、閱覽區的矮櫃隔間、資訊島都跟 4F 同一個位置
 _UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=True, white_shelves=True,
               sign_colors=((236, 236, 246), (72, 58, 128)), halo=dict(center=(21.04, 15.47), radius=2.4),
+              island=((21.04, 15.47), 2.3, 1.6, 25),
               curves=FLOORS["4F"]["curves"],
               # 中間核心西側的電梯廳：黑色亮面牆、東牆兩部電梯、北牆樓層指引
               elevator=dict(cells=(22, 8, 23, 10), doors=[(24, 8), (24, 10)], buttons=(24, 9), directory=(22, 7)),
@@ -699,9 +700,13 @@ class World:
                     self.armchairs(p)
                 elif ch == "p":
                     self.plant(p)
+                elif ch == "J":
+                    self.copier(p)
                 elif ch == "x":
                     self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), occludes=False)
         self.curves()
+        if "island" in self.spec:
+            self.island_terminals(*self.spec["island"])
         if "circle" in self.spec:
             self.circle(self.spec["circle"])
         for name, *rect in self.spec.get("floor_regions", []):
@@ -1556,10 +1561,18 @@ class World:
 
     def rack(self, c, r, p):
         """報紙／期刊架：斜的架子上插著一份份報紙。"""
-        self.box(p + Vec3(0, 0.6, 0), (CELL * 0.9, 1.2, 0.5), self.t["wood"])
-        for i in range(4):
-            self.box(p + Vec3(-0.65 + i * 0.43, 1.0, 0.27), (0.36, 0.45, 0.02), col=color.rgb32(215, 210, 195))
-            self.box(p + Vec3(-0.65 + i * 0.43, 1.1, 0.285), (0.3, 0.04, 0.005), col=color.rgb32(40, 40, 40))
+        white = self.spec.get("white")
+        self.box(p + Vec3(0, 0.6, 0), (CELL * 0.9, 1.2, 0.5), None if white else self.t["wood"],
+                 col=color.rgb32(240, 240, 238) if white else color.white)
+        mags = self.floor != "1F"      # 2F 以上是期刊架：兩面斜板上立著一本本雜誌（影片裡是白色的架子）
+        for side in (1, -1):
+            if mags:
+                self.quad(p + Vec3(0, 0.78, side * 0.255), (CELL * 0.86, 0.9), self.t["mags"][(c + r + side) % 4],
+                          rot=(0, 0 if side < 0 else 180, 0))
+                continue
+            for i in range(4):
+                self.box(p + Vec3(-0.65 + i * 0.43, 1.0, side * 0.27), (0.36, 0.45, 0.02), col=color.rgb32(215, 210, 195))
+                self.box(p + Vec3(-0.65 + i * 0.43, 1.1, side * 0.285), (0.3, 0.04, 0.005), col=color.rgb32(40, 40, 40))
         self.collider(p + Vec3(0, 0.6, 0), (CELL * 0.9, 1.2, 0.5), occludes=False)
         self.racks += 1
         if self.racks == 1:   # 第一份報紙：日期是明天
@@ -1918,6 +1931,32 @@ class World:
         Entity(parent=self.group(None), model=fastops.cylinder(resolution=24, radius=1.0, height=0.42), position=p, color=color.rgb32(205, 58, 40))
         Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.5, height=0.85), position=p, color=color.rgb32(238, 232, 220))
         self.collider(p + Vec3(0, 0.45, 0), (CELL, 0.9, CELL), occludes=False)
+
+    def copier(self, p):
+        """1F 複印機：米白機身、上面深灰的掃描蓋和操作面板，側邊兩層紙匣。"""
+        body, dark = color.rgb32(232, 230, 224), color.rgb32(70, 72, 78)
+        self.box(p + Vec3(0, 0.45, 0), (0.95, 0.9, 0.7), col=body)
+        self.box(p + Vec3(0, 0.93, 0.02), (0.92, 0.06, 0.62), col=dark)                       # 掃描蓋
+        self.box(p + Vec3(0.28, 0.95, -0.34), (0.32, 0.08, 0.12), col=color.rgb32(40, 40, 44))  # 操作面板
+        self.quad(p + Vec3(0.28, 1.0, -0.34), (0.22, 0.08), col=color.rgb(0.6, 1.2, 1.3), rot=(70, 0, 0))   # 亮著的小螢幕
+        for y in (0.22, 0.48):     # 前面的紙匣
+            self.box(p + Vec3(0, y, -0.36), (0.8, 0.2, 0.02), col=color.rgb32(214, 212, 206))
+            self.box(p + Vec3(0, y + 0.06, -0.38), (0.22, 0.03, 0.03), col=dark)
+        self.box(p + Vec3(-0.55, 0.7, 0), (0.18, 0.04, 0.4), col=color.rgb32(214, 212, 206))   # 出紙匣
+        self.box(p + Vec3(-0.55, 0.73, 0), (0.15, 0.02, 0.3), col=color.white)                 # 印好的紙
+        self.collider(p + Vec3(0, 0.5, 0), (1.1, 1.0, 0.8), occludes=False)
+
+    def island_terminals(self, center, a, b, rot):
+        """資訊島：橢圓矮櫃上面一圈查詢用的電腦，螢幕朝外，人站在外面查書。"""
+        cx, cy = center
+        for ang in (60, 90, 120, 240, 270, 300):
+            (x, y) = ellipse_pts(center, a, b, rot, ang, ang, n=1)[0]
+            pos = Vec3(x * CELL, 0, -y * CELL)
+            out = pos - Vec3(cx * CELL, 0, -cy * CELL)
+            out.y = 0
+            out = out.normalized()
+            r = math.degrees(math.atan2(-out.x, -out.z))
+            self.monitor(pos - out * 0.1 + Vec3(0, 1.04, 0), r, w=0.42)
 
     def plant(self, p):
         """窗邊、角落的大盆栽：白色圓盆，一叢深淺不同的綠葉。"""
