@@ -360,6 +360,10 @@ FLOORS = {
                banners=[(11.9, 4.4, 10), (14.1, 4.4, -10)],
                frames=[((10, 0), (0, 1), "恕")],
                decals=[(9.5, 7.6, 20, 1.0), (19.5, 14.5, -35, 0.8)],
+               # 1 秒一張的影片畫面：知識集東邊「我的人社超能力」白色展箱、旁邊的吉祥物立牌、地上的彩虹緞帶、圈裡的白色展示台
+               hss=dict(box=(20.0, 12.3, 90), mascots=[(19.3, 13.5, 75), (20.9, 11.2, 105), (19.2, 11.4, 95)],
+                        ribbon=[(19.6, 13.4), (20.1, 14.3), (20.9, 15.0), (21.9, 15.5)]),
+               plinths=[(16.6, 9.0), (12.6, 9.4)],
                pickup_gates=[(12.3, 13.7)],        # 自助取書區入口的紅白防盜門（接在玻璃房的開口兩邊）
                # 知識集：黑色地毯圓區、天花板上發光的白色環、從地上彎上去的白色弧形骨架、木色展示板
                circle=dict(center=(14.73, 11.6), radius=3.9, carpet=(38, 42, 64), halo=(0.95, 1.05, 1.35),
@@ -371,7 +375,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(big_history=True, level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -786,6 +790,11 @@ class World:
             self.walkable.discard((c, r))
         for c, r, rot in self.spec.get("banners", []):
             self.rollup_banner(Vec3(c * CELL, 0, -r * CELL), rot, ["WELCOME", "教師指定參考書", "Course Reserved Books"])
+        if "hss" in self.spec:
+            self.hss_exhibit(self.spec["hss"])
+        for c, r in self.spec.get("plinths", []):
+            self.plinth(Vec3(c * CELL, 0, -r * CELL))
+            self.walkable.discard((round(c), round(r)))
         for c, r, rot, sx in self.spec.get("decals", []):
             Entity(model="quad", position=Vec3(c * CELL, 0.012, -r * CELL), rotation=(90, rot, 0), scale=(3.2 * sx, 1.6 * sx),
                    texture=self.t["leaf"])
@@ -1671,6 +1680,14 @@ class World:
                 bk.rotation_z = self.rng.uniform(-6, 6)
                 x += w + 0.004
         self.box((0, 0.95, 0.2), (0.86, 0.03, 0.03), col=steel, parent=cart)       # 推把
+        if self.spec.get("end_style") == "board":   # 2F 的還書車上面插一塊紅牌（影片裡的 2003）
+            for x in (-0.2, 0.2):
+                self.box((x, 1.02, 0), (0.02, 0.16, 0.02), col=steel, parent=cart)
+            self.box((0, 1.27, 0), (0.56, 0.36, 0.03), col=color.rgb32(196, 36, 40), parent=cart)
+            code = self.text_tex([f"20{self.rng.randint(1, 12):02d}"], w=120, h=70, bg=(196, 36, 40), fg=(255, 255, 255), sizes=[44])
+            ec = Entity(parent=self.group(code), position=p, rotation_y=rot)
+            for side in (1, -1):
+                self.quad((0, 1.3, side * 0.017), (0.44, 0.24), code, rot=(0, 0 if side < 0 else 180, 0), parent=ec)
         self.collider(p + Vec3(0, 0.5, 0), (0.9, 1.0, 0.5), occludes=False)
 
     def locker(self, c, r, p):
@@ -1702,6 +1719,16 @@ class World:
             tex = self.text_tex([year, text], w=220, h=280, bg=(246, 246, 244), fg=(40, 40, 44), sizes=[64, 20])
         else:
             tex = self.text_tex([year, text], w=220, h=280, bg=(70, 50, 30), sizes=[64, 20])
+        if self.spec.get("big_history"):   # 2F 校史展區：一人多高的白色大展板，上面老照片、下面淡墨山水，斜斜地錯開排
+            e = Entity(parent=self.group(None), position=p, rotation_y=(-25, 20, -15, 30)[self.history_i % 4])
+            self.box((0, 1.15, 0), (1.9, 2.3, 0.12), col=color.rgb32(246, 246, 246), parent=e)
+            art = Texture(tx.landscape(self.history_i), filtering="mipmap")
+            ea = Entity(parent=self.group(art), position=p, rotation_y=e.rotation_y)
+            for side in (1, -1):
+                self.quad((0, 1.15, side * 0.065), (1.84, 2.2), art, rot=(0, 0 if side < 0 else 180, 0), parent=ea)
+            self.collider(p + Vec3(0, 1.0, 0), (1.5, 2.0, 0.7), occludes=False)
+            self.interactables.append(dict(kind="read", pos=p, data=f"history:{year} {text}"))
+            return
         c, r = round(p.x / CELL), round(-p.z / CELL)
         if self.char(c, r - 1) == "#":   # 4F 故事牆：用細線吊在白牆上的照片展板，上面一排軌道燈
             wall = p + Vec3(0, 0, CELL / 2)
@@ -2008,6 +2035,40 @@ class World:
         for s_ in (-1, 1):
             self.box(back + f * 0.33 + side * 0.1 * s_ + Vec3(0, 1.1, 0), (0.02, 0.25, 0.02), col=color.rgb32(190, 190, 190))
         self.collider(back + Vec3(0, 1.15, 0), (CELL if f.z else 0.6, 2.3, 0.6 if f.z else CELL))
+
+    def hss_exhibit(self, spec):
+        """1F 知識集東邊：「我的人社超能力」白色展箱、吉祥物立牌、地上一條淡彩色緞帶。"""
+        c, r, rot = spec["box"]
+        p = Vec3(c * CELL, 0, -r * CELL)
+        e = Entity(parent=self.group(None), position=p, rotation_y=rot)
+        self.box((0, 1.15, 0), (1.3, 2.3, 0.9), col=color.rgb32(248, 248, 246), parent=e)
+        art = Texture(tx.hss_board(self.font_path), filtering="mipmap")
+        ea = Entity(parent=self.group(art), position=p, rotation_y=rot)   # 有貼圖的要放在同一張貼圖的群組裡，合併時才不會掉貼圖
+        for side in (1, -1):
+            self.quad((0, 1.2, side * 0.455), (1.24, 2.1), art, rot=(0, 0 if side < 0 else 180, 0), parent=ea)
+        self.collider(p + Vec3(0, 1.0, 0), (1.2, 2.0, 1.2), occludes=False)
+        self.walkable.discard((round(c), round(r)))
+        for k, (mc, mr, mrot) in enumerate(spec["mascots"]):
+            q = Vec3(mc * CELL, 0, -mr * CELL)
+            self.box(q + Vec3(0, 0.02, 0), (0.4, 0.04, 0.3), col=color.rgb32(235, 235, 232))
+            mt = Texture(tx.mascot(k), filtering="mipmap")
+            Entity(parent=self.group(mt), model="quad", position=q + Vec3(0, 0.6, 0), scale=(0.75, 1.12),
+                   rotation_y=mrot, texture=mt, double_sided=True)
+            self.collider(q + Vec3(0, 0.6, 0), (0.5, 1.2, 0.5), occludes=False)
+        tex = Texture(tx.ribbon(), filtering="mipmap")
+        pts = spec["ribbon"]
+        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+            a, b = Vec3(x0 * CELL, 0, -y0 * CELL), Vec3(x1 * CELL, 0, -y1 * CELL)
+            d = b - a
+            Entity(parent=self.group(tex), model="quad", position=(a + b) / 2 + Vec3(0, 0.011, 0),
+                   rotation=(90, math.degrees(math.atan2(d.x, d.z)) + 90, 0), scale=(d.length() + 0.3, 0.9), texture=tex)
+
+    def plinth(self, p):
+        """知識集圈裡的白色展示台，上面一個玻璃罩，裡面放一個小展品。"""
+        self.box(p + Vec3(0, 0.5, 0), (0.55, 1.0, 0.55), col=color.rgb32(248, 248, 246))
+        self.box(p + Vec3(0, 1.08, 0), (0.22, 0.16, 0.16), col=color.rgb32(*self.rng.choice(tx.BOOK_COLORS)))
+        self.box(p + Vec3(0, 1.15, 0), (0.5, 0.3, 0.5), col=color.rgba32(200, 225, 235, 50))
+        self.collider(p + Vec3(0, 0.6, 0), (0.55, 1.2, 0.55), occludes=False)
 
     def wall_bench(self, c, r, p):
         """2F 期刊牆尾端：靠白牆的米色長條軟墊椅（影片 IMG_5326_5），一格一段。"""
