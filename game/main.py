@@ -601,7 +601,7 @@ class Game:
         light_scene(self.world.owned if getattr(self, "_lit_once", False) else None)   # 新蓋的這層換成有光影的 shader
         self._lit_once = True
         fastops.unlist_static(self.world.owned)   # 靜態的東西不用每一幀被引擎掃
-        set_fog(SKY, 20.0, 75.0)          # 霧設在場景根節點，大家一起繼承（不用逐個物件設）
+        set_fog(SKY, 28.0, 110.0)         # 霧設在場景根節點，大家一起繼承（不用逐個物件設）
 
     def setup_audio(self):
         self.sounds = {}
