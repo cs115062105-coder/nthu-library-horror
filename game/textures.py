@@ -875,3 +875,89 @@ def window_panorama(n=12, seed=11):
         pd.rectangle([0, h // 2 - 2, sw, h // 2 + 2], fill=frame)
         out.append(piece)
     return out
+
+
+def mascot(seed=0):
+    """1F 主題展旁邊的吉祥物立牌：灰綠色、大耳朵、白臉的小動物（去背 RGBA）。"""
+    w, h = 160, 240
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    body, light, line = (150, 170, 140, 255), (246, 246, 238, 255), (70, 80, 70, 255)
+    d.ellipse([18, 6, 66, 96], fill=body, outline=line, width=3)       # 左耳
+    d.ellipse([94, 6, 142, 96], fill=body, outline=line, width=3)      # 右耳
+    d.ellipse([30, 22, 56, 80], fill=(222, 214, 200, 255))
+    d.ellipse([104, 22, 130, 80], fill=(222, 214, 200, 255))
+    d.ellipse([22, 50, 138, 150], fill=body, outline=line, width=3)    # 頭
+    d.ellipse([40, 78, 120, 146], fill=light)                          # 白臉
+    for x in (62, 98):
+        d.ellipse([x - 7, 98, x + 7, 114], fill=(30, 30, 34, 255))
+        d.ellipse([x - 3, 100, x + 1, 105], fill=(255, 255, 255, 255))
+    d.ellipse([75, 116, 85, 123], fill=(200, 120, 120, 255))
+    d.rounded_rectangle([44, 140, 116, 222], 28, fill=body, outline=line, width=3)   # 身體
+    d.ellipse([58, 152, 102, 206], fill=light)
+    if seed % 2:   # 一隻舉手
+        d.ellipse([108, 120, 140, 150], fill=body, outline=line, width=3)
+    for x in (54, 90):
+        d.rounded_rectangle([x, 214, x + 18, 236], 6, fill=body, outline=line, width=3)
+    return img
+
+
+def hss_board(font_path):
+    """1F「我的人社超能力」展覽立板：白底、直排書法標題、淡彩色塊。"""
+    w, h = 220, 320
+    img = Image.new("RGB", (w, h), (250, 250, 248))
+    d = ImageDraw.Draw(img)
+    rng = random.Random(5)
+    for _ in range(9):
+        x, y = rng.randrange(90, w - 30), rng.randrange(30, h - 60)
+        c = rng.choice([(240, 226, 170), (210, 228, 236), (230, 214, 232), (214, 232, 214)])
+        d.polygon([(x, y), (x + 34, y + 10), (x + 22, y + 44), (x - 8, y + 30)], fill=c)
+    f = _font(font_path, 40)
+    for i, ch in enumerate("我的人社超能力"):
+        d.text((26 + (i % 2) * 10, 20 + i * 40), ch, font=f, fill=(40, 40, 46))
+    d.text((110, 12), "My HSS Superpower", font=_font(font_path, 13), fill=(90, 120, 150))
+    d.ellipse([120, 240, 180, 300], fill=(120, 150, 200))
+    d.ellipse([136, 256, 164, 284], fill=(250, 250, 248))
+    return img
+
+
+def ribbon():
+    """地上淡淡的彩虹緞帶貼紙（橫向一條條淡彩色）。"""
+    w, h = 64, 32
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cols = [(250, 236, 200), (236, 246, 250), (240, 226, 240), (226, 244, 230), (250, 250, 252), (232, 236, 252)]
+    for i in range(h):
+        c = cols[i * len(cols) // h]
+        d.line([(0, i), (w, i)], fill=c + (215,))
+    return img
+
+
+def landscape(seed):
+    """2F 校史展區的大展板：上面一排老照片和說明字，下面一大片淡墨山水（湖、山、船）。"""
+    rng = random.Random(seed)
+    w, h = 256, 300
+    img = Image.new("RGB", (w, h), (246, 247, 248))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle([12, 14, 110, 30], 6, fill=(150, 196, 220))
+    for k in range(rng.randint(3, 5)):     # 老照片
+        x = 14 + k * 50
+        if x + 42 > w:
+            break
+        tone = rng.randint(90, 170)
+        d.rectangle([x, 44, x + 42, 76], fill=(tone, tone - 6, tone - 18))
+        d.rectangle([x + 4, 58, x + 38, 74], fill=(tone - 40, tone - 30, tone - 30))
+    for y in range(86, 140, 7):           # 說明字（細線）
+        d.line([(14, y), (14 + rng.randint(120, 228), y)], fill=(120, 124, 130))
+    for layer, base in enumerate((205, 175, 140)):   # 一層層的淡墨山
+        pts, x = [(0, h)], 0
+        top = 150 + layer * 28
+        while x <= w:
+            pts.append((x, top + rng.randint(-22, 22)))
+            x += rng.randint(14, 30)
+        pts += [(w, h)]
+        d.polygon(pts, fill=(base, base + 4, base + 10))
+    d.rectangle([0, 250, w, h], fill=(218, 226, 232))   # 湖
+    bx = rng.randint(60, 180)
+    d.polygon([(bx, 262), (bx + 40, 262), (bx + 32, 270), (bx + 6, 270)], fill=(80, 80, 86))
+    return _noise(img, 3, rng)
