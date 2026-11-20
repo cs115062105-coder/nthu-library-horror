@@ -12,6 +12,7 @@ from collections import deque
 from ursina import Entity, Vec3, color, destroy, time
 
 import body
+import fastops
 from npc import Person, bubble, next_step, step_toward, to_cell
 from world import cell_pos
 
@@ -199,8 +200,11 @@ class Crowd:
         self.global_cd = 0.0
 
     def clear(self):
+        """拆掉所有路人（連身體各部位一起拆，不然它們會留在場景清單裡每一幀被掃）。"""
+        doomed = []
         for n in self.npcs:
-            destroy(n.root)
+            doomed += fastops._descendants(n.root) + [n.root]
+        fastops.bulk_destroy(doomed)
         self.npcs = []
 
     def spawn(self, world, talkers=(), walkers=3, readers=3, taken=()):

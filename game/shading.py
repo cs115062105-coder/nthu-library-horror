@@ -68,27 +68,55 @@ void main() {
 """, default_input={
     "texture_scale": Vec2(1, 1),
     "texture_offset": Vec2(0, 0),
-    "fog_color": color.clear,
-    "fog_start": 10,
-    "fog_end": 100,
-    "camera_world_position": Vec3.zero,
     "wall_height": 3.2,
 })
 
 
-def _camera_position():
+
+# 霧和相機位置不放在每個物件身上，而是設在整個場景的根節點，所有物件一起繼承：
+# 換樓層不用一個一個設霧，每一幀也只要更新一次相機位置（原本每幀要設一千多次）。
+# Ursina 預設 shader（unlit_with_fog）也一樣：不要每個物件每一幀各設一次相機位置，改成從根節點繼承。
+from ursina.shaders.unlit_with_fog_shader import unlit_with_fog_shader as _unlit
+for _k in ("fog_color", "fog_start", "fog_end", "camera_world_position"):
+    _unlit.default_input.pop(_k, None)
+_unlit.continuous_input.clear()
+
+
+def _roots():
+    from ursina import camera, scene
+    return (scene, camera.ui)
+
+
+def set_fog(fog_color, start, end):
+    from ursina import scene
+    from panda3d.core import NodePath
+    for root in _roots():
+        NodePath.set_shader_input(root, "fog_color", fog_color if root is scene else color.clear)
+        NodePath.set_shader_input(root, "fog_start", float(start))
+        NodePath.set_shader_input(root, "fog_end", float(end))
+    scene.fog.setColor(fog_color)            # 沒用自訂 shader 的東西走 Panda 內建的霧
+    scene.fog.setLinearRange(start, end)
+    scene._fog_color, scene._fog_density = fog_color, (start, end)
+
+
+def update_camera():
+    """每一幀呼叫一次：把相機位置告訴所有用光影 shader 的東西。"""
     from ursina import camera
-    return camera.world_position
+    from panda3d.core import NodePath
+    p = camera.world_position
+    for root in _roots():
+        NodePath.set_shader_input(root, "camera_world_position", p)
 
 
-lit_shader.continuous_input["camera_world_position"] = _camera_position
 
-
-def light_scene():
-    """把場景裡還在用預設 shader 的東西換成有光影的版本（畫面上的介面不換）。"""
+def light_scene(entities=None):
+    """把還在用預設 shader 的東西換成有光影的版本（畫面上的介面不換）。
+    entities 給了就只看這些（例如剛蓋好的樓層），不用把整個場景掃一遍。"""
     from ursina import Entity, camera, scene
     default = Entity.default_shader
-    for e in scene.entities:
+    for e in (scene.entities if entities is None else entities):
+        if not e:
+            continue
         if e.is_empty() or e.shader is not default or e.model is None or e.has_ancestor(camera.ui):
             continue
         keep = {k: v for k, v in e._shader_inputs.items() if k in ("texture_scale", "texture_offset")}
@@ -142,10 +170,4 @@ void main() {
     float t = clamp(length(to_cam) / (fog_end - fog_start), 0.0, 1.0);
     color.rgb = mix(color.rgb, fog_color.rgb, t * fog_color.a);
 }
-""", default_input={
-    "fog_color": color.clear,
-    "fog_start": 10,
-    "fog_end": 100,
-    "camera_world_position": Vec3.zero,
-})
-person_shader.continuous_input["camera_world_position"] = _camera_position
+""", default_input={})
