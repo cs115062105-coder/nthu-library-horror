@@ -118,14 +118,10 @@ class Person:
         self.hat = self.bag = None
 
     def _part(self, parent, mesh, tint=None, **kw):
-        """掛一塊人物 mesh 上去，換成人物用的 shader（並跟上現在的霧）。"""
-        e = Entity(parent=parent, model=mesh, color=tint if tint is not None else color.white, **kw)
-        e.shader = person_shader
-        e.set_shader_input("fog_color", scene.fog_color)
-        fog = scene.fog_density
-        if isinstance(fog, tuple):
-            e.set_shader_input("fog_start", fog[0])
-            e.set_shader_input("fog_end", fog[1])
+        """掛一塊人物 mesh 上去，換成人物用的 shader。"""
+        e = Entity(parent=parent, model=mesh, color=tint if tint is not None else color.white,
+                   add_to_scene_entities=False, **kw)      # 身體零件不用每幀被引擎掃（跟著關節動就好）
+        e.shader = person_shader          # 霧和相機位置從場景根節點繼承（shading.set_fog）
         self.parts.append(e)
         return e
 

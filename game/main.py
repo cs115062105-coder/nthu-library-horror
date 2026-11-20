@@ -27,7 +27,8 @@ from quiz import LOCKER_RIDDLES, pick as pick_quiz
 from minimap import Minimap, bang_texture, triangle
 from npc import Hunter, Librarian, Roommate, to_cell
 from player import Player
-from shading import light_scene
+import fastops
+from shading import light_scene, set_fog, update_camera
 from ursina.shaders import unlit_shader
 from world import ORDER, World, cell_pos
 
@@ -98,6 +99,8 @@ def setup_font(path):
 
 class Game:
     def __init__(self, font_path):
+        set_fog(color.clear, 10, 100)      # 霧和相機位置放在場景根節點，先給預設值
+        update_camera()
         self.read_notes = set()      # 跨天保留：讀過的筆記
         self.found = set()           # 跨天保留：已經找到的密碼位數
         self.items = set()           # 跨天保留：查到的線索
@@ -595,9 +598,10 @@ class Game:
     # ---------- 場景 ----------
     def apply_view(self):
         """白天：燈全亮，只留一層很淡的霧讓遠處柔和一點。"""
-        light_scene()       # 先換成有光影的 shader，下面的霧才會套到它身上
-        scene.fog_color = SKY
-        scene.fog_density = (20.0, 75.0)
+        light_scene(self.world.owned if getattr(self, "_lit_once", False) else None)   # 新蓋的這層換成有光影的 shader
+        self._lit_once = True
+        fastops.unlist_static(self.world.owned)   # 靜態的東西不用每一幀被引擎掃
+        set_fog(SKY, 20.0, 75.0)          # 霧設在場景根節點，大家一起繼承（不用逐個物件設）
 
     def setup_audio(self):
         self.sounds = {}
@@ -1082,6 +1086,7 @@ class Game:
         self.note_bg.enabled = False
 
     def update(self):
+        update_camera()
         self.ui_left.x = -window.aspect_ratio / 2
         if self.state != "play" or self.cleared or self.dead:
             return

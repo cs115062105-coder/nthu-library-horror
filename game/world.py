@@ -13,6 +13,7 @@ from ursina import Entity, Texture, Vec3, color, destroy, scene
 from ursina.models.procedural.cone import Cone
 from ursina.models.procedural.cylinder import Cylinder
 
+import fastops
 import textures as tx
 
 PHOTOS = Path(__file__).parent / "photos"     # 從組員拍的影片截下來的材質
@@ -496,7 +497,7 @@ class World:
     _textures = None   # 材質只產生一次，換樓層時沿用
 
     def __init__(self, font_path, floor="1F"):
-        first_entity = len(scene.entities)
+        before = set(map(id, scene.entities))
         self.font_path = font_path
         self.floor = floor
         self.spec = FLOORS[floor]
@@ -524,20 +525,16 @@ class World:
         self.load_textures()
         self.build()
         for tex, g in self.groups.values():
-            g.combine()
+            fastops.combine(g)
             g.texture = tex
             g.color = color.rgb(SHADE, SHADE, SHADE)
         if floor == "4F":
             self.place_clues()
         self.build_banks()
-        self.owned = [e for e in scene.entities[first_entity:]]   # 換樓層時要拆掉的東西
+        self.owned = [e for e in scene.entities if id(e) not in before]   # 換樓層時要拆掉的東西
 
     def unload(self):
-        for e in self.owned:
-            try:
-                destroy(e)
-            except Exception:
-                pass
+        fastops.bulk_destroy(self.owned)
 
     # ---------- 小工具 ----------
     def load_textures(self):
@@ -1007,17 +1004,17 @@ class World:
                     arm = Entity(parent=ch, model="cube", position=(x, 0.52, 0.05), scale=(0.12, 0.3, 0.7), color=col)
                     arm.rotation_z = 12 if x < 0 else -12
                 Entity(parent=ch, model="cube", position=(0, 0.12, 0), scale=(0.05, 0.24, 0.05), color=color.rgb32(190, 192, 196))
-            Entity(parent=self.group(None), model=Cylinder(resolution=14, radius=0.3, height=0.03), position=p + Vec3(0, 0.55, 0),
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=14, radius=0.3, height=0.03), position=p + Vec3(0, 0.55, 0),
                    color=color.rgb32(246, 246, 246))
             self.box(p + Vec3(0, 0.27, 0), (0.05, 0.55, 0.05), col=color.rgb32(246, 246, 246))
             self.collider(p + Vec3(0, 0.4, 0), (CELL * 0.9, 0.8, 1.0), occludes=False)
             return
         for side in (1, -1):
             ch = Entity(parent=self.group(None), position=p + Vec3(side * 0.6, 0, 0), rotation_y=90 * side + self.rng.uniform(-15, 15))
-            Entity(parent=ch, model=Cylinder(resolution=12, radius=0.38, height=0.42), color=color.rgb32(242, 242, 242))
+            Entity(parent=ch, model=fastops.cylinder(resolution=12, radius=0.38, height=0.42), color=color.rgb32(242, 242, 242))
             Entity(parent=ch, model="cube", position=(0, 0.6, 0.25), scale=(0.72, 0.36, 0.2), color=color.rgb32(242, 242, 242))
             Entity(parent=ch, model="cube", position=(0, 0.44, 0), scale=(0.6, 0.06, 0.55), color=color.rgb32(210, 210, 212))
-        Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.25, height=0.03), position=p + Vec3(0, 0.5, 0),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=12, radius=0.25, height=0.03), position=p + Vec3(0, 0.5, 0),
                color=color.rgb32(200, 202, 206))
         self.box(p + Vec3(0, 0.25, 0), (0.04, 0.5, 0.04), col=color.rgb32(200, 202, 206))
         self.collider(p + Vec3(0, 0.4, 0), (CELL * 0.9, 0.8, 1.0), occludes=False)
@@ -1127,7 +1124,7 @@ class World:
         if self.char(c, r + 1) not in "K":   # 走道那一端有手搖輪
             front = p + Vec3(0, 0, -CELL / 2 - 0.02)
             self.quad(front + Vec3(0, 1.3, 0), (CELL * 0.9, 2.6), col=color.rgb32(120, 130, 120), rot=(0, 180, 0))
-            Entity(parent=self.group(None), model=Cylinder(resolution=10, radius=0.22, height=0.05, direction=(0, 0, -1)),
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=10, radius=0.22, height=0.05, direction=(0, 0, -1)),
                    position=front + Vec3(0, 1.1, -0.02), color=color.rgb32(60, 60, 62))
             self.quad(front + Vec3(0, 2.2, -0.01), (0.5, 0.2),
                       self.text_tex([f"K-{c:02d}"], w=128, h=48, bg=(240, 240, 230), fg=(30, 30, 30), sizes=[30]),
@@ -1174,7 +1171,7 @@ class World:
         """輕學區：白色圓桌（一支中柱、十字腳），旁邊擺黑白兩色的殼椅。"""
         self.hides.append(p)
         top = p + Vec3(0, 0.74, 0)
-        Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.55, height=0.04),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=16, radius=0.55, height=0.04),
                position=top - Vec3(0, 0.04, 0), color=color.rgb32(222, 200, 165))
         self.box(p + Vec3(0, 0.36, 0), (0.07, 0.72, 0.07), col=color.rgb32(190, 192, 196))
         for rot in (45, 135):
@@ -1205,9 +1202,9 @@ class World:
         cx, cy = spec["center"]
         R = spec["radius"] * CELL
         center = Vec3(cx * CELL, 0, -cy * CELL)
-        Entity(model=Cylinder(resolution=48, radius=R, height=0.02), position=center + Vec3(0, 0.005, 0),
+        Entity(model=fastops.cylinder(resolution=48, radius=R, height=0.02), position=center + Vec3(0, 0.005, 0),
                color=color.rgb32(*spec.get("carpet", (30, 31, 34))))
-        Entity(model=Cylinder(resolution=48, radius=R + 0.08, height=0.012), position=center,
+        Entity(model=fastops.cylinder(resolution=48, radius=R + 0.08, height=0.012), position=center,
                color=color.rgb32(170, 172, 176))   # 不鏽鋼收邊
         halo_r, n = R * 0.9, 40
         for i in range(n):   # 天花板的白色光環
@@ -1461,10 +1458,10 @@ class World:
 
     def pillar(self, p):
         if self.spec.get("white"):   # 1F 是光滑的白色圓柱
-            Entity(parent=self.group(None), model=Cylinder(resolution=20, radius=0.5, height=WALL_H),
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.5, height=WALL_H),
                    position=p, color=color.rgb32(238, 238, 236))
         else:
-            Entity(parent=self.group(self.t["wall"]), model=Cylinder(resolution=14, radius=0.5, height=WALL_H),
+            Entity(parent=self.group(self.t["wall"]), model=fastops.cylinder(resolution=14, radius=0.5, height=WALL_H),
                    position=p, texture=self.t["wall"], texture_scale=(3, 1))
         self.collider(p + Vec3(0, WALL_H / 2, 0), (0.9, WALL_H, 0.9))
 
@@ -1591,9 +1588,9 @@ class World:
         g, white = self.group(None), color.rgb32(242, 242, 240)
         Entity(parent=g, model=Cone(resolution=20, radius=0.23, height=0.4, add_bottom=False), position=q,
                color=white, double_sided=True)
-        Entity(parent=g, model=Cylinder(resolution=20, radius=0.16, height=0.03), position=q + Vec3(0, 0.38, 0),
+        Entity(parent=g, model=fastops.cylinder(resolution=20, radius=0.16, height=0.03), position=q + Vec3(0, 0.38, 0),
                color=color.rgb32(232, 232, 230))
-        Entity(parent=g, model=Cylinder(resolution=20, radius=0.235, height=0.035), position=q,
+        Entity(parent=g, model=fastops.cylinder(resolution=20, radius=0.235, height=0.035), position=q,
                color=color.rgb32(70, 72, 76))
         for a in (0, 180):
             d = Vec3(math.sin(math.radians(a)), 0, math.cos(math.radians(a)))
@@ -1738,7 +1735,7 @@ class World:
         rot = -90 + self.rng.uniform(-30, 30)   # 背對大廳、面向東邊的窗
         ch = Entity(parent=self.group(None), position=p, rotation_y=rot)
         col, steel = color.rgb32(52, 52, 56), color.rgb32(200, 202, 206)
-        Entity(parent=ch, model=Cylinder(resolution=16, radius=0.32, height=0.03), color=steel)
+        Entity(parent=ch, model=fastops.cylinder(resolution=16, radius=0.32, height=0.03), color=steel)
         Entity(parent=ch, model="cube", position=(0, 0.22, 0), scale=(0.06, 0.4, 0.06), color=steel)
         Entity(parent=ch, model="sphere", position=(0, 0.5, 0.02), scale=(0.8, 0.3, 0.75), color=col)
         Entity(parent=ch, model="sphere", position=(0, 1.0, 0.3), scale=(0.85, 1.05, 0.25), color=col)
@@ -1773,16 +1770,16 @@ class World:
                           scale=(0.12, 0.5, 0.6), color=color.rgb32(*cushions[k]))
             back.look_at(p + Vec3(0, 0.7, 0))
             back.rotation_y += 90
-        Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.4, height=0.015), position=p + Vec3(0, 0.005, 0),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=16, radius=0.4, height=0.015), position=p + Vec3(0, 0.005, 0),
                color=color.rgb32(40, 40, 44))       # 中間一塊深色地毯
         self.collider(p + Vec3(0, 1.0, 0), (CELL * 0.95, 2.0, CELL * 0.95), occludes=False)
 
     def draped_table(self, p, kind):
         """1F 桌巾桌：navy 是深藍桌巾的小圓桌；books 是米色桌巾的新書展示長桌，上面擺書和一盆綠色植物。"""
         if kind == "navy":
-            Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.55, height=0.74), position=p,
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=16, radius=0.55, height=0.74), position=p,
                    color=color.rgb32(40, 52, 82))
-            Entity(parent=self.group(None), model=Cylinder(resolution=16, radius=0.57, height=0.03), position=p + Vec3(0, 0.74, 0),
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=16, radius=0.57, height=0.03), position=p + Vec3(0, 0.74, 0),
                    color=color.rgb32(50, 64, 98))
             self.collider(p + Vec3(0, 0.4, 0), (1.15, 0.8, 1.15), occludes=False)
             return
@@ -1812,9 +1809,9 @@ class World:
 
     def campus_model(self, p):
         """2F 校史展示區中間的清華校園模型：藍色圓台上一片白色的小房子。"""
-        Entity(parent=self.group(None), model=Cylinder(resolution=24, radius=0.9, height=0.55), position=p,
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=24, radius=0.9, height=0.55), position=p,
                color=color.rgb32(40, 70, 170))
-        Entity(parent=self.group(None), model=Cylinder(resolution=24, radius=0.86, height=0.02), position=p + Vec3(0, 0.55, 0),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=24, radius=0.86, height=0.02), position=p + Vec3(0, 0.55, 0),
                color=color.rgb32(90, 120, 210))
         for _ in range(40):
             a, rr = self.rng.uniform(0, 2 * math.pi), 0.75 * math.sqrt(self.rng.random())
@@ -1879,7 +1876,7 @@ class World:
 
     def tv_booth(self, p):
         """3F 電視區：米白色沙發，前面一張木頭圓桌上放電視，旁邊兩片霧面玻璃。"""
-        Entity(parent=self.group(None), model=Cylinder(resolution=20, radius=0.75, height=0.55), position=p + Vec3(0, 0, -0.3),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.75, height=0.55), position=p + Vec3(0, 0, -0.3),
                color=color.rgb32(222, 196, 158))
         self.box(p + Vec3(0, 0.85, -0.3), (0.95, 0.58, 0.05), col=color.rgb32(18, 18, 20))
         self.quad(p + Vec3(0, 0.85, -0.33), (0.88, 0.5), self.t["screen"], rot=(0, 0, 0))
@@ -1901,7 +1898,7 @@ class World:
         for k in range(3):
             a = math.radians(k * 120 + 30)
             off = Vec3(math.sin(a), 0, math.cos(a)) * 0.45
-            Entity(parent=self.group(None), model=Cylinder(resolution=14, radius=0.55, height=0.04), position=top + off - Vec3(0, 0.04, 0),
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=14, radius=0.55, height=0.04), position=top + off - Vec3(0, 0.04, 0),
                    color=wood)
             self.box(top + off * 0.5 + Vec3(0, -0.38, 0), (0.5, 0.7, 0.04), col=color.rgb32(222, 196, 160)).rotation_y = k * 120 + 30
             arm = self.box(top + off * 0.55 + Vec3(0, 0.25, 0), (0.03, 0.5, 0.8), col=color.rgba32(225, 232, 234, 180))
@@ -1915,15 +1912,15 @@ class World:
 
     def round_sofa(self, p):
         """4F 的紅色圓形沙發，中間一個米白色的圓靠背。"""
-        Entity(parent=self.group(None), model=Cylinder(resolution=24, radius=1.0, height=0.42), position=p, color=color.rgb32(205, 58, 40))
-        Entity(parent=self.group(None), model=Cylinder(resolution=20, radius=0.5, height=0.85), position=p, color=color.rgb32(238, 232, 220))
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=24, radius=1.0, height=0.42), position=p, color=color.rgb32(205, 58, 40))
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.5, height=0.85), position=p, color=color.rgb32(238, 232, 220))
         self.collider(p + Vec3(0, 0.45, 0), (CELL, 0.9, CELL), occludes=False)
 
     def plant(self, p):
         """窗邊、角落的大盆栽：白色圓盆，一叢深淺不同的綠葉。"""
         g = self.group(None)
-        Entity(parent=g, model=Cylinder(resolution=16, radius=0.32, height=0.55), position=p, color=color.rgb32(240, 240, 238))
-        Entity(parent=g, model=Cylinder(resolution=16, radius=0.3, height=0.02), position=p + Vec3(0, 0.55, 0),
+        Entity(parent=g, model=fastops.cylinder(resolution=16, radius=0.32, height=0.55), position=p, color=color.rgb32(240, 240, 238))
+        Entity(parent=g, model=fastops.cylinder(resolution=16, radius=0.3, height=0.02), position=p + Vec3(0, 0.55, 0),
                color=color.rgb32(70, 52, 40))
         self.box(p + Vec3(0, 0.85, 0), (0.06, 0.7, 0.06), col=color.rgb32(96, 72, 50))
         greens = [(58, 110, 52), (76, 132, 60), (46, 92, 44), (90, 146, 70)]
@@ -1945,7 +1942,7 @@ class World:
             for x in (-0.38, 0.38):
                 Entity(parent=ch, model="cube", position=(x, 0.55, 0), scale=(0.12, 0.3, 0.65), color=col)
             Entity(parent=ch, model="cube", position=(0, 0.15, 0), scale=(0.05, 0.3, 0.05), color=color.rgb32(190, 192, 196))
-        Entity(parent=self.group(None), model=Cylinder(resolution=14, radius=0.3, height=0.03), position=p + Vec3(0, 0.55, 0),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=14, radius=0.3, height=0.03), position=p + Vec3(0, 0.55, 0),
                color=color.rgb32(245, 245, 245))
         self.box(p + Vec3(0, 0.27, 0), (0.04, 0.55, 0.04), col=color.rgb32(190, 192, 196))
         self.collider(p + Vec3(0, 0.45, 0), (CELL * 0.95, 0.9, 1.1), occludes=False)
@@ -2058,7 +2055,7 @@ class World:
     def spiral_stair(self, cx, cy):
         """研究小間旁邊那座白色螺旋梯（裝飾，走不上去）。"""
         center = Vec3(cx * CELL, 0, -cy * CELL)
-        Entity(parent=self.group(None), model=Cylinder(resolution=12, radius=0.12, height=WALL_H),
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=12, radius=0.12, height=WALL_H),
                position=center, color=color.rgb32(230, 230, 228))
         for i in range(16):
             a = math.radians(i * 26)
@@ -2145,7 +2142,7 @@ class World:
                 Entity(parent=unit, model="quad", position=(0, 2.2, front), scale=(0.9, 0.3), rotation=(0, 180, 0),
                        texture=self.text_tex([f"{spec['name']}-{i + 1}", label], w=200, h=80,
                                              bg=(240, 240, 230), fg=(30, 30, 30), sizes=[30, 24]))
-                Entity(parent=unit, model=Cylinder(resolution=10, radius=0.25, height=0.06, direction=(0, 0, 1)),
+                Entity(parent=unit, model=fastops.cylinder(resolution=10, radius=0.25, height=0.06, direction=(0, 0, 1)),
                        position=(0, 1.1, front), color=color.rgb32(70, 70, 72))
                 Entity(parent=unit, model="cube", position=(0, 1.1, front + 0.07), scale=(0.04, 0.4, 0.04),
                        color=color.rgb32(70, 70, 72))
