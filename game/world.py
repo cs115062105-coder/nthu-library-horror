@@ -420,7 +420,7 @@ FLOORS = {
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
                # 使用者截圖指出：木條牆＋電視是南牆（電視區那面）；北牆的「深色玻璃牆」其實是一整排木框玻璃櫃（格子 w）
-               wood_wall=(24, 42, 31, 38, "N"),
+               wood_wall=(24, 42, 31, (31, 38), "N"),   # 使用者：牆上有兩台螢幕
                hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
                         (32, 22): ("媒體區", "Audio-Visual Collection"), (41, 21): ("發呆區", "Relaxing and Inspiration"),
                         (31, 28): ("電視區", "TV Area"), (8, 13): ("多人聆賞席", "Group Carrels"),
@@ -2150,8 +2150,8 @@ class World:
             z = -row * CELL + CELL / 2 + 0.02
             Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z), scale=(w, WALL_H), rotation_y=180,
                    texture=self.t["woodslats"], texture_scale=(w / 1.2, 1), color=color.rgb(0.95, 0.95, 0.95))
-            if tv_at is not None:
-                x = tv_at * CELL
+            for c in ((tv_at,) if isinstance(tv_at, (int, float)) else tv_at or ()):
+                x = c * CELL
                 self.box(Vec3(x, 1.7, z + 0.04), (1.5, 0.9, 0.06), col=color.rgb32(18, 18, 20))
                 self.box(Vec3(x, 1.7, z + 0.072), (1.38, 0.78, 0.005), col=color.rgb32(70, 110, 150))
             return
