@@ -53,8 +53,8 @@ LEVEL_1F = [
     "xxxx..................t..W",
     "xxxxx..P.................W",
     "xxxxxx....O....O....O..t.W",
-    "xxxxxx..R................W",
-    "xxxxxxx..R..Y...hhhh.t...W",
+    "xxxxxx...................W",
+    "xxxxxxx.....Y...hhhh.t...W",
     "xxxxxxxx.....Y..hhhh.....W",
     "xxxxxxxx.................W",
     "xxxxxxxxx.O....O....######",
@@ -362,8 +362,13 @@ FLOORS = {
                decals=[(9.5, 7.6, 20, 1.0), (19.5, 14.5, -35, 0.8)],
                # 1 秒一張的影片畫面：知識集東邊「我的人社超能力」白色展箱、旁邊的吉祥物立牌、地上的彩虹緞帶、圈裡的白色展示台
                # 0.5 秒一張再看：展箱其實在知識集「西邊」、背後是木條天花板和櫃臺，緞帶從黑地毯流到展箱腳下
-               hss=dict(box=(9.0, 13.0, -90), mascots=[(9.6, 14.0, -70), (8.6, 11.9, -100), (9.9, 12.2, -95)],
-                        ribbon=[(11.3, 13.7), (10.6, 13.6), (9.8, 13.3)]),
+               # 使用者在平面圖上圈的位置：知識集的西南邊緣（K 逗留點北邊）
+               hss=dict(box=(12.0, 14.7, -138), mascots=[(11.2, 14.2, -150), (12.9, 15.4, -120), (11.5, 15.4, -140)],
+                        ribbon=[(13.2, 13.7), (12.7, 14.1), (12.3, 14.4)]),
+               # 使用者：出入口要像一點。照平面圖：斜面落地窗上兩扇門（出口在北、入口在南），
+               # 往裡一點是一整排順著斜窗排的感應閘門
+               gate_bank=dict(center=(6.31, 15.32), dir=(0.559, 0.829), n=9, step=0.55),
+               facade_doors=[((4.29, 14.83), "出口", "Exit"), ((6.04, 17.43), "入口", "Entrance")],
                plinths=[(16.6, 9.0), (12.6, 9.4)],
                pickup_gates=[(12.3, 13.7)],        # 自助取書區入口的紅白防盜門（接在玻璃房的開口兩邊）
                # 知識集：黑色地毯圓區、天花板上發光的白色環、從地上彎上去的白色弧形骨架、木色展示板
@@ -425,8 +430,8 @@ FLOORS = {
                floor_regions=[("wood", 8, 7, 12, 11)], practice_room=(8, 7, 11, 10),
                bell_lights=[(15, 18), (18, 21), (21, 23), (24, 24), (24, 27)],
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
-                       {'kind': 'darkglass', 'pts': [(38.45, 17.4), (38.45, 20.6)]},    # 影片：媒體區和發呆區中間的深色玻璃牆
-                       {'kind': 'darkglass', 'pts': [(38.45, 22.4), (38.45, 27.6)]},    # 中間留一個門口
+                       {'kind': 'darkglass', 'pts': [(32.3, 16.6), (36.3, 16.6)]},   # 使用者在平面圖上圈的：服務台南邊、東西向    # 影片：媒體區和發呆區中間的深色玻璃牆
+                       {'kind': 'darkglass', 'pts': [(37.7, 16.6), (40.5, 16.6)]},    # 中間留一個門口
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
     "4F": dict(level=LEVEL_4F, floor="carpet_45", stools=8, carts=3, banks=[], safe=set(),
@@ -798,6 +803,10 @@ class World:
             self.walkable.discard((c, r))
         for c, r, rot in self.spec.get("banners", []):
             self.rollup_banner(Vec3(c * CELL, 0, -r * CELL), rot, ["WELCOME", "教師指定參考書", "Course Reserved Books"])
+        if "gate_bank" in self.spec:
+            self.gate_bank(**self.spec["gate_bank"])
+        for (c, r), zh, en in self.spec.get("facade_doors", []):
+            self.facade_door(Vec3(c * CELL, 0, -r * CELL), zh, en)
         for c, r, R, a0, a1 in self.spec.get("red_benches", []):
             self.red_bench(Vec3(c * CELL, 0, -r * CELL), R, a0, a1)
             self.walkable.discard((round(c), round(r)))
@@ -1552,6 +1561,53 @@ class World:
             leg = self.box(q + Vec3(0, 0.1, 0), (0.04, 0.2, 0.04), col=color.rgb32(170, 172, 176))
         self.collider(p + Vec3(0, 0.25, 0), (2.4, 0.5, 2.4), occludes=False)
 
+    def gate_bank(self, center, dir, n, step):
+        """1F 入館：順著斜面落地窗排成一列的不鏽鋼感應閘門，機箱之間是一條條通道，中間灰色擋板。"""
+        dc, dr = dir
+        along = Vec3(dc, 0, -dr).normalized()           # 世界座標裡沿著窗的方向
+        normal = Vec3(-along.z, 0, along.x)             # 走進館內的方向（機箱長邊朝這個方向）
+        rot = math.degrees(math.atan2(normal.x, normal.z))
+        c0 = Vec3(center[0] * CELL, 0, -center[1] * CELL)
+        steel, dark = color.rgb32(176, 178, 182), color.rgb32(70, 72, 78)
+        for i in range(n):
+            q = c0 + along * ((i - (n - 1) / 2) * step * CELL)
+            e = Entity(parent=self.group(None), position=q, rotation_y=rot)
+            self.box((0, 0.5, 0), (0.3, 1.0, 1.25), col=steel, parent=e)
+            self.box((0, 1.01, 0), (0.32, 0.03, 1.27), col=dark, parent=e)
+            self.box((0, 0.72, 0.64), (0.22, 0.05, 0.02), col=color.rgb(0.5, 1.6, 0.7), parent=e)    # 綠燈
+            self.box((0, 1.1, -0.35), (0.24, 0.16, 0.2), col=color.rgb32(200, 200, 204), parent=e)   # 刷卡機
+            if i < n - 1:   # 擋板：從機箱伸到通道中間
+                self.box((0.3, 0.62, 0), (0.3, 0.55, 0.02), col=color.rgba32(120, 124, 130, 170), parent=e)
+            Entity(model="cube", position=q + Vec3(0, 0.5, 0), rotation_y=rot, scale=(0.3, 1.0, 1.25),
+                   collider="box", visible=False)
+        # 兩端用灰色矮欄杆接到窗邊，人一定要從閘門過
+        for s in (-1, 1):
+            q = c0 + along * (s * ((n - 1) / 2 * step * CELL + 0.6))
+            e = Entity(parent=self.group(None), position=q, rotation_y=rot)
+            self.box((0, 0.5, -0.4), (0.06, 1.0, 1.6), col=color.rgba32(200, 210, 214, 150), parent=e)
+            self.box((0, 1.0, -0.4), (0.08, 0.04, 1.62), col=steel, parent=e)
+
+    def facade_door(self, p, zh, en):
+        """斜面落地窗上的玻璃門：深色門框、兩片玻璃門、上面一塊出口／入口牌，門內一塊深色地墊。"""
+        a, b = self.spec["curves"][0]["pts"]
+        d = Vec3((b[0] - a[0]) * CELL, 0, -(b[1] - a[1]) * CELL).normalized()
+        rot = math.degrees(math.atan2(d.x, d.z)) + 90       # 門面平行窗
+        inside = Vec3(-d.z, 0, d.x)        # 往館內（東邊）
+        frame = color.rgb32(52, 54, 58)
+        p = p + inside * 0.3          # 稍微往館內，才不會被落地窗的外景貼圖蓋住
+        e = Entity(parent=self.group(None), position=p, rotation_y=rot)
+        for x in (-0.95, 0.95):
+            self.box((x, 1.3, 0), (0.1, 2.6, 0.14), col=frame, parent=e)
+        self.box((0, 2.65, 0), (2.0, 0.14, 0.16), col=frame, parent=e)
+        self.box((0, 0.03, 0), (1.9, 0.04, 0.16), col=color.rgb32(150, 152, 156), parent=e)
+        for x in (-0.46, 0.46):
+            self.box((x, 1.28, 0), (0.86, 2.5, 0.03), col=color.rgba32(190, 215, 225, 70), parent=e)
+            self.box((x + (0.38 if x < 0 else -0.38), 1.1, 0.05), (0.03, 0.5, 0.04), col=color.rgb32(190, 192, 196), parent=e)
+        sign = self.text_tex([zh, en], w=200, h=72, bg=(72, 58, 128), fg=(250, 250, 250), sizes=[30, 16])
+        self.quad(p + inside * 0.12 + Vec3(0, 2.95, 0), (0.9, 0.32), sign, rot=(0, math.degrees(math.atan2(-inside.x, -inside.z)), 0))
+        self.quad(p + inside * 1.2 + Vec3(0, 0.012, 0), (1.8, 1.6), col=color.rgb32(46, 46, 50),
+                  rot=(90, math.degrees(math.atan2(d.x, d.z)), 0))
+
     def red_bench(self, p, R, a0, a1):
         """6F 休息區：酒紅色的弧形長椅，上面一層淺色坐墊。"""
         n = 10
@@ -1851,24 +1907,37 @@ class World:
         self.collider(p + Vec3(0, 0.7, 0), (1.4, 1.4, 0.8), occludes=False)
 
     def white_booth(self, p, live):
-        """3F 視聽聆賞席：白色弧形桌、霧面隔板、螢幕和耳機，配一張橘色的蛋殼椅。"""
-        top = p + Vec3(0, 0.76, 0)
-        self.box(top - Vec3(0, 0.02, 0), (1.5, 0.05, 0.85), col=color.rgb32(236, 228, 214))
-        self.box(p + Vec3(0, 0.37, 0.25), (1.2, 0.74, 0.3), col=color.rgb32(228, 214, 190))
-        for x in (-0.74, 0.74):
-            self.box(top + Vec3(x, 0.3, 0.05), (0.03, 0.6, 0.75), col=color.rgba32(225, 232, 234, 190))
-        self.box(top + Vec3(0, 0.28, 0.25), (0.75, 0.45, 0.04), col=color.rgb32(20, 20, 24))
-        for x in (-0.12, 0.12):   # 耳機
-            self.box(top + Vec3(0.45 + x * 0.4, 0.06, -0.1), (0.07, 0.12, 0.1), col=color.rgb32(30, 30, 30))
+        """3F 視聽聆賞席（使用者圈出來、影片 IMG_5325_7）：米色／駝色沙發對著一張圓形木頭矮桌，
+        桌上一台電視，旁邊一片立在桌上的霧面玻璃隔板。"""
+        wood = color.rgb32(196, 160, 112)
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=18, radius=0.5, height=0.42),
+               position=p + Vec3(0, 0, 0.35), color=wood)
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=18, radius=0.52, height=0.04),
+               position=p + Vec3(0, 0.42, 0.35), color=color.rgb32(214, 182, 136))
+        top = p + Vec3(0, 0.46, 0.45)
+        self.box(top + Vec3(0, 0.05, 0), (0.24, 0.1, 0.16), col=color.rgb32(30, 30, 32))       # 電視腳座
+        self.box(top + Vec3(0, 0.42, 0.02), (0.86, 0.52, 0.05), col=color.rgb32(20, 20, 24))
+        scr = top + Vec3(0, 0.42, -0.005)
         if live:
-            Entity(model="quad", position=top + Vec3(0, 0.28, 0.225), scale=(0.68, 0.4),
+            Entity(model="quad", position=scr, scale=(0.8, 0.46),
                    texture=self.text_tex(["▶ 錄音帶", "03:00"], w=200, h=120, bg=(20, 40, 90), sizes=[34, 30]),
                    color=color.rgb(1.4, 1.4, 1.4))
             self.interactables.append(dict(kind="tape", pos=p + Vec3(0, 0, -CELL * 0.5)))
         else:
-            Entity(model="quad", position=top + Vec3(0, 0.28, 0.225), scale=(0.68, 0.4), texture=self.t["screen"])
-        self.egg_seat(p + Vec3(0, 0, -0.65), self.rng.uniform(-25, 25), color.rgb32(222, 98, 40))
-        self.collider(p + Vec3(0, 0.7, 0), (1.5, 1.4, 0.85), occludes=False)
+            Entity(model="quad", position=scr, scale=(0.8, 0.46), texture=self.t["screen"])
+        side = 1 if self.rng.random() < 0.5 else -1
+        self.box(p + Vec3(side * 0.62, 0.95, 0.3), (0.03, 1.0, 0.9), col=color.rgba32(228, 236, 236, 170))   # 霧面隔板
+        # 沙發：米白或駝色，背靠 -z、面向電視
+        col = color.rgb32(*self.rng.choice([(232, 222, 196), (186, 156, 120), (222, 208, 176)]))
+        q = p + Vec3(0, 0, -0.65)
+        self.box(q + Vec3(0, 0.22, 0), (1.1, 0.44, 0.75), col=col)
+        self.box(q + Vec3(0, 0.55, -0.3), (1.1, 0.5, 0.16), col=col)
+        for x in (-0.5, 0.5):
+            self.box(q + Vec3(x, 0.5, 0.02), (0.12, 0.2, 0.75), col=col)
+        for x in (-0.48, 0.48):
+            for z in (-0.3, 0.3):
+                self.box(q + Vec3(x, 0.03, z), (0.05, 0.06, 0.05), col=color.rgb32(150, 150, 154))
+        self.collider(p + Vec3(0, 0.5, -0.15), (1.3, 1.0, 1.7), occludes=False)
 
     def egg_seat(self, pos, rot, col):
         """蛋殼椅：圓圓的椅身包住你，下面一支鍍鉻腳。"""
