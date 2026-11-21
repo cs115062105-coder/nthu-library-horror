@@ -1920,7 +1920,7 @@ class World:
         c, r = p.x / CELL, -p.z / CELL
         fc, fr = self.spec.get("facade_center", (-1.35, 44.0))
         dc, dr = -(r - fr), (c - fc)                    # 落地窗弧線的切線方向（往東北排）
-        rot = math.degrees(math.atan2(dc, dr))          # 本地 +z 對到世界的 (dc, 0, -dr)
+        rot = math.degrees(math.atan2(dc, -dr))         # 本地 +z 對到世界的 (dc, 0, -dr)（世界 z 是 -row）
         e = Entity(parent=self.group(None), position=p, rotation_y=rot)
         B = lambda pos, scale, col: self.box(pos, scale, col=col, parent=e)
         wood, wood_top = color.rgb32(214, 186, 142), color.rgb32(232, 212, 176)
