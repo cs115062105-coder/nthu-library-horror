@@ -434,8 +434,10 @@ FLOORS = {
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
-    "4F": dict(level=LEVEL_4F, floor="carpet_45", stools=8, carts=3, banks=[], safe=set(),
-               wall_tex="wallw", ceiling_tex="slats", white=True, band_windows=True, white_shelves=True,
+    "4F": dict(level=LEVEL_4F, floor="carpet_6f", stools=14, carts=4, banks=[], safe=set(),
+               # 使用者：4F、5F 整層跟 6F 差不多，只差書櫃跟電梯後面的空間 → 外觀照 6F
+               shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="40",
+               wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["000 總類", "010 目錄學", "100 哲學類", "200 宗教類", "300 科學類",
                              "310 數學", "400 應用科學類", "410 醫藥", "490 商業"],
@@ -470,7 +472,8 @@ _UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=T
               # 中間核心西側的電梯廳：黑色亮面牆、東牆兩部電梯、北牆樓層指引
               elevator=dict(cells=(22, 8, 23, 10), doors=[(24, 8), (24, 10)], buttons=(24, 9), directory=(22, 7)),
               spiral=(31.5, 39.5))    # 南邊研究小間旁的螺旋梯
-FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="carpet_45", stools=8, carts=3, ceiling_tex="slats",
+FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="carpet_6f", stools=14, carts=4, ceiling_tex="plaster",
+                    shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="50",
                     shelf_labels=["500 社會科學類", "510 統計", "520 教育", "550 經濟", "570 政治", "580 法律",
                                   "600 中國史地類", "700 世界史地類", "800 語言文學類", "850 中國文學", "900 藝術類"],
                     hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
