@@ -57,6 +57,74 @@ def _sky_texture():
     return Texture(img)
 
 
+def _font(path, size):
+    from PIL import ImageFont
+    try:
+        return ImageFont.truetype(path, size)
+    except Exception:
+        return ImageFont.load_default()
+
+
+def _poster_lazy(font_path):
+    """「擺爛」海報：一隻攤平的貓躺在沙發上。"""
+    img = Image.new("RGB", (180, 252), (250, 214, 120))
+    d = ImageDraw.Draw(img)
+    for y in range(252):
+        d.line((0, y, 180, y), fill=(250, int(214 - y * 0.25), int(120 + y * 0.2)))
+    d.rounded_rectangle((20, 150, 160, 200), 14, fill=(120, 80, 160))
+    d.ellipse((40, 118, 150, 168), fill=(245, 245, 240))
+    d.ellipse((118, 108, 160, 146), fill=(245, 245, 240))
+    d.polygon([(124, 112), (130, 94), (138, 110)], fill=(245, 245, 240))
+    d.polygon([(142, 110), (152, 94), (156, 114)], fill=(245, 245, 240))
+    d.line((130, 128, 138, 128), fill=(40, 40, 40), width=2)
+    d.line((144, 128, 152, 128), fill=(40, 40, 40), width=2)
+    d.text((90, 40), "擺爛", font=_font(font_path, 54), fill=(70, 40, 90), anchor="mm")
+    d.text((90, 225), "LAZY MODE ON", font=_font(font_path, 16), fill=(70, 40, 90), anchor="mm")
+    return img
+
+
+def _poster_band(font_path):
+    """樂團海報：深色底、霓虹圓圈、一把吉他剪影。"""
+    img = Image.new("RGB", (180, 252), (24, 22, 40))
+    d = ImageDraw.Draw(img)
+    for r, col in ((80, (220, 60, 120)), (66, (60, 200, 230)), (52, (240, 200, 60))):
+        d.ellipse((90 - r, 100 - r, 90 + r, 100 + r), outline=col, width=4)
+    d.polygon([(84, 40), (96, 40), (96, 120), (84, 120)], fill=(240, 240, 240))
+    d.ellipse((62, 110, 118, 170), fill=(240, 240, 240))
+    d.ellipse((80, 128, 100, 148), fill=(24, 22, 40))
+    d.text((90, 205), "清大搖滾夜", font=_font(font_path, 26), fill=(240, 240, 240), anchor="mm")
+    d.text((90, 232), "LIVE · 12.20", font=_font(font_path, 14), fill=(60, 200, 230), anchor="mm")
+    return img
+
+
+def _poster_meizhu(font_path):
+    """梅竹賽海報：清大紫。"""
+    img = Image.new("RGB", (180, 252), (110, 50, 140))
+    d = ImageDraw.Draw(img)
+    d.polygon([(0, 170), (180, 120), (180, 252), (0, 252)], fill=(240, 236, 246))
+    d.text((90, 60), "梅竹", font=_font(font_path, 60), fill=(255, 255, 255), anchor="mm")
+    d.text((90, 115), "清大 加油！", font=_font(font_path, 22), fill=(255, 220, 120), anchor="mm")
+    d.text((90, 210), "NTHU", font=_font(font_path, 34), fill=(110, 50, 140), anchor="mm")
+    return img
+
+
+def _calendar(font_path):
+    """期中考倒數月曆：紅色月份、日期一格格，前面幾天被打叉，考試那天畫紅圈。"""
+    img = Image.new("RGB", (170, 220), (252, 252, 250))
+    d = ImageDraw.Draw(img)
+    d.rectangle((0, 0, 170, 46), fill=(200, 50, 50))
+    d.text((85, 23), "11 月", font=_font(font_path, 28), fill=(255, 255, 255), anchor="mm")
+    for k in range(30):
+        x, y = 8 + (k % 7) * 22, 56 + (k // 7) * 32
+        d.text((x + 9, y + 10), str(k + 1), font=_font(font_path, 13), fill=(60, 60, 60), anchor="mm")
+        if k < 16:
+            d.line((x + 2, y + 2, x + 17, y + 18), fill=(120, 120, 120), width=2)
+        if k == 23:
+            d.ellipse((x - 2, y - 2, x + 20, y + 22), outline=(220, 30, 30), width=3)
+    d.text((85, 208), "期中考!!", font=_font(font_path, 14), fill=(220, 30, 30), anchor="mm")
+    return img
+
+
 def _phone_texture(window_tex_img=None):
     """IG 限動：總圖的落地窗（綠樹＋窗框），上面一條進度條、頭像。"""
     w, h = 180, 320
@@ -187,53 +255,8 @@ class Intro:
                                 (L0 + 2.8, L1 - 0.15, (200, 200, 190))):
                 box((side * (W - 0.48), 2.0, (z0 + z1) / 2), (0.85, 0.14, z1 - z0), color.rgb32(*col))
                 box((side * (W - 0.48), 2.11, z1 - 0.25), (0.4, 0.1, 0.25), color.rgb32(245, 245, 245))
-            # 桌上：筆電、零食
-            box((x + 0.05 * side, 0.89, L0 + 0.55), (0.3, 0.22, 0.02), color.rgb32(40, 40, 46))
-            box((x, 0.88, L0 + 0.2), (0.25, 0.25, 0.15), color.rgb32(240, 200, 80))
-        Entity(parent=root, model=Cylinder(12), position=(-(W - 0.32), 0.76, L0 + 0.85), scale=(0.12, 0.18, 0.12),
-               color=color.rgb32(200, 40, 40))      # 泡麵
-        # ---- 生活感小東西（使用者：宿舍放什麼自由發揮）----
-        def cyl(pos, r, h, col):
-            return Entity(parent=root, model=Cylinder(10), position=pos, scale=(r, h, r), color=color.rgb32(*col))
-        yx, mx = -(W - 0.32), W - 0.32                 # 你的桌子在左、室友在右
-        top = 0.76
-        # 你的桌子：擺爛現場，泡麵碗、能量飲料、搖桿
-        for k, dz in enumerate((0.3, 0.45, 0.62)):
-            cyl((yx + 0.12, top, L0 + dz), 0.11, 0.1, (230, 230, 225) if k else (200, 40, 40))
-        for dz in (0.1, 0.16, 0.22):
-            cyl((yx - 0.1, top, L0 + 0.75 + dz), 0.035, 0.13, (40, 180, 90))
-        box((yx + 0.05, top + 0.03, L0 + 0.9), (0.16, 0.05, 0.1), color.rgb32(30, 30, 34))
-        # 室友的桌子：螢幕、檯燈，還有一疊藏不住的課本（偷卷的伏筆）
-        box((mx + 0.1, top + 0.25, L0 + 0.5), (0.04, 0.32, 0.55), color.rgb32(25, 25, 28))
-        box((mx + 0.1, top + 0.25, L0 + 0.5), (0.05, 0.28, 0.5), color.rgb32(60, 90, 140))
-        box((mx + 0.12, top + 0.05, L0 + 0.5), (0.12, 0.1, 0.12), color.rgb32(25, 25, 28))
-        for k, col in enumerate(((180, 40, 40), (40, 80, 160), (230, 200, 60), (60, 140, 80), (240, 240, 235))):
-            box((mx - 0.08, top + 0.03 + k * 0.055, L0 + 0.85), (0.24, 0.05, 0.32 - k * 0.02), color.rgb32(*col))
-        cyl((mx + 0.15, top, L0 + 0.12), 0.08, 0.02, (40, 40, 44))      # 檯燈
-        box((mx + 0.15, top + 0.22, L0 + 0.12), (0.02, 0.44, 0.02), color.rgb32(40, 40, 44))
-        box((mx + 0.08, top + 0.44, L0 + 0.12), (0.18, 0.04, 0.1), color.rgb32(40, 40, 44))
-        # 兩張桌上的水壺
-        cyl((yx + 0.2, top, L0 + 0.1), 0.05, 0.22, (90, 160, 210))
-        cyl((mx + 0.2, top, L0 + 0.9), 0.05, 0.22, (230, 120, 140))
-        # 床邊欄杆晾著毛巾、衣服
-        for side, z, col in ((-1, L0 + 1.4, (250, 200, 80)), (1, L0 + 0.9, (120, 200, 200)), (-1, L0 + 3.9, (220, 220, 230)),
-                             (1, L0 + 4.6, (240, 160, 160))):
-            ax = side * (W - 0.48) - side * 0.47
-            box((ax, 1.95, z), (0.02, 0.5, 0.35), color.rgb32(*col))
-        # 衣櫃門上貼的小海報、門口的拖鞋、窗邊的洗衣籃、垃圾桶
-        for side, z, col in ((-1, L0 + 1.4, (60, 60, 120)), (1, L0 + 1.25, (230, 90, 60)), (1, L0 + 3.8, (90, 160, 120))):
-            box((side * 0.905, 1.45, z), (0.01, 0.38, 0.27), color.rgb32(*col))
-            box((side * 0.9, 1.45, z), (0.01, 0.24, 0.17), color.rgb32(245, 240, 225))
-        for side, z, col in ((-1, L0 + 1.1, (40, 60, 130)), (1, L0 + 1.0, (60, 60, 60)), (-1, L0 + 3.6, (200, 60, 60)), (1, L0 + 3.5, (240, 240, 240))):
-            for dz in (-0.07, 0.07):
-                box((side * 0.75, 0.02, z + dz), (0.26, 0.03, 0.1), color.rgb32(*col))
-        cyl((0.6, 0, L1 - 0.5), 0.24, 0.4, (150, 190, 230))                  # 洗衣籃
-        box((0.6, 0.42, L1 - 0.5), (0.3, 0.1, 0.3), color.rgb32(230, 230, 235))
-        cyl((-0.75, 0, L0 + 2.6), 0.14, 0.32, (90, 90, 96))                  # 垃圾桶
-        cyl((-0.75, 0.3, L0 + 2.6), 0.1, 0.06, (230, 230, 225))              # 塞到滿出來的泡麵碗
-        # 牆上的期中考倒數月曆
-        box((-0.6, 2.25, L1 - 0.06), (0.35, 0.45, 0.02), color.rgb32(250, 250, 248))
-        box((-0.6, 2.4, L1 - 0.075), (0.35, 0.12, 0.01), color.rgb32(200, 50, 50))
+        # ---- 生活感小東西（使用者：宿舍放什麼自由發揮）：用圓滑的 mesh 和畫好的貼圖，不用方塊硬疊 ----
+        self._dorm_props(root, W, L0, L1)
         import shading
         shading.light_scene(root.get_descendants())     # 跟圖書館一樣有光影，木櫃的面才分得出來
 
@@ -246,6 +269,112 @@ class Intro:
         self.mate.root.rotation_y = -90
         self.phone_prop = Entity(parent=self.you.hands[1], model="cube", position=(0, -0.02, 0.1),
                                  scale=(0.08, 0.14, 0.02), color=color.rgb32(20, 20, 24), enabled=False)
+
+    def _dorm_props(self, root, W, L0, L1):
+        import body
+        from shading import person_shader
+        sh = body.Shape()
+        yx, mx, top = -(W - 0.32), W - 0.32, 0.76      # 你的桌子在左、室友在右，桌面高度
+
+        def cup(x, z, lid=(235, 235, 230), band=(205, 45, 40)):        # 泡麵碗：上寬下窄，中間一圈紅色包裝
+            sh.loft([(top, 0.0, 0.0), (top, 0.048, 0.048), (top + 0.035, 0.054, 0.054)], (240, 238, 232), seg=16, at=(x, 0, z))
+            sh.loft([(top + 0.035, 0.054, 0.054), (top + 0.075, 0.061, 0.061)], band, seg=16, at=(x, 0, z))
+            sh.loft([(top + 0.075, 0.061, 0.061), (top + 0.09, 0.064, 0.064), (top + 0.093, 0.0, 0.0)], lid, seg=16, at=(x, 0, z))
+
+        def can(x, z, col):
+            sh.loft([(top, 0.0, 0.0), (top + 0.004, 0.028, 0.028), (top + 0.012, 0.033, 0.033), (top + 0.11, 0.033, 0.033),
+                     (top + 0.122, 0.027, 0.027), (top + 0.124, 0.0, 0.0)], col, seg=14, at=(x, 0, z))
+            sh.loft([(top + 0.122, 0.027, 0.027), (top + 0.126, 0.0, 0.0)], (200, 200, 205), seg=14, at=(x, 0, z))
+
+        def bottle(x, z, col):
+            sh.loft([(top, 0.0, 0.0), (top + 0.005, 0.04, 0.04), (top + 0.2, 0.042, 0.042), (top + 0.22, 0.03, 0.03)], col, seg=16, at=(x, 0, z))
+            sh.loft([(top + 0.22, 0.03, 0.03), (top + 0.25, 0.03, 0.03), (top + 0.255, 0.0, 0.0)], (40, 40, 44), seg=16, at=(x, 0, z))
+
+        def book(x, y, z, w, h, d, col, rot=0):        # 書：封面顏色＋側面一層米白的書頁
+            sh.box((x, y, z), (w, h, d), col, rot=(0, rot, 0))
+            sh.box((x + 0.006, y, z + 0.004), (w - 0.006, h - 0.012, d - 0.004), (246, 242, 228), rot=(0, rot, 0))
+
+        # 你的桌子：擺爛現場
+        cup(yx + 0.12, L0 + 0.32)
+        cup(yx + 0.02, L0 + 0.45, band=(240, 170, 40))
+        cup(yx + 0.16, L0 + 0.62)
+        for k in range(3):
+            can(yx - 0.12 + 0.07 * k, L0 + 0.86 - 0.03 * k, (40, 170, 90))
+        sh.ellipsoid((yx + 0.04, top + 0.02, L0 + 0.95), (0.06, 0.022, 0.04), (36, 36, 40))     # 搖桿
+        for dz in (-0.05, 0.05):
+            sh.ellipsoid((yx + 0.06, top + 0.02, L0 + 0.95 + dz), (0.035, 0.024, 0.03), (36, 36, 40))
+        bottle(yx + 0.2, L0 + 0.12, (90, 160, 210))
+        # 筆電：薄薄的機身，螢幕往後斜開，開著遊戲
+        sh.box((yx - 0.02, top + 0.008, L0 + 0.62), (0.24, 0.016, 0.33), (60, 62, 68))
+        sh.box((yx - 0.15, top + 0.12, L0 + 0.62), (0.012, 0.22, 0.33), (60, 62, 68), rot=(0, 0, -14))
+        sh.box((yx - 0.142, top + 0.125, L0 + 0.62), (0.004, 0.19, 0.3), (90, 150, 200), rot=(0, 0, -14))
+        # 洋芋片袋：鼓鼓的一包，開口捲起來
+        sh.ellipsoid((yx + 0.05, top + 0.05, L0 + 0.2), (0.09, 0.05, 0.13), (235, 190, 50), rot=(0, 20, 0))
+        sh.ellipsoid((yx + 0.09, top + 0.06, L0 + 0.1), (0.07, 0.03, 0.04), (220, 60, 50), rot=(0, 20, 0))
+        # 室友的桌子：螢幕、檯燈、一疊課本（偷卷的伏筆）
+        sh.ellipsoid((mx + 0.12, top + 0.005, L0 + 0.5), (0.09, 0.01, 0.13), (30, 30, 34))
+        sh.loft([(top, 0.02, 0.02), (top + 0.2, 0.02, 0.02)], (30, 30, 34), seg=10, at=(mx + 0.14, 0, L0 + 0.5))
+        sh.box((mx + 0.12, top + 0.3, L0 + 0.5), (0.025, 0.3, 0.52), (26, 26, 30))
+        sh.box((mx + 0.106, top + 0.305, L0 + 0.5), (0.004, 0.26, 0.48), (70, 120, 170))     # 亮著的螢幕：開著 Word 寫報告
+        sh.box((mx + 0.103, top + 0.4, L0 + 0.5), (0.003, 0.03, 0.44), (40, 80, 160))
+        for k, (col, w, h) in enumerate((((150, 40, 40), 0.2, 0.26), ((40, 70, 150), 0.21, 0.28), ((60, 130, 80), 0.19, 0.25),
+                                          ((230, 190, 60), 0.22, 0.29), ((240, 240, 236), 0.2, 0.27))):
+            book(mx - 0.06, top + 0.018 + k * 0.034, L0 + 0.86, h, 0.032, w, col, rot=(k * 7) % 11 - 5)
+        sh.ellipsoid((mx + 0.16, top + 0.01, L0 + 0.13), (0.06, 0.012, 0.06), (44, 44, 48))      # 檯燈
+        sh.loft([(0, 0.008, 0.008), (0.3, 0.008, 0.008)], (44, 44, 48), seg=8, at=(mx + 0.16, top, L0 + 0.13), rot=(0, 0, 12))
+        sh.loft([(0, 0.008, 0.008), (0.22, 0.008, 0.008)], (44, 44, 48), seg=8, at=(mx + 0.1, top + 0.29, L0 + 0.13), rot=(0, 0, 70))
+        sh.loft([(0, 0.0, 0.0), (0.0, 0.02, 0.02), (-0.08, 0.06, 0.06)], (44, 44, 48), seg=14,
+                at=(mx - 0.1, top + 0.36, L0 + 0.13))
+        bottle(mx + 0.2, L0 + 0.95, (230, 120, 140))
+
+        # 床邊欄杆晾著的毛巾：一塊布從欄杆垂下來，有自然的皺褶
+        def towel(x, z, col, w=0.34, drop=0.42, side=1):
+            n, m = 10, 8
+            base = len(sh.v)
+            c = sh._col(col)
+            for i in range(n + 1):
+                t = i / n
+                ang = math.pi * t                          # 繞過欄杆的 U 形
+                for j in range(m + 1):
+                    u = j / m
+                    zz = z + (u - 0.5) * w
+                    fold = 0.012 * math.sin(u * math.pi * 3 + i * 0.4)
+                    if t < 0.5:
+                        px, py = x - side * (0.02 + fold), 2.25 - drop * (0.5 - t) * 2
+                    else:
+                        px, py = x + side * (0.02 + fold), 2.25 - drop * 0.7 * (t - 0.5) * 2
+                    sh.v.append((px, py, zz)); sh.c.append(c); sh.n.append((side if t >= 0.5 else -side, 0, 0))
+            for i in range(n):
+                for j in range(m):
+                    a_, b_ = base + i * (m + 1) + j, base + i * (m + 1) + j + 1
+                    c_, d_ = a_ + m + 1, b_ + m + 1
+                    sh.t += [(a_, b_, d_), (a_, d_, c_), (a_, d_, b_), (a_, c_, d_)]     # 兩面都看得到
+        rail = W - 0.48 - 0.46
+        towel(-rail, L0 + 1.5, (250, 214, 120), side=1)
+        towel(rail, L0 + 1.0, (150, 205, 210), side=-1)
+        towel(-rail, L0 + 4.1, (238, 238, 244), w=0.5, side=1)
+        # 門口的拖鞋（扁扁的鞋底＋一條鞋帶）
+        for sx, z, col in ((-0.72, L0 + 1.15, (40, 60, 130)), (0.72, L0 + 1.0, (70, 70, 74)), (-0.72, L0 + 3.6, (200, 70, 60)),
+                           (0.72, L0 + 3.5, (236, 236, 236))):
+            for dz in (-0.06, 0.06):
+                sh.ellipsoid((sx, 0.015, z + dz), (0.11, 0.015, 0.045), col)
+                sh.ellipsoid((sx + 0.03, 0.035, z + dz), (0.035, 0.03, 0.05), col)
+        # 窗邊的洗衣籃（開口，上面堆著衣服）、門邊塞滿的垃圾桶
+        sh.loft([(0, 0.0, 0.0), (0.0, 0.2, 0.2), (0.38, 0.24, 0.24), (0.4, 0.25, 0.25)], (150, 190, 230), seg=20, at=(0.62, 0, L1 - 0.5))
+        for k, col in enumerate(((235, 235, 240), (70, 90, 140), (220, 120, 110))):
+            sh.ellipsoid((0.62 + 0.08 * math.cos(k * 2.1), 0.4 + 0.03 * k, L1 - 0.5 + 0.08 * math.sin(k * 2.1)), (0.14, 0.06, 0.11), col)
+        sh.loft([(0, 0.0, 0.0), (0.0, 0.12, 0.12), (0.32, 0.14, 0.14)], (90, 90, 96), seg=16, at=(-0.74, 0, L0 + 2.62))
+        sh.loft([(0.3, 0.06, 0.06), (0.36, 0.065, 0.065), (0.37, 0.0, 0.0)], (240, 238, 232), seg=14, at=(-0.72, 0, L0 + 2.6))
+        e = Entity(parent=root, model=sh.mesh(), double_sided=True)
+        e.shader = person_shader
+
+        # 衣櫃門上的海報、牆上的月曆：真的畫出來的圖，不是色塊
+        for (side, z, img) in ((-1, L0 + 1.4, _poster_lazy(self.font_path)), (1, L0 + 1.4, _poster_band(self.font_path)),
+                               (1, L0 + 3.8, _poster_meizhu(self.font_path))):
+            Entity(parent=root, model="quad", texture=Texture(img), position=(side * 0.902, 1.45, z),
+                   rotation_y=90 * side, scale=(0.3, 0.42))
+        Entity(parent=root, model="quad", texture=Texture(_calendar(self.font_path)), position=(-0.62, 2.2, L1 - 0.056),
+               scale=(0.34, 0.44))
 
     def clear_dorm(self):
         for e in (self.set, getattr(self, "you", None) and self.you.root, getattr(self, "mate", None) and self.mate.root):
