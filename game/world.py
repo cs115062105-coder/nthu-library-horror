@@ -417,7 +417,7 @@ FLOORS = {
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
-               wood_wall=(27, 42, 11, 36),
+               wood_wall=(27, 42, 11, 36), dark_glass_wall=True,   # 使用者：這面其實是深色玻璃牆（後面是辦公區的書架）
                hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
                         (32, 22): ("媒體區", "Audio-Visual Collection"), (41, 21): ("發呆區", "Relaxing and Inspiration"),
                         (31, 28): ("電視區", "TV Area"), (8, 13): ("多人聆賞席", "Group Carrels"),
@@ -430,8 +430,6 @@ FLOORS = {
                floor_regions=[("wood", 8, 7, 12, 11)], practice_room=(8, 7, 11, 10),
                bell_lights=[(15, 18), (18, 21), (21, 23), (24, 24), (24, 27)],
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
-                       {'kind': 'darkglass', 'pts': [(32.3, 16.6), (36.3, 16.6)]},   # 使用者在平面圖上圈的：服務台南邊、東西向    # 影片：媒體區和發呆區中間的深色玻璃牆
-                       {'kind': 'darkglass', 'pts': [(37.7, 16.6), (40.5, 16.6)]},    # 中間留一個門口
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
     "4F": dict(level=LEVEL_4F, floor="carpet_45", stools=8, carts=3, banks=[], safe=set(),
@@ -2085,13 +2083,50 @@ class World:
         x0, x1 = (c0 - 0.5) * CELL, (c1 + 0.5) * CELL
         z = -row * CELL - CELL / 2 - 0.02
         w = x1 - x0
-        Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z), scale=(w, WALL_H),
-               texture=self.t["woodslats"], texture_scale=(w / 1.2, 1), color=color.rgb(0.95, 0.95, 0.95))
+        if self.spec.get("dark_glass_wall") and tv_at is not None:
+            # 影片裡電視那一小段還是木條牆，兩邊才是深色玻璃
+            a, b = tv_at - 2, tv_at + 2
+            for s0, s1 in ((c0, a - 1), (b + 1, c1)):
+                if s1 >= s0:
+                    self._dark_glass(s0, s1, row)
+            c0, c1 = a, b
+            x0, x1 = (c0 - 0.5) * CELL, (c1 + 0.5) * CELL
+            w = x1 - x0
+            Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z), scale=(w, WALL_H),
+                   texture=self.t["woodslats"], texture_scale=(w / 1.2, 1), color=color.rgb(0.95, 0.95, 0.95))
+        elif self.spec.get("dark_glass_wall"):   # 3F：一整片深色玻璃，隔著看得到後面淡淡的書架，一段段黑色直框
+            Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z - 0.01), scale=(w, WALL_H),
+                   texture=self.t["light_books"][0], texture_scale=(w / 2.4, 1.4), color=color.rgb32(70, 74, 82))
+            Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z - 0.03), scale=(w, WALL_H),
+                   color=color.rgba32(16, 18, 22, 200))
+            x = x0
+            while x <= x1 + 0.01:
+                self.box(Vec3(x, WALL_H / 2, z - 0.05), (0.06, WALL_H, 0.05), col=color.rgb32(20, 20, 22))
+                x += 2.4
+            self.box(Vec3((x0 + x1) / 2, 0.06, z - 0.06), (w, 0.12, 0.06), col=color.rgb32(26, 26, 28))
+        else:
+            Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z), scale=(w, WALL_H),
+                   texture=self.t["woodslats"], texture_scale=(w / 1.2, 1), color=color.rgb(0.95, 0.95, 0.95))
         if tv_at is not None:
             x = tv_at * CELL
             self.box(Vec3(x, 1.7, z - 0.04), (1.5, 0.9, 0.06), col=color.rgb32(18, 18, 20))
             Entity(model="quad", position=Vec3(x, 1.7, z - 0.075), scale=(1.38, 0.78),
                    color=color.rgb32(70, 110, 150))
+
+    def _dark_glass(self, c0, c1, row):
+        """一段深色玻璃牆：後面淡淡看得到書架，一段段黑色直框，底下一條黑色踢腳。"""
+        x0, x1 = (c0 - 0.5) * CELL, (c1 + 0.5) * CELL
+        z = -row * CELL - CELL / 2 - 0.02
+        w = x1 - x0
+        Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z - 0.01), scale=(w, WALL_H),
+               texture=self.t["light_books"][0], texture_scale=(w / 2.4, 1.4), color=color.rgb32(70, 74, 82))
+        Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z - 0.03), scale=(w, WALL_H),
+               color=color.rgba32(16, 18, 22, 200))
+        x = x0
+        while x <= x1 + 0.01:
+            self.box(Vec3(x, WALL_H / 2, z - 0.05), (0.06, WALL_H, 0.05), col=color.rgb32(20, 20, 22))
+            x += 2.4
+        self.box(Vec3((x0 + x1) / 2, 0.06, z - 0.06), (w, 0.12, 0.06), col=color.rgb32(26, 26, 28))
 
     def tv_booth(self, p):
         """3F 電視區：米白色沙發，前面一張木頭圓桌上放電視，旁邊兩片霧面玻璃。"""
