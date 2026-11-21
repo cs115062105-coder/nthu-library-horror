@@ -361,8 +361,9 @@ FLOORS = {
                frames=[((10, 0), (0, 1), "恕")],
                decals=[(9.5, 7.6, 20, 1.0), (19.5, 14.5, -35, 0.8)],
                # 1 秒一張的影片畫面：知識集東邊「我的人社超能力」白色展箱、旁邊的吉祥物立牌、地上的彩虹緞帶、圈裡的白色展示台
-               hss=dict(box=(20.0, 12.3, 90), mascots=[(19.3, 13.5, 75), (20.9, 11.2, 105), (19.2, 11.4, 95)],
-                        ribbon=[(19.6, 13.4), (20.1, 14.3), (20.9, 15.0), (21.9, 15.5)]),
+               # 0.5 秒一張再看：展箱其實在知識集「西邊」、背後是木條天花板和櫃臺，緞帶從黑地毯流到展箱腳下
+               hss=dict(box=(9.0, 13.0, -90), mascots=[(9.6, 14.0, -70), (8.6, 11.9, -100), (9.9, 12.2, -95)],
+                        ribbon=[(11.3, 13.7), (10.6, 13.6), (9.8, 13.3)]),
                plinths=[(16.6, 9.0), (12.6, 9.4)],
                pickup_gates=[(12.3, 13.7)],        # 自助取書區入口的紅白防盜門（接在玻璃房的開口兩邊）
                # 知識集：黑色地毯圓區、天花板上發光的白色環、從地上彎上去的白色弧形骨架、木色展示板
@@ -480,7 +481,9 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                     # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
                     label_colors=((40, 110, 190), (245, 248, 252)), bay_prefix="60",
                     # 1 秒一張的影片：電梯廳出來的休息區有一張酒紅色的弧形長椅；研究小間走廊牆邊一台黑色飲水機
-                    red_benches=[(28.6, 13.3, 1.2, 150, 330)], water=[((37, 37), (0, 1))],
+                    red_benches=[(28.6, 13.3, 1.2, 150, 330)],
+                    # 0.5 秒一張：樓梯口出來的休息區上面是深色木條天花板，資訊島上方是黑色格柵
+                    grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[((37, 37), (0, 1))],
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
                                   "Q Science", "QA Math", "T Technology"],
                     west_labels=(22, ["期刊 中文合訂本"]),
@@ -573,6 +576,7 @@ class World:
         self.t["timeline"] = [t(tx.timeline(i)) for i in range(3)]
         self.t["light_books"] = [t(tx.books_hd(i, rows=6)) for i in range(4)]
         self.t["light_books5"] = [t(tx.books_hd(i + 4, rows=5)) for i in range(3)]   # 3F：跟 DVD 架一樣五層
+        self.t["theses"] = [t(tx.books_hd(i + 30, rows=6, palette=tx.THESIS)) for i in range(2)]   # 2F 學位論文
         for f in sorted(PHOTOS.glob("carpet_*.png")):     # 從各樓層影片截下來的地毯
             self.t[f.stem] = t(tx.photo_tile(f, 1024))
         self.t["stripes6"] = t(tx.stripes((160, 158, 152), (72, 70, 70), 23))
@@ -1088,6 +1092,14 @@ class World:
         mid = (pa + pb) / 2
         Entity(model="cube", position=mid + Vec3(0, 0.5, 0), rotation_y=rot, scale=(0.6, 1.0, d.length()),
                collider="box", color=color.rgb(1.25, 1.25, 1.22))
+        # 0.5 秒一張的影片：櫃子上面是一整條玻璃展示櫃，裡面平放著泛黃的老文件
+        Entity(model="cube", position=mid + Vec3(0, 1.14, 0), rotation_y=rot, scale=(0.56, 0.26, d.length() - 0.1),
+               color=color.rgba32(210, 230, 236, 45))
+        n = max(2, int(d.length() / 0.5))
+        for i in range(n):
+            q = pa + d * ((i + 0.5) / n) + Vec3(0, 1.015, 0)
+            Entity(model="cube", position=q, rotation_y=rot + self.rng.uniform(-8, 8), scale=(0.3, 0.01, 0.36),
+                   color=color.rgb32(*self.rng.choice([(226, 208, 168), (214, 194, 150), (236, 226, 200)])))
         normal = Vec3(-d.z, 0, d.x).normalized()      # 朝東北，面向走道
         tex = self.text_tex(list(lines), w=320, h=64, bg=(250, 250, 250), fg=(30, 30, 34), sizes=[36, 14])
         self.quad(mid + normal * 0.31 + Vec3(0, 0.55, 0), (3.0, 0.6), tex, rot=(0, math.degrees(math.atan2(-normal.x, -normal.z)), 0))
@@ -1103,6 +1115,8 @@ class World:
             tex = self.t["dvds"][k % 4] if k % 3 == 0 else self.t["light_books5"][k % 3]
         elif self.spec.get("shelf_fill") == "light":  # 6F 西文書，書背顏色淺
             tex = self.t["light_books"][(c * 7 + r * 3) % 4]
+        if self.spec.get("end_style") == "board" and r >= 26:   # 2F 學位論文區：影片裡整排都是米黃色的論文
+            tex = self.t["theses"][(c + r) % 2]
         blue_end = self.spec.get("end_style") == "blue"
         edge = color.rgb32(*self.spec.get("end_color", (40, 110, 190)))
         white = self.spec.get("white_shelves")    # 3F／4F 是白色的書架，側面一塊黃色的分類牌
@@ -2097,9 +2111,11 @@ class World:
 
     def plinth(self, p):
         """知識集圈裡的白色展示台，上面一個玻璃罩，裡面放一個小展品。"""
-        self.box(p + Vec3(0, 0.5, 0), (0.55, 1.0, 0.55), col=color.rgb32(248, 248, 246))
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=16, radius=0.3, height=1.0), position=p,
+               color=color.rgb32(248, 248, 246))     # 影片裡是圓柱形的白色展示台
         self.box(p + Vec3(0, 1.08, 0), (0.22, 0.16, 0.16), col=color.rgb32(*self.rng.choice(tx.BOOK_COLORS)))
-        self.box(p + Vec3(0, 1.15, 0), (0.5, 0.3, 0.5), col=color.rgba32(200, 225, 235, 50))
+        Entity(parent=self.group(None), model=fastops.cylinder(resolution=16, radius=0.26, height=0.3), position=p + Vec3(0, 1.0, 0),
+               color=color.rgba32(200, 225, 235, 50))
         self.collider(p + Vec3(0, 0.6, 0), (0.55, 1.2, 0.55), occludes=False)
 
     def wall_bench(self, c, r, p):

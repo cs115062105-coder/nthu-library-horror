@@ -625,7 +625,7 @@ def painting(seed):
     return _noise(img, 3, rng)
 
 
-def books_hd(seed, light=True, rows=6):
+def books_hd(seed, light=True, rows=6, palette=None):
     """高解析度的書架正面（512×512）：每本書有圓弧的明暗、索書號貼紙、書名色帶，
     書後面和上一層層板下面有陰影，偶爾一個白色拱形書擋（照 6F 影片）。先畫兩倍大再縮小，邊緣才平滑。"""
     rng = random.Random(2000 + seed + (0 if light else 500))
@@ -639,6 +639,8 @@ def books_hd(seed, light=True, rows=6):
         cols = list(BOOK_COLORS)
         weights = [1] * len(cols)
         back = (40, 38, 36)
+    if palette:          # 例如 2F 學位論文：清一色米黃色精裝
+        cols, weights = palette
     img = Image.new("RGB", (S, S), back)
     d = ImageDraw.Draw(img)
     rh = S / rows
@@ -961,3 +963,7 @@ def landscape(seed):
     bx = rng.randint(60, 180)
     d.polygon([(bx, 262), (bx + 40, 262), (bx + 32, 270), (bx + 6, 270)], fill=(80, 80, 86))
     return _noise(img, 3, rng)
+
+
+# 2F 學位論文的書背：清一色米黃／淺黃精裝，偶爾一本白的
+THESIS = ([(236, 226, 168), (230, 218, 150), (242, 234, 190), (224, 212, 160), (246, 244, 236)], [6, 5, 4, 3, 1])
