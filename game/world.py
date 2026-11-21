@@ -1905,37 +1905,51 @@ class World:
         self.collider(p + Vec3(0, 0.7, 0), (1.4, 1.4, 0.8), occludes=False)
 
     def white_booth(self, p, live):
-        """3F 視聽聆賞席（使用者圈出來、影片 IMG_5325_7）：米色／駝色沙發對著一張圓形木頭矮桌，
-        桌上一台電視，旁邊一片立在桌上的霧面玻璃隔板。"""
-        wood = color.rgb32(196, 160, 112)
-        Entity(parent=self.group(None), model=fastops.cylinder(resolution=18, radius=0.5, height=0.42),
-               position=p + Vec3(0, 0, 0.35), color=wood)
-        Entity(parent=self.group(None), model=fastops.cylinder(resolution=18, radius=0.52, height=0.04),
-               position=p + Vec3(0, 0.42, 0.35), color=color.rgb32(214, 182, 136))
-        top = p + Vec3(0, 0.46, 0.45)
-        self.box(top + Vec3(0, 0.05, 0), (0.24, 0.1, 0.16), col=color.rgb32(30, 30, 32))       # 電視腳座
-        self.box(top + Vec3(0, 0.42, 0.02), (0.86, 0.52, 0.05), col=color.rgb32(20, 20, 24))
-        scr = top + Vec3(0, 0.42, -0.005)
+        """3F 雙人聆賞席（照影片 IMG_5325_7_2 一格一格對）：
+        一座橢圓形的淺木色矮櫃（側面挖空），櫃上一台黑色薄電視、一片立著的霧面玻璃屏風；
+        前面一張低背方扶手的皮沙發（米白或駝色），鍍鉻斜腳，面向電視。"""
+        g = self.group(None)
+        wood, wood_top = color.rgb32(214, 186, 142), color.rgb32(232, 212, 176)
+        cz = 0.45                                     # 櫃子中心（往北，沙發在南）
+        # 橢圓矮櫃：外圈木色、上下兩片、中間挖空露出深色
+        Entity(parent=g, model=fastops.cylinder(resolution=24, radius=0.5, height=0.06), position=p + Vec3(0, 0.06, cz),
+               scale=(1.8, 1, 0.7), color=wood)
+        Entity(parent=g, model=fastops.cylinder(resolution=24, radius=0.5, height=0.06), position=p + Vec3(0, 0.4, cz),
+               scale=(1.8, 1, 0.7), color=wood_top)
+        Entity(parent=g, model=fastops.cylinder(resolution=24, radius=0.47, height=0.28), position=p + Vec3(0, 0.12, cz),
+               scale=(1.7, 1, 0.62), color=color.rgb32(70, 60, 50))
+        for x in (-0.78, 0.78):                       # 兩端的實心板
+            self.box(p + Vec3(x, 0.26, cz), (0.08, 0.3, 0.3), col=wood)
+        for x in (-0.45, 0.45):                       # 下面兩支金屬腳
+            self.box(p + Vec3(x, 0.03, cz), (0.05, 0.06, 0.4), col=color.rgb32(160, 162, 166))
+        # 霧面玻璃屏風：立在櫃子北側，整片比櫃子短一點
+        self.box(p + Vec3(-0.1, 0.83, cz + 0.2), (1.4, 0.8, 0.03), col=color.rgba32(226, 236, 236, 200))
+        self.box(p + Vec3(0.62, 0.83, cz + 0.2), (0.04, 0.8, 0.05), col=color.rgb32(200, 202, 206))
+        # 電視：黑色薄框，腳座在櫃子上，面向南邊的沙發
+        self.box(p + Vec3(0.25, 0.48, cz - 0.05), (0.3, 0.04, 0.18), col=color.rgb32(28, 28, 30))
+        self.box(p + Vec3(0.25, 0.58, cz - 0.02), (0.05, 0.18, 0.04), col=color.rgb32(28, 28, 30))
+        self.box(p + Vec3(0.25, 0.92, cz - 0.05), (0.98, 0.58, 0.04), col=color.rgb32(16, 16, 18))
+        scr = p + Vec3(0.25, 0.92, cz - 0.075)
         if live:
-            Entity(model="quad", position=scr, scale=(0.8, 0.46),
+            Entity(model="quad", position=scr, scale=(0.92, 0.52), rotation_y=180,
                    texture=self.text_tex(["▶ 錄音帶", "03:00"], w=200, h=120, bg=(20, 40, 90), sizes=[34, 30]),
                    color=color.rgb(1.4, 1.4, 1.4))
             self.interactables.append(dict(kind="tape", pos=p + Vec3(0, 0, -CELL * 0.5)))
         else:
-            Entity(model="quad", position=scr, scale=(0.8, 0.46), texture=self.t["screen"])
-        side = 1 if self.rng.random() < 0.5 else -1
-        self.box(p + Vec3(side * 0.62, 0.95, 0.3), (0.03, 1.0, 0.9), col=color.rgba32(228, 236, 236, 170))   # 霧面隔板
-        # 沙發：米白或駝色，背靠 -z、面向電視
-        col = color.rgb32(*self.rng.choice([(232, 222, 196), (186, 156, 120), (222, 208, 176)]))
-        q = p + Vec3(0, 0, -0.65)
-        self.box(q + Vec3(0, 0.22, 0), (1.1, 0.44, 0.75), col=col)
-        self.box(q + Vec3(0, 0.55, -0.3), (1.1, 0.5, 0.16), col=col)
-        for x in (-0.5, 0.5):
-            self.box(q + Vec3(x, 0.5, 0.02), (0.12, 0.2, 0.75), col=col)
-        for x in (-0.48, 0.48):
+            Entity(model="quad", position=scr, scale=(0.92, 0.52), rotation_y=180, color=color.rgb32(24, 26, 30))
+        # 雙人皮沙發：低背、方方的扶手、鍍鉻斜腳
+        leather = color.rgb32(*self.rng.choice([(236, 226, 188), (240, 232, 200), (200, 172, 132), (190, 160, 118)]))
+        dark = color.rgb32(int(leather[0] * 255 * 0.86), int(leather[1] * 255 * 0.86), int(leather[2] * 255 * 0.86))
+        q = p + Vec3(0, 0, -0.55)
+        self.box(q + Vec3(0, 0.33, 0), (1.5, 0.16, 0.72), col=leather)               # 坐墊
+        self.box(q + Vec3(0, 0.2, 0), (1.62, 0.12, 0.76), col=dark)                  # 座框
+        self.box(q + Vec3(0, 0.55, -0.3), (1.5, 0.42, 0.16), col=leather)            # 椅背（低）
+        for x in (-0.76, 0.76):
+            self.box(q + Vec3(x, 0.38, 0), (0.14, 0.34, 0.76), col=leather)         # 方扶手
             for z in (-0.3, 0.3):
-                self.box(q + Vec3(x, 0.03, z), (0.05, 0.06, 0.05), col=color.rgb32(150, 150, 154))
-        self.collider(p + Vec3(0, 0.5, -0.15), (1.3, 1.0, 1.7), occludes=False)
+                leg = self.box(q + Vec3(x * 0.95, 0.07, z), (0.03, 0.16, 0.03), col=color.rgb32(196, 198, 202))
+                leg.rotation_z = 12 if x > 0 else -12
+        self.collider(p + Vec3(0, 0.5, -0.05), (1.8, 1.0, 1.9), occludes=False)
 
     def egg_seat(self, pos, rot, col):
         """蛋殼椅：圓圓的椅身包住你，下面一支鍍鉻腳。"""
@@ -2338,10 +2352,11 @@ class World:
 
     def bell_light(self, p):
         """3F 的白色鐘形吊燈。"""
-        self.box(p + Vec3(0, WALL_H - 0.5, 0), (0.015, 1.0, 0.015), col=color.rgb32(200, 200, 200))
-        Entity(parent=self.group(None), model=Cone(resolution=12, radius=0.3, height=0.45, add_bottom=False),
-               position=p + Vec3(0, WALL_H - 1.45, 0), color=color.rgb32(245, 245, 245), double_sided=True)
-        self.box(p + Vec3(0, WALL_H - 1.47, 0), (0.18, 0.04, 0.18), col=color.rgb(1.5, 1.5, 1.4))
+        # 影片裡是細長的喇叭形小吊燈，掛得比人頭高很多
+        self.box(p + Vec3(0, WALL_H - 0.35, 0), (0.012, 0.7, 0.012), col=color.rgb32(200, 200, 200))
+        Entity(parent=self.group(None), model=Cone(resolution=14, radius=0.22, height=0.42, add_bottom=False),
+               position=p + Vec3(0, WALL_H - 1.12, 0), color=color.rgb32(245, 245, 245), double_sided=True)
+        self.box(p + Vec3(0, WALL_H - 1.13, 0), (0.12, 0.03, 0.12), col=color.rgb(1.5, 1.5, 1.4))
 
     def wall_text(self, p, d, lines):
         """直接印在白牆上的大字，例如 4F 故事牆的標題。"""
