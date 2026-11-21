@@ -105,49 +105,102 @@ class Intro:
 
     # ---------- 宿舍佈景 ----------
     def build_dorm(self):
+        """照使用者拍的宿舍照片：長條形四人房，中間一條白磁磚走道，兩邊各兩組淺木色「上面床、下面衣櫃書桌」，
+        床的樓梯是斜的置物階梯，盡頭一扇窗、窗上一台冷氣。門口那端往窗戶看。"""
         root = Entity(position=BASE)
         self.set = root
-        floor_col, wall_col = color.rgb32(196, 176, 150), color.rgb32(232, 226, 214)
+        wood, wood_dk = color.rgb32(206, 188, 162), color.rgb32(178, 160, 136)
+        white, wall_col = color.rgb32(236, 233, 224), color.rgb32(236, 230, 212)
+        L0, L1, W = -3.3, 3.0, 1.55          # 房間 z 從門到窗、x 半寬
 
-        def box(pos, scale, col):
-            return Entity(parent=root, model="cube", position=pos, scale=scale, color=col)
-        box((0, -0.05, 0), (6, 0.1, 5), floor_col)
-        box((0, 1.5, 2.5), (6, 3, 0.1), wall_col)          # 北牆（窗戶那面）
-        box((-3, 1.5, 0), (0.1, 3, 5), wall_col)
-        box((3, 1.5, 0), (0.1, 3, 5), wall_col)
-        box((0, 3, 0), (6, 0.1, 5), color.rgb32(240, 238, 232))
-        Entity(parent=root, model="quad", position=(0, 1.7, 2.44), scale=(1.8, 1.3), texture=_sky_texture(),
-               color=color.rgb(1.1, 1.1, 1.1))   # 窗外
-        box((0, 1.7, 2.42), (1.9, 0.06, 0.04), color.rgb32(200, 200, 200))
-        box((0, 1.05, 2.42), (2.0, 0.06, 0.12), color.rgb32(200, 200, 200))
-        box((0, 2.35, 2.42), (2.0, 0.06, 0.04), color.rgb32(200, 200, 200))
-        for side in (-1, 1):        # 兩組床下書桌的上下舖：上面床，下面書桌
-            x = side * 2.0
-            wood = color.rgb32(170, 130, 90)
-            for dz in (-1.0, 1.0):
-                for dx in (-0.55, 0.55):
-                    box((x + dx, 1.0, dz), (0.08, 2.0, 0.08), wood)
-            box((x, 1.65, 0), (1.2, 0.12, 2.1), wood)                      # 床板
-            box((x, 1.78, 0), (1.1, 0.15, 2.0), color.rgb32(120, 150, 200) if side < 0 else color.rgb32(220, 150, 120))
-            box((x, 0.75, 0.4), (1.1, 0.05, 1.0), color.rgb32(200, 170, 130))   # 書桌
-            box((x + 0.1 * side, 0.95, 0.5), (0.35, 0.25, 0.02), color.rgb32(40, 40, 46))  # 筆電
-            box((x, 0.9, -0.3), (0.3, 0.3, 0.2), color.rgb32(240, 200, 80))        # 零食
-        box((-2.0, 1.95, -0.8), (0.4, 0.12, 0.25), color.rgb32(245, 245, 245))     # 枕頭
-        box((2.0, 1.95, -0.8), (0.4, 0.12, 0.25), color.rgb32(245, 245, 245))
-        Entity(parent=root, model="quad", position=(-2.94, 1.6, 0.9), rotation_y=-90, scale=(0.6, 0.8),
-               color=color.rgb32(200, 60, 50))        # 牆上的海報
-        Entity(parent=root, model="quad", position=(-2.93, 1.6, 0.9), rotation_y=-90, scale=(0.4, 0.15),
-               color=color.rgb32(250, 240, 200))
-        box((0, 0.2, -1.2), (1.2, 0.4, 0.7), color.rgb32(110, 90, 70))   # 中間的小茶几
-        Entity(parent=root, model=Cylinder(12), position=(0.3, 0.4, -1.2), scale=(0.12, 0.2, 0.12),
+        def box(pos, scale, col, rot=(0, 0, 0)):
+            return Entity(parent=root, model="cube", position=pos, scale=scale, color=col, rotation=rot)
+        tile = Image.new("RGB", (128, 128), (226, 223, 214))
+        ImageDraw.Draw(tile).rectangle((0, 0, 127, 127), outline=(170, 166, 158), width=3)
+        Entity(parent=root, model="quad", rotation_x=90, position=(0, 0.001, (L0 + L1) / 2), scale=(2 * W, L1 - L0),
+               texture=Texture(tile), texture_scale=(2 * W / 0.4, (L1 - L0) / 0.4))     # 40 公分白磁磚
+        box((0, -0.05, (L0 + L1) / 2), (2 * W, 0.1, L1 - L0), color.rgb32(200, 196, 188))
+        box((0, 1.45, L1), (2 * W, 2.9, 0.1), wall_col)                       # 窗戶那面
+        box((0, 1.45, L0), (2 * W, 2.9, 0.1), wall_col)                       # 門那面（在鏡頭後面）
+        for side in (-1, 1):
+            box((side * W, 1.45, (L0 + L1) / 2), (0.1, 2.9, L1 - L0), wall_col)
+        box((0, 2.9, (L0 + L1) / 2), (2 * W, 0.1, L1 - L0), color.rgb32(242, 240, 234))
+        box((0, 0.05, L1 - 0.06), (2 * W, 0.1, 0.02), color.rgb32(90, 60, 45))   # 深色踢腳板
+        box((0.1, 2.87, (L0 + L1) / 2), (0.1, 0.04, 2.4), color.rgb32(250, 250, 250))   # 日光燈
+        # 窗戶：窄長的白框窗，上面一台分離式冷氣
+        Entity(parent=root, model="quad", position=(0.1, 1.3, L1 - 0.06), scale=(0.75, 1.5), texture=_sky_texture(),
+               color=color.rgb(1.15, 1.15, 1.15))
+        for y in (0.55, 1.3, 2.05):
+            box((0.1, y, L1 - 0.08), (0.85, 0.06, 0.05), white)
+        for x in (-0.3, 0.1, 0.5):
+            box((x, 1.3, L1 - 0.08), (0.06, 1.55, 0.05), white)
+        box((0.1, 2.45, L1 - 0.17), (0.95, 0.3, 0.22), color.rgb32(248, 248, 246))
+        box((0.1, 2.33, L1 - 0.28), (0.85, 0.03, 0.02), color.rgb32(210, 210, 210))
+
+        def wardrobe(x, z0, z1, h=2.0):       # 兩扇門的衣櫃，門朝走道
+            zc = (z0 + z1) / 2
+            box((x, h / 2, zc), (0.62, h, z1 - z0), wood)
+            f = x - math.copysign(0.315, x)
+            box((f, h / 2, zc), (0.01, h - 0.06, 0.012), wood_dk)                # 中間門縫
+            for dz in (-0.07, 0.07):
+                box((f - math.copysign(0.02, x), 1.0, zc + dz), (0.02, 0.16, 0.015), color.rgb32(190, 190, 192))
+
+        def desk(x, z0, z1):                  # 書桌＋活動抽屜櫃
+            box((x, 0.74, (z0 + z1) / 2), (0.62, 0.04, z1 - z0), wood)
+            box((x + math.copysign(0.29, x), 0.37, (z0 + z1) / 2), (0.04, 0.74, z1 - z0), wood)
+            px = x - math.copysign(0.05, x)
+            box((px, 0.32, z0 + 0.25), (0.5, 0.6, 0.42), color.rgb32(225, 223, 216))
+            for k in range(3):
+                box((px - math.copysign(0.255, x), 0.15 + k * 0.19, z0 + 0.25), (0.01, 0.025, 0.22), color.rgb32(150, 150, 150))
+
+        def loft(x, z0, z1):                  # 上舖：木床板、白色鐵柱、走道那側有欄杆
+            box((x, 1.9, (z0 + z1) / 2), (0.95, 0.06, z1 - z0), wood)
+            box((x, 1.84, (z0 + z1) / 2), (0.95, 0.06, z1 - z0), wood_dk)
+            ax = x - math.copysign(0.46, x)
+            for z in (z0 + 0.03, z1 - 0.03):
+                box((ax, 1.3, z), (0.05, 2.6, 0.05), white)
+            box((ax, 2.25, (z0 + z1) / 2 + 0.3), (0.035, 0.035, z1 - z0 - 0.6), white)
+            for k in range(4):
+                box((ax, 2.1, z0 + 0.6 + k * (z1 - z0 - 1.2) / 3), (0.03, 0.3, 0.03), white)
+
+        def stair(x, z0):                     # 斜的置物階梯（照片裡上舖的樓梯）
+            sx = x - math.copysign(0.05, x)
+            box((sx, 0.95, z0 + 0.3), (0.5, 1.9, 0.04), wood)                    # 背板
+            box((sx, 0.95, z0 + 0.3), (0.04, 2.1, 0.06), wood, rot=(-28, 0, 0))   # 斜梁
+            for k in range(4):
+                box((sx, 0.3 + k * 0.42, z0 + 0.1 + k * 0.12), (0.46, 0.04, 0.25), wood)
+
+        for side in (-1, 1):
+            x = side * (W - 0.32)
+            # 門口這組：書桌（上面一層開放層板）、衣櫃，床在上面
+            desk(x, L0, L0 + 1.0)
+            box((x, 1.3, L0 + 0.5), (0.62, 0.03, 1.0), wood)
+            wardrobe(x, L0 + 1.0, L0 + 1.8)
+            loft(side * (W - 0.48), L0 + 0.1, L0 + 2.6)
+            # 窗戶這組：樓梯、衣櫃、書桌，床在上面
+            stair(x, L0 + 2.75)
+            wardrobe(x, L0 + 3.4, L0 + 4.2)
+            desk(x, L0 + 4.2, L1)
+            loft(side * (W - 0.48), L0 + 2.7, L1 - 0.05)
+            # 床上的被子和枕頭
+            for z0, z1, col in ((L0 + 0.2, L0 + 2.5, (120, 150, 200) if side < 0 else (220, 150, 120)),
+                                (L0 + 2.8, L1 - 0.15, (200, 200, 190))):
+                box((side * (W - 0.48), 2.0, (z0 + z1) / 2), (0.85, 0.14, z1 - z0), color.rgb32(*col))
+                box((side * (W - 0.48), 2.11, z1 - 0.25), (0.4, 0.1, 0.25), color.rgb32(245, 245, 245))
+            # 桌上：筆電、零食
+            box((x + 0.05 * side, 0.89, L0 + 0.55), (0.3, 0.22, 0.02), color.rgb32(40, 40, 46))
+            box((x, 0.88, L0 + 0.2), (0.25, 0.25, 0.15), color.rgb32(240, 200, 80))
+        Entity(parent=root, model=Cylinder(12), position=(-(W - 0.32), 0.76, L0 + 0.85), scale=(0.12, 0.18, 0.12),
                color=color.rgb32(200, 40, 40))      # 泡麵
+        import shading
+        shading.light_scene(root.get_descendants())     # 跟圖書館一樣有光影，木櫃的面才分得出來
 
         self.you = Person(shirt=color.rgb32(230, 120, 30), pants=color.rgb32(50, 50, 60), hair=color.rgb32(40, 30, 25))
         self.mate = Person(shirt=color.rgb32(120, 125, 135), pants=color.rgb32(40, 60, 100), hair=color.rgb32(25, 22, 20))
         self.mate.dress(bag=(170, 50, 45))     # 室友的紅書包
-        self.you.root.position = BASE + Vec3(-0.7, 0, -0.6)
+        self.you.root.position = BASE + Vec3(-0.42, 0, -1.2)
         self.you.root.rotation_y = 90
-        self.mate.root.position = BASE + Vec3(0.7, 0, -0.6)
+        self.mate.root.position = BASE + Vec3(0.42, 0, -1.2)
         self.mate.root.rotation_y = -90
         self.phone_prop = Entity(parent=self.you.hands[1], model="cube", position=(0, -0.02, 0.1),
                                  scale=(0.08, 0.14, 0.02), color=color.rgb32(20, 20, 24), enabled=False)
@@ -196,7 +249,7 @@ class Intro:
         self.phone.enabled = shot == "phone"
         if act == "mate_gone":
             self.mate.root.enabled = False
-            self.you.root.position = BASE + Vec3(-0.3, 0, -0.4)
+            self.you.root.position = BASE + Vec3(-0.1, 0, -0.8)
             self.you.root.rotation_y = 30
         if act == "lib":
             self.game.librarian.root.enabled = True
@@ -233,8 +286,8 @@ class Intro:
         elif act == "high_five":
             k = min(1.0, t * 2)
             you.arms[0].rotation_x = mate.arms[0].rotation_x = -165 * k
-            you.root.x = BASE.x - 0.7 + 0.25 * k
-            mate.root.x = BASE.x + 0.7 - 0.25 * k
+            you.root.x = BASE.x - 0.42 + 0.17 * k
+            mate.root.x = BASE.x + 0.42 - 0.17 * k
         if act in ("phone", "phone_angry"):
             self.phone_prop.enabled = True
             you.arms[1].rotation_x = -80
@@ -259,11 +312,11 @@ class Intro:
         b = BASE
         sway = math.sin(self.t * 0.4) * 0.08
         shots = {
-            "dorm_wide": (b + Vec3(sway, 1.75, -4.6), b + Vec3(0, 1.1, 0)),
-            "dorm_you": (b + Vec3(0.9, 1.6, -2.7 + sway), b + Vec3(-0.6, 1.45, -0.6)),
-            "dorm_mate": (b + Vec3(-0.9, 1.6, -2.7 + sway), b + Vec3(0.6, 1.45, -0.6)),
-            "dorm_empty": (b + Vec3(-1.2, 1.8, -3.8), b + Vec3(2.0, 1.6, 0)),
-            "phone": (b + Vec3(0.7, 1.6, -2.6), b + Vec3(-0.3, 1.35, -0.4)),
+            "dorm_wide": (b + Vec3(sway, 1.6, -3.15), b + Vec3(0, 1.15, 0.6)),
+            "dorm_you": (b + Vec3(0.35, 1.55, -3.1 + sway), b + Vec3(-0.42, 1.45, -1.2)),
+            "dorm_mate": (b + Vec3(-0.35, 1.55, -3.1 + sway), b + Vec3(0.42, 1.45, -1.2)),
+            "dorm_empty": (b + Vec3(-0.3, 1.75, -3.15), b + Vec3(0.6, 1.5, 1.5)),
+            "phone": (b + Vec3(0.3, 1.55, -2.9), b + Vec3(-0.1, 1.35, -0.8)),
             "lib_wide": (Vec3(14 + sway * 4, 2.4, -33), Vec3(19, 1.3, -25)),
         }
         if shot == "lib_guard":
