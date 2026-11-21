@@ -128,7 +128,7 @@ LEVEL_3F = [
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O..e..W",
     "#xxxxxxxxxxxxxxxxxxxxx.....................W",
     "#xxxxxxxxxxxxxxxxxxxxx...................e.W",
-    "#xxxxxxxxxxxxxxxxxxxxxx......j..j..O.......W",
+    "#xxxxxxxxxxxxxxxxxxxxxx............O.......W",
     "#xxxxxxxxxxxxxxxxxxxxxxx............P......W",
     "############################################",
 ]
@@ -415,7 +415,7 @@ FLOORS = {
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
                end_style="blue", end_color=(236, 150, 30),     # 第二批影片：側板霧面玻璃配橘黃邊條
                grid_ceilings=[(27.5, 17.5, 37.5, 26.5, "grid_white")],   # 書架區上方白色鋁格柵
-               wave_chairs=[(37, 28, 0), (39, 28, 0)],           # 木條牆前的白色波浪躺椅（面向南牆的電視）
+               wave_chairs=[(29, 29, 0), (32, 29, 0)],           # 使用者：截圖裡電視座位那兩格其實是白色波浪躺椅
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
