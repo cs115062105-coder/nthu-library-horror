@@ -111,7 +111,7 @@ LEVEL_3F = [
     "########....####.###########################",
     "########....####.########UD#################",
     "##########.#####.#####.....#################",
-    "#..............................w...........W",
+    "#..........................wwwwwwwwwwwwwwwwW",
     "#.............................S............W",
     "#.u.u..u..u.u..u..............S............W",
     "#.............................S........e...W",
@@ -415,11 +415,12 @@ FLOORS = {
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
                end_style="blue", end_color=(236, 150, 30),     # 第二批影片：側板霧面玻璃配橘黃邊條
                grid_ceilings=[(27.5, 17.5, 37.5, 26.5, "grid_white")],   # 書架區上方白色鋁格柵
-               wave_chairs=[(38, 13), (40, 13)],                 # 木條牆前的白色波浪躺椅
+               wave_chairs=[(37, 28, 0), (39, 28, 0)],           # 木條牆前的白色波浪躺椅（面向南牆的電視）
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
-               wood_wall=(27, 42, 11, 36), dark_glass_wall=True,   # 使用者：這面其實是深色玻璃牆（後面是辦公區的書架）
+               # 使用者截圖指出：木條牆＋電視是南牆（電視區那面）；北牆的「深色玻璃牆」其實是一整排木框玻璃櫃（格子 w）
+               wood_wall=(24, 42, 31, 38, "N"),
                hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
                         (32, 22): ("媒體區", "Audio-Visual Collection"), (41, 21): ("發呆區", "Relaxing and Inspiration"),
                         (31, 28): ("電視區", "TV Area"), (8, 13): ("多人聆賞席", "Group Carrels"),
@@ -798,8 +799,8 @@ class World:
             self.campus_model(Vec3(c * CELL, 0, -r * CELL))
         for c, r, rot, word in self.spec.get("ink_panels", []):
             self.ink_panel(Vec3(c * CELL, 0, -r * CELL), rot, word)
-        for c, r in self.spec.get("wave_chairs", []):
-            self.wave_chair(cell_pos(c, r))
+        for c, r, *rot in self.spec.get("wave_chairs", []):
+            self.wave_chair(cell_pos(c, r), *rot)
             self.walkable.discard((c, r))
         for (c, r), kind in self.spec.get("draped", []):
             self.draped_table(cell_pos(c, r), kind)
@@ -2109,10 +2110,10 @@ class World:
             Entity(parent=b, model="quad", position=(0, 1.2, z), rotation_y=ry, scale=(1.5, 2.25), texture=tex)
         self.collider(p + Vec3(0, 1.2, 0), (1.6, 2.4, 0.15), occludes=False).rotation_y = rot
 
-    def wave_chair(self, p):
+    def wave_chair(self, p, rot=180):
         """3F 木條牆前的白色波浪造型躺椅：一塊白色板子彎成 S 形，兩張並排。"""
         for x in (-0.45, 0.45):
-            ch = Entity(parent=self.group(None), position=p + Vec3(x, 0, 0), rotation_y=180)
+            ch = Entity(parent=self.group(None), position=p + Vec3(x, 0, 0), rotation_y=rot)
             prev = None
             for k in range(8):       # 從前緣往後彎上去的曲面，用一段段薄板接起來
                 t = k / 7
@@ -2141,11 +2142,20 @@ class World:
                 self.box((0, y - 0.16, side * 0.2), (0.86, 0.02, 0.1), col=black, parent=rk)
         self.collider(p + Vec3(0, 0.85, 0), (1.0, 1.7, 1.0), occludes=False)
 
-    def wood_wall(self, c0, c1, row, tv_at=None):
-        """木條牆：貼在 row 那排牆的南面，中間掛一台電視。"""
+    def wood_wall(self, c0, c1, row, tv_at=None, face="S"):
+        """木條牆：貼在 row 那排牆的南面（face="N" 則是北面，給南牆用），中間掛一台電視。"""
         x0, x1 = (c0 - 0.5) * CELL, (c1 + 0.5) * CELL
-        z = -row * CELL - CELL / 2 - 0.02
         w = x1 - x0
+        if face == "N":
+            z = -row * CELL + CELL / 2 + 0.02
+            Entity(model="quad", position=Vec3((x0 + x1) / 2, WALL_H / 2, z), scale=(w, WALL_H), rotation_y=180,
+                   texture=self.t["woodslats"], texture_scale=(w / 1.2, 1), color=color.rgb(0.95, 0.95, 0.95))
+            if tv_at is not None:
+                x = tv_at * CELL
+                self.box(Vec3(x, 1.7, z + 0.04), (1.5, 0.9, 0.06), col=color.rgb32(18, 18, 20))
+                self.box(Vec3(x, 1.7, z + 0.072), (1.38, 0.78, 0.005), col=color.rgb32(70, 110, 150))
+            return
+        z = -row * CELL - CELL / 2 - 0.02
         if self.spec.get("dark_glass_wall") and tv_at is not None:
             # 影片裡電視那一小段還是木條牆，兩邊才是深色玻璃
             a, b = tv_at - 2, tv_at + 2
