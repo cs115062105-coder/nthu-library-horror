@@ -407,7 +407,8 @@ FLOORS = {
                        {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
-    "3F": dict(av_line=dict(center=(-1.35, 44.0), R=30.2, a0=-55.7, a1=-30.3, n=12, live=7),   # 雙人聆賞席：沿著落地窗排一直線
+    "3F": dict(av_line=dict(center=(-1.35, 44.0), R=30.2, mid=-43.0, modules=3),   # 雙人聆賞席：沿著落地窗排一直線
+               # 排法（使用者說的）：沙發 玻璃 沙發 電視電視 沙發 玻璃 沙發 …
                level=LEVEL_3F, floor="carpet_3f", island=((21.08, 15.79), 2.3, 1.4, 25), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
@@ -429,7 +430,7 @@ FLOORS = {
                posters=[((1, 13), (-1, 0), "missing"), ((20, 12), (0, -1), "notice"), ((30, 30), (0, 1), "missing")],
                # 照 3F 實景照片：深咖啡條紋地毯、白色天花板、整面窗配深色捲簾、小舞台是木地板
                floor_regions=[("wood", 8, 7, 12, 11)], practice_room=(8, 7, 11, 10),
-               bell_lights=[(15, 18), (18, 21), (21, 23), (24, 24), (24, 27)],
+               bell_lights=[],     # 吊燈改掛在聆賞席每座電視櫃上方（av_line）
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
@@ -804,10 +805,35 @@ class World:
             self.rollup_banner(Vec3(c * CELL, 0, -r * CELL), rot, ["WELCOME", "教師指定參考書", "Course Reserved Books"])
         if "av_line" in self.spec:
             s = self.spec["av_line"]
-            for i in range(s["n"]):
-                a = math.radians(s["a0"] + (s["a1"] - s["a0"]) * (i + 0.5) / s["n"])
-                c, r = s["center"][0] + s["R"] * math.cos(a), s["center"][1] + s["R"] * math.sin(a)
-                self.white_booth(Vec3(c * CELL, 0, -r * CELL), live=i == s["live"])
+            items = []                        # (沿線距離 m, 種類)
+            for m in range(s["modules"]):
+                base = m * 4.5
+                items += [(base, "sofa+"), (base + 1.5, "tv"), (base + 3.0, "sofa-")]
+                if m < s["modules"] - 1:
+                    items.append((base + 3.75, "glass"))
+            total = items[-1][0]
+            Rm = s["R"] * CELL
+            fc, fr = s["center"]
+            for i, (d, kind) in enumerate(items):
+                a = math.radians(s["mid"]) + (d - total / 2) / Rm
+                c, r = fc + s["R"] * math.cos(a), fr + s["R"] * math.sin(a)
+                p = Vec3(c * CELL, 0, -r * CELL)
+                dc, dr = -(r - fr), (c - fc)                       # 切線（往東北）
+                rot = math.degrees(math.atan2(dc, -dr))
+                e = Entity(parent=self.group(None), position=p, rotation_y=rot)
+                if kind in ("tv", "glass"):
+                    self.bell_light(p)
+                if kind == "tv":
+                    self.av_tv_pair(e, live=i == 4)
+                    if i == 4:
+                        radial = Vec3(c - fc, 0, -(r - fr)).normalized()
+                        self.interactables.append(dict(kind="tape", pos=p + radial * 1.6))
+                elif kind == "glass":
+                    self.av_glass(e)
+                else:
+                    self.av_sofa(e, 1 if kind == "sofa+" else -1)
+                size = {"tv": (1.8, 1.2, 0.8), "glass": (1.6, 1.4, 0.5), "sofa+": (1.7, 0.9, 0.85), "sofa-": (1.7, 0.9, 0.85)}[kind]
+                Entity(model="cube", position=p + Vec3(0, size[1] / 2, 0), rotation_y=rot, scale=size, collider="box", visible=False)
                 self.walkable.discard((round(c), round(r)))
         if "gate_bank" in self.spec:
             self.gate_bank(**self.spec["gate_bank"])
@@ -1913,55 +1939,58 @@ class World:
         self.collider(p + Vec3(0, 0.7, 0), (1.4, 1.4, 0.8), occludes=False)
 
     def white_booth(self, p, live):
-        """3F 雙人聆賞席（照影片 IMG_5325_7_2 和使用者說明）：
-        一整排順著弧形落地窗排過去，每組是「沙發 → 電視櫃 → 霧玻璃」，下一組的沙發就靠在這片霧玻璃後面；
-        電視跟窗戶垂直，面向排的方向。橢圓淺木色矮櫃（側面挖空）、黑色薄電視、立著的霧面玻璃屏風、
-        低背方扶手皮沙發（米白或駝色），鍍鉻斜腳。"""
-        c, r = p.x / CELL, -p.z / CELL
-        fc, fr = self.spec.get("facade_center", (-1.35, 44.0))
-        dc, dr = -(r - fr), (c - fc)                    # 落地窗弧線的切線方向（往東北排）
-        rot = math.degrees(math.atan2(dc, -dr))         # 本地 +z 對到世界的 (dc, 0, -dr)（世界 z 是 -row）
-        e = Entity(parent=self.group(None), position=p, rotation_y=rot)
-        B = lambda pos, scale, col: self.box(pos, scale, col=col, parent=e)
+        """（舊的 V 格子用；3F 現在改用 av_line）"""
+        e = Entity(parent=self.group(None), position=p)
+        self.av_tv_pair(e, live)
+
+    def _oval_console(self, e):
+        """橢圓淺木色矮櫃：上下兩片木板、中間挖空露出深色，兩端實心，底下金屬腳。長軸沿本地 x。"""
         wood, wood_top = color.rgb32(214, 186, 142), color.rgb32(232, 212, 176)
-        cz = 0.35
         for y, rad, h, sc, col in ((0.06, 0.5, 0.06, (1.7, 1, 0.66), wood), (0.4, 0.5, 0.06, (1.7, 1, 0.66), wood_top),
                                    (0.12, 0.47, 0.28, (1.6, 1, 0.58), color.rgb32(70, 60, 50))):
-            Entity(parent=e, model=fastops.cylinder(resolution=24, radius=rad, height=h), position=(0, y, cz), scale=sc, color=col)
+            Entity(parent=e, model=fastops.cylinder(resolution=24, radius=rad, height=h), position=(0, y, 0), scale=sc, color=col)
         for x in (-0.74, 0.74):
-            B((x, 0.26, cz), (0.08, 0.3, 0.3), wood)
+            self.box((x, 0.26, 0), (0.08, 0.3, 0.3), col=wood, parent=e)
         for x in (-0.45, 0.45):
-            B((x, 0.03, cz), (0.05, 0.06, 0.4), color.rgb32(160, 162, 166))
-        # 霧面玻璃屏風：立在櫃子後緣，把下一組沙發隔開
-        B((0, 0.86, cz + 0.24), (1.5, 0.86, 0.03), color.rgba32(226, 236, 236, 205))
+            self.box((x, 0.03, 0), (0.05, 0.06, 0.4), col=color.rgb32(160, 162, 166), parent=e)
+
+    def av_tv_pair(self, e, live=False):
+        """一座橢圓矮櫃上兩台黑色薄電視背對背，各自對著前後一張沙發（沿線 ±z）。"""
+        self._oval_console(e)
+        for side in (1, -1):
+            z = side * 0.06
+            self.box((0, 0.48, z * 2), (0.3, 0.04, 0.14), col=color.rgb32(28, 28, 30), parent=e)
+            self.box((0, 0.58, z * 2), (0.05, 0.18, 0.04), col=color.rgb32(28, 28, 30), parent=e)
+            self.box((0, 0.92, z * 2), (0.98, 0.58, 0.04), col=color.rgb32(16, 16, 18), parent=e)
+            q = (0, 0.92, z * 2 + side * 0.025)
+            ry = 0 if side > 0 else 180
+            if live and side < 0:
+                Entity(parent=e, model="quad", position=q, scale=(0.92, 0.52), rotation_y=ry,
+                       texture=self.text_tex(["▶ 錄音帶", "03:00"], w=200, h=120, bg=(20, 40, 90), sizes=[34, 30]),
+                       color=color.rgb(1.4, 1.4, 1.4))
+            else:
+                Entity(parent=e, model="quad", position=q, scale=(0.92, 0.52), rotation_y=ry, color=color.rgb32(24, 26, 30))
+
+    def av_glass(self, e):
+        """背對背兩張沙發中間：橢圓矮櫃上立一片霧面玻璃屏風。"""
+        self._oval_console(e)
+        self.box((0, 0.86, 0), (1.5, 0.86, 0.03), col=color.rgba32(226, 236, 236, 205), parent=e)
         for x in (-0.76, 0.76):
-            B((x, 0.86, cz + 0.24), (0.04, 0.86, 0.05), color.rgb32(200, 202, 206))
-        # 電視：面向 -z（自己這組的沙發）
-        B((0, 0.48, cz - 0.08), (0.3, 0.04, 0.18), color.rgb32(28, 28, 30))
-        B((0, 0.58, cz - 0.06), (0.05, 0.18, 0.04), color.rgb32(28, 28, 30))
-        B((0, 0.92, cz - 0.08), (0.98, 0.58, 0.04), color.rgb32(16, 16, 18))
-        if live:
-            Entity(parent=e, model="quad", position=(0, 0.92, cz - 0.105), scale=(0.92, 0.52), rotation_y=180,
-                   texture=self.text_tex(["▶ 錄音帶", "03:00"], w=200, h=120, bg=(20, 40, 90), sizes=[34, 30]),
-                   color=color.rgb(1.4, 1.4, 1.4))
-            radial = Vec3(c - fc, 0, -(r - fr)).normalized()     # 往館內那一側，站在沙發旁邊
-            self.interactables.append(dict(kind="tape", pos=p + radial * 1.6))
-        else:
-            Entity(parent=e, model="quad", position=(0, 0.92, cz - 0.105), scale=(0.92, 0.52), rotation_y=180,
-                   color=color.rgb32(24, 26, 30))
-        # 雙人皮沙發：背靠前一組的霧玻璃，面向電視
+            self.box((x, 0.86, 0), (0.04, 0.86, 0.05), col=color.rgb32(200, 202, 206), parent=e)
+
+    def av_sofa(self, e, facing):
+        """低背方扶手的雙人皮沙發（米白或駝色），鍍鉻斜腳。facing = +1 面向本地 +z，-1 面向 -z。"""
         tone = self.rng.choice([(236, 226, 188), (240, 232, 200), (200, 172, 132), (190, 160, 118)])
         leather, dark = color.rgb32(*tone), color.rgb32(*(int(v * 0.86) for v in tone))
-        sz = -0.8
-        B((0, 0.33, sz), (1.5, 0.16, 0.72), leather)
-        B((0, 0.2, sz), (1.62, 0.12, 0.76), dark)
-        B((0, 0.55, sz - 0.3), (1.5, 0.42, 0.16), leather)
+        f = facing
+        self.box((0, 0.33, 0), (1.5, 0.16, 0.72), col=leather, parent=e)
+        self.box((0, 0.2, 0), (1.62, 0.12, 0.76), col=dark, parent=e)
+        self.box((0, 0.55, -0.3 * f), (1.5, 0.42, 0.16), col=leather, parent=e)
         for x in (-0.76, 0.76):
-            B((x, 0.38, sz), (0.14, 0.34, 0.76), leather)
+            self.box((x, 0.38, 0), (0.14, 0.34, 0.76), col=leather, parent=e)
             for z in (-0.3, 0.3):
-                leg = B((x * 0.95, 0.07, sz + z), (0.03, 0.16, 0.03), color.rgb32(196, 198, 202))
+                leg = self.box((x * 0.95, 0.07, z), (0.03, 0.16, 0.03), col=color.rgb32(196, 198, 202), parent=e)
                 leg.rotation_z = 12 if x > 0 else -12
-        Entity(model="cube", position=p + Vec3(0, 0.5, 0), rotation_y=rot, scale=(1.8, 1.0, 1.9), collider="box", visible=False)
 
     def egg_seat(self, pos, rot, col):
         """蛋殼椅：圓圓的椅身包住你，下面一支鍍鉻腳。"""
