@@ -367,7 +367,7 @@ FLOORS = {
                         ribbon=[(13.2, 13.7), (12.7, 14.1), (12.3, 14.4)]),
                # 使用者：出入口要像一點。照平面圖：斜面落地窗上兩扇門（出口在北、入口在南），
                # 往裡一點是一整排順著斜窗排的感應閘門
-               gate_bank=dict(center=(6.31, 15.32), dir=(0.559, 0.829), n=9, step=0.55),
+               gate_bank=dict(center=(6.31, 15.32), dir=(0.559, 0.829), n=5, step=0.6),   # 使用者：只有 4 道，出口 2、入口 2
                facade_doors=[((4.29, 14.83), "出口", "Exit"), ((6.04, 17.43), "入口", "Entrance")],
                plinths=[(16.6, 9.0), (12.6, 9.4)],
                pickup_gates=[(12.3, 13.7)],        # 自助取書區入口的紅白防盜門（接在玻璃房的開口兩邊）
@@ -1618,6 +1618,16 @@ class World:
                 self.box((0.3, 0.62, 0), (0.3, 0.55, 0.02), col=color.rgba32(120, 124, 130, 170), parent=e)
             Entity(model="cube", position=q + Vec3(0, 0.5, 0), rotation_y=rot, scale=(0.3, 1.0, 1.25),
                    collider="box", visible=False)
+        # 每兩道通道上面一塊小牌子：靠出口門那兩道是出口、靠入口門那兩道是入口
+        if n == 5:
+            for k, (zh, en, bg) in ((-1, ("出口", "Exit", (180, 50, 50))), (1, ("入口", "Entrance", (40, 130, 80)))):
+                q = c0 + along * (k * step * CELL)
+                tex = self.text_tex([zh, en], w=128, h=64, bg=bg, fg=(255, 255, 255), sizes=[30, 14])
+                e = Entity(parent=self.group(tex), position=q + Vec3(0, 1.45, 0), rotation_y=rot)
+                self.quad((0, 0, -0.01), (0.9, 0.45), tex, rot=(0, 0, 0), parent=e)
+                self.quad((0, 0, 0.01), (0.9, 0.45), tex, rot=(0, 180, 0), parent=e)
+                for x in (-0.3, 0.3):
+                    self.box(q + along * x + Vec3(0, 1.22, 0), (0.025, 0.42, 0.025), col=steel)
         # 兩端用灰色矮欄杆接到窗邊，人一定要從閘門過
         for s in (-1, 1):
             q = c0 + along * (s * ((n - 1) / 2 * step * CELL + 0.6))
