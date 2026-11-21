@@ -1957,8 +1957,11 @@ class World:
             self.box((x, 0.03, 0), (0.05, 0.06, 0.4), col=color.rgb32(160, 162, 166), parent=e)
 
     def av_tv_pair(self, e, live=False):
-        """一座橢圓矮櫃上兩台黑色薄電視背對背，各自對著前後一張沙發（沿線 ±z）。"""
+        """一座橢圓矮櫃上兩台黑色薄電視背對背，各自對著前後一張沙發（沿線 ±z），中間夾一片小的霧面玻璃。"""
         self._oval_console(e)
+        self.box((0, 0.84, 0), (1.15, 0.8, 0.02), col=color.rgba32(226, 236, 236, 205), parent=e)
+        for x in (-0.585, 0.585):
+            self.box((x, 0.84, 0), (0.03, 0.8, 0.04), col=color.rgb32(200, 202, 206), parent=e)
         for side in (1, -1):
             z = side * 0.06
             self.box((0, 0.48, z * 2), (0.3, 0.04, 0.14), col=color.rgb32(28, 28, 30), parent=e)
