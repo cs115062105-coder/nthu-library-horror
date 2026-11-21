@@ -407,7 +407,7 @@ FLOORS = {
                        {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
-    "3F": dict(av_line=dict(center=(-1.35, 44.0), R=30.2, mid=-43.0, modules=3),   # 雙人聆賞席：沿著落地窗排一直線
+    "3F": dict(av_line=dict(center=(-1.35, 44.0), R=30.2, mid=-43.0, modules=5),   # 雙人聆賞席：沿著落地窗排一直線
                # 排法（使用者說的）：沙發 玻璃 沙發 電視電視 沙發 玻璃 沙發 …
                level=LEVEL_3F, floor="carpet_3f", island=((21.08, 15.79), 2.3, 1.4, 25), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
@@ -808,7 +808,8 @@ class World:
             items = []                        # (沿線距離 m, 種類)
             for m in range(s["modules"]):
                 base = m * 4.5
-                items += [(base, "sofa+"), (base + 1.5, "tv"), (base + 3.0, "sofa-")]
+                items += [(base, "sofa+"), (base + 0.75, "speaker"), (base + 1.5, "tv"),
+                          (base + 2.25, "speaker"), (base + 3.0, "sofa-")]
                 if m < s["modules"] - 1:
                     items.append((base + 3.75, "glass"))
             total = items[-1][0]
@@ -821,11 +822,12 @@ class World:
                 dc, dr = -(r - fr), (c - fc)                       # 切線（往東北）
                 rot = math.degrees(math.atan2(dc, -dr))
                 e = Entity(parent=self.group(None), position=p, rotation_y=rot)
-                if kind in ("tv", "glass"):
+                if kind == "speaker":      # 沙發和電視中間正上方的白色喇叭罩（使用者：那不是燈，是喇叭）
                     self.bell_light(p)
+                    continue
                 if kind == "tv":
-                    self.av_tv_pair(e, live=i == 4)
-                    if i == 4:
+                    self.av_tv_pair(e, live=d == 1.5 + 4.5 * (s["modules"] // 2))
+                    if d == 1.5 + 4.5 * (s["modules"] // 2):
                         radial = Vec3(c - fc, 0, -(r - fr)).normalized()
                         self.interactables.append(dict(kind="tape", pos=p + radial * 1.6))
                 elif kind == "glass":
@@ -2392,7 +2394,7 @@ class World:
                 self.box(pos, ((w - 0.6) / n - 0.04, 0.16 + k * 0.24, 0.55), col=color.rgb32(120, 92, 82)).rotation_y = -t * 40
 
     def bell_light(self, p):
-        """3F 的白色鐘形吊燈。"""
+        """3F 的白色喇叭罩（聆賞席上方，像吊燈一樣垂下來的定向喇叭）。"""
         # 影片裡是細長的喇叭形小吊燈，掛得比人頭高很多
         self.box(p + Vec3(0, WALL_H - 0.35, 0), (0.012, 0.7, 0.012), col=color.rgb32(200, 200, 200))
         Entity(parent=self.group(None), model=Cone(resolution=14, radius=0.22, height=0.42, add_bottom=False),
