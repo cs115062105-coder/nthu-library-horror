@@ -484,6 +484,8 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                     red_benches=[(28.6, 13.3, 1.2, 150, 330)],
                     # 0.5 秒一張：樓梯口出來的休息區上面是深色木條天花板，資訊島上方是黑色格柵
                     grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[((37, 37), (0, 1))],
+                    # 使用者說：樓梯間右轉再右轉，電梯廳北邊那面牆是一整排藍白色置物櫃，旁邊兩台灰色書車
+                    blue_lockers=[((21, 6), (-1, 0)), ((21, 7), (-1, 0))], extra_carts=[(20.6, 5.2, 90), (20.6, 4.6, 90)],
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
                                   "Q Science", "QA Math", "T Technology"],
                     west_labels=(22, ["期刊 中文合訂本"]),
@@ -799,6 +801,11 @@ class World:
         for c, r, R, a0, a1 in self.spec.get("red_benches", []):
             self.red_bench(Vec3(c * CELL, 0, -r * CELL), R, a0, a1)
             self.walkable.discard((round(c), round(r)))
+        for (c, r), d in self.spec.get("blue_lockers", []):
+            self.blue_lockers(cell_pos(c, r), Vec3(d[0], 0, -d[1]))
+            self.walkable.discard((c, r))
+        for c, r, rot in self.spec.get("extra_carts", []):
+            self.book_cart(Vec3(c * CELL, 0, -r * CELL), rot)
         for (c, r), d in self.spec.get("water", []):
             self.water_dispenser(cell_pos(c, r), Vec3(d[0], 0, -d[1]))
             self.walkable.discard((c, r))
@@ -1557,6 +1564,21 @@ class World:
             top = self.box(q + Vec3(0, 0.43, 0), (w, 0.06, 0.48), col=color.rgb32(196, 92, 92))
             top.rotation_y = math.degrees(a)
         self.collider(p + Vec3(0, 0.25, 0), (R * 2 + 0.5, 0.5, R * 2 + 0.5), occludes=False)
+
+    def blue_lockers(self, p, d):
+        """6F 電梯廳旁靠牆的一整排置物櫃：白色外框，一格格藍色小門，每格一個鎖孔。"""
+        q = p - d * 0.7
+        side = Vec3(d.z, 0, -d.x)          # 沿著牆的方向
+        wide = (0.5, 1.95, CELL) if d.x else (CELL, 1.95, 0.5)
+        self.box(q + Vec3(0, 0.98, 0), wide, col=color.rgb32(240, 242, 244))
+        front = q + d * 0.255
+        rot = (0, facing_y(d), 0)
+        for i in range(5):                 # 一格寬 0.38、五欄
+            for j in range(5):             # 五層
+                pos = front + side * (-0.78 + i * 0.39) + Vec3(0, 0.22 + j * 0.37, 0)
+                self.quad(pos, (0.35, 0.33), col=color.rgb32(70, 140, 214), rot=rot)
+                self.quad(pos + d * 0.005 + side * 0.12 + Vec3(0, 0.08, 0), (0.03, 0.05), col=color.rgb32(220, 224, 230), rot=rot)
+        self.collider(q + Vec3(0, 0.98, 0), wide, occludes=False)
 
     def water_dispenser(self, p, d):
         """黑色的飲水機，靠牆放。"""
