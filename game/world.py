@@ -242,9 +242,9 @@ LEVEL_6F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
-    "W...T...T...n..n..............BBBBBB.BBBBBBW",
+    "W...T...T...n..n.................BBBB.BBBB.W",
     "Wp.........................................W",
-    "W...T...T...T..T..............BBBBBB.BBBBBBW",
+    "W...T...T...T..T.................BBBB.BBBB.W",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########................................W",
     "#xxxxxxxxxx...n.............BBBB.BBBB.BBBB.W",
@@ -493,8 +493,10 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                     # 1 秒一張的影片：電梯廳出來的休息區有一張酒紅色的弧形長椅；研究小間走廊牆邊一台黑色飲水機
                     # 新影片 0:00–0:06：樓梯口出來往東南，照片牆前面的走道是空的；
                     # 休息區有紅色單人椅、白色小圓几、紅底白靠背的圓形沙發；書架平行照片牆，一排排往南
-                    lounge6=dict(bench=(28.9, 14.5), tables=[(27.3, 13.8), (30.7, 15.3)],
-                                 chairs=[(26.6, 13.5, 120), (27.9, 14.4, 300), (26.9, 14.6, 30), (31.3, 15.7, 250)]),
+                    # 照片牆對面那幾排的西端：影片裡從牆邊往南是 6039、6037…6029
+                    bay_codes={(33, 13): "6039", (33, 15): "6037", (28, 18): "6035", (28, 20): "6033", (28, 23): "6031", (28, 25): "6029"},
+                    lounge6=dict(bench=(28.5, 14.6), sofa=(28.5, 14.6, 1.55, 55, 125), tables=[(26.9, 14.0), (30.2, 16.4)],
+                                 chairs=[(26.3, 13.5, 120), (27.4, 13.3, 210), (26.6, 14.8, 40), (30.9, 16.3, 250)]),
                     # 0.5 秒一張：樓梯口出來的休息區上面是深色木條天花板，資訊島上方是黑色格柵
                     grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[((37, 37), (0, 1))],
                     # 使用者說：樓梯間右轉再右轉，電梯廳北邊那面牆是一整排藍白色置物櫃，旁邊兩台灰色書車
@@ -1233,6 +1235,7 @@ class World:
                 code, name = label.split(" ")
                 if "bay_prefix" in self.spec:   # 6F：藍牌上方印大大的架號 60xx，下面才是索書號（影片裡的 6039、6051…）
                     code, name = f"{self.spec['bay_prefix']}{39 + (run * 2) % 24:02d}", f"{code} {name}"
+                    code = self.spec.get("bay_codes", {}).get((c, r), code)   # 影片看得到的架號直接指定
                 bg, fg = self.spec.get("label_colors", ((245, 200, 40), (40, 36, 30)) if white else ((30, 34, 40), (235, 235, 225)))
                 self.quad(p + end * (CELL / 2 + 0.045) + Vec3(0, 2.0 if blue_end else 1.75, 0), (0.6 if blue_end else 0.5, 0.28 if blue_end else 0.26),
                           self.text_tex([code, name], w=160, h=80, bg=bg, fg=fg, sizes=[44 if "bay_prefix" in self.spec else 30, 16 if "bay_prefix" in self.spec else 20]),
@@ -1666,7 +1669,7 @@ class World:
         self.quad(p + inside * 1.2 + Vec3(0, 0.012, 0), (1.8, 1.6), col=color.rgb32(46, 46, 50),
                   rot=(90, math.degrees(math.atan2(d.x, d.z)), 0))
 
-    def lounge6(self, bench, tables, chairs):
+    def lounge6(self, bench, tables, chairs, sofa=None):
         """6F 樓梯口的休息區：圓滑的酒紅色單人椅（十字星腳）、白色小圓几、紅底白靠背圓沙發。"""
         import body
         from shading import person_shader
@@ -1705,6 +1708,49 @@ class World:
         sh.loft([(0.44, 0.5, 0.5), (0.9, 0.5, 0.5), (0.98, 0.44, 0.44), (1.0, 0.3, 0.3), (1.01, 0, 0)], white, seg=24, at=at)  # 白色圓靠背
         self.collider(Vec3(at[0], 0.5, at[2]), (2.0, 1.0, 2.0), occludes=False)
         self.walkable.discard((round(c), round(r)))
+        if sofa:      # 圓沙發後面那張米白色半弧形沙發，靠背在外側
+            c, r, R, a0, a1 = sofa
+            ctr = (c * CELL, 0, -r * CELL)
+            col = sh._col((232, 222, 200))
+            # 截面（d = 離圓心半徑的偏移、y），坐墊在內側、靠背在外側，圓角
+            prof = [(-0.42, 0.02), (-0.46, 0.2), (-0.44, 0.38), (-0.36, 0.44), (0.0, 0.45), (0.14, 0.47),
+                    (0.2, 0.62), (0.22, 0.8), (0.28, 0.88), (0.38, 0.88), (0.44, 0.8), (0.45, 0.02)]
+            m = len(prof)
+            norms = []
+            for i in range(m):          # 截面每一點往外的法線（2D）
+                pd, py = prof[i - 1]
+                nd, ny = prof[(i + 1) % m]
+                td, ty = nd - pd, ny - py
+                norms.append((ty, -td))
+            n = 18
+            base = len(sh.v)
+            for k in range(n + 1):
+                a = math.radians(a0 + (a1 - a0) * k / n)
+                sx, sz = math.sin(a), math.cos(a)
+                for (d, y), (nd, ny) in zip(prof, norms):
+                    sh.v.append((ctr[0] + sx * (R + d), y, ctr[2] + sz * (R + d)))
+                    L = math.hypot(nd, ny) or 1
+                    sh.n.append((sx * nd / L, ny / L, sz * nd / L))
+                    sh.c.append(col)
+            for k in range(n):
+                for i in range(m):
+                    p0, p1 = base + k * m + i, base + k * m + (i + 1) % m
+                    q0, q1 = p0 + m, p1 + m
+                    sh.t += [(p0, p1, q1), (p0, q1, q0)]
+            for k in (0, n):            # 兩端封口
+                a = math.radians(a0 + (a1 - a0) * k / n)
+                sx, sz = math.sin(a), math.cos(a)
+                tang = (sz, 0, -sx) if k == 0 else (-sz, 0, sx)
+                cb = len(sh.v)
+                for d, y in prof:
+                    sh.v.append((ctr[0] + sx * (R + d), y, ctr[2] + sz * (R + d)))
+                    sh.n.append(tang)
+                    sh.c.append(col)
+                for i in range(1, m - 1):
+                    sh.t.append((cb, cb + i, cb + i + 1))
+            for k in range(3):
+                a = math.radians(a0 + (a1 - a0) * (k + 0.5) / 3)
+                self.collider(Vec3(ctr[0] + math.sin(a) * (R + 0.15), 0.4, ctr[2] + math.cos(a) * (R + 0.15)), (1.0, 0.8, 1.0), occludes=False)
         e = Entity(model=sh.mesh(), double_sided=True)
         e.shader = person_shader
 
