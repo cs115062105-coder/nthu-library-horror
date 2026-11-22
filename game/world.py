@@ -78,24 +78,24 @@ LEVEL_2F = [
     "####.........#GGGG######################",
     "####..t.O..t.########UD#################",
     "####.........#..........mmmmmmmmmmmmll.W",
-    "####.kk...kk...........................W",
+    "####.kk...kk..................c........W",
     "####.....................N.N.N.N.....d.W",
-    "####.........#.........................W",
+    "####.........#.......c.............c...W",
     "##############....O....O....O....O....OW",
     "######.............BBB..........BBB....W",
     "######....................c...c....c.d.W",
     "####xxxx......H.2...BBB......BBB.....d.W",
     "####xxxxxx...............M.............W",
     "####xxxxxxx....H..O....O....O....O....OW",
-    "####xxxxxxxxx..........................W",
+    "####xxxxxxxxx........c.............c...W",
     "####xxxxxxxxxx...H........c...c......d.W",
     "####xxxxxxxxxxx........BBB......BBB..d.W",
     "####xxxxxxxxxxxx.......................W",
     "####xxxxxxxxxxxxx.O....O....O....O....OW",
     "####xxxxxxxxxxxxxx........BBBBBB.......W",
-    "####xxxxxxxxxxxxxx...H...............d.W",
+    "####xxxxxxxxxxxxxx...H....BBBBBB.....d.W",
     "####xxxxxxxxxxxxxxx.......BBBBBB.P.....W",
-    "####xxxxxxxxxxxxxxxx...................W",
+    "####xxxxxxxxxxxxxxxx......BBBBBB.......W",
     "########################################",
 ]
 # 3F：視聽媒體與聆賞、語言學習區、簡報練習室、討論室、小舞台、發呆區
@@ -382,11 +382,13 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(big_history=True, level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(big_history=True, level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26), (18, 16), (28, 21), (33, 16)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
                # 照 2F 影片：論文書架側面的大紅牌、白黃兩色的多角形扶手椅、校史區的藍色校園模型和紫色水墨展板
+               # 0.5 秒逐格（2:48–3:23）：現期期刊區（第 17、19、24 列）是腰高的白色矮書架，紅牌 2001…；論文區 R001–R011 排得很密
+               low_rows={17, 19, 24}, lake_mural=(15, 17, 11),   # 影片 0:10–0:13：電梯旁一整面成功湖照片牆，前面木頭拱橋欄杆
                end_style="board", facet_chairs=True, white_shelves=True, shelf_fill="light", campus_model=(9.6, 17.4),
                ink_panels=[(11.0, 19.0, -30, "校史"), (16.4, 24.4, -42, "精神")],
                hanging={(21, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (9, 3): ("電腦教室", "Computer Lab II"),
@@ -818,6 +820,8 @@ class World:
             self.ink_panel(Vec3(c * CELL, 0, -r * CELL), rot, word)
         for c, r, *rot in self.spec.get("wave_chairs", []):
             self.wave_chair(cell_pos(c, r), *rot)
+        if "lake_mural" in self.spec:
+            self.lake_mural(*self.spec["lake_mural"])
         if "olive_chairs" in self.spec:
             self.olive_chairs(self.spec["olive_chairs"])
         if "lang_rooms" in self.spec:
@@ -1200,39 +1204,41 @@ class World:
         edge = color.rgb32(*self.spec.get("end_color", (40, 110, 190)))
         white = self.spec.get("white_shelves")    # 3F／4F 是白色的書架，側面一塊黃色的分類牌
         frame_col = color.rgb32(238, 238, 236) if white else color.white
-        self.box(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.5), None if white else self.t["metal"], col=frame_col)
+        low = r in self.spec.get("low_rows", ())   # 2F 現期期刊：影片裡是一人腰高的白色矮書架
+        H = 1.35 if low else 2.2
+        self.box(p + Vec3(0, H / 2, 0), (CELL, H, 0.5), None if white else self.t["metal"], col=frame_col)
         light = white or self.spec.get("shelf_fill") in ("dvd", "light")
         board = color.rgb32(246, 246, 244) if light else color.rgb32(150, 154, 158)
-        rows = 6 if self.spec.get("shelf_fill") == "light" else 5
+        rows = 3 if low else 6 if self.spec.get("shelf_fill") == "light" else 5
         for side in (1, -1):
             # 書往裡面縮一點，前面露出層板的邊，看起來才有深度
-            self.quad(p + Vec3(0, 1.08, side * 0.255), (CELL * 0.98, 2.1), tex,
+            self.quad(p + Vec3(0, H / 2 - 0.02, side * 0.255), (CELL * 0.98, H - 0.1), tex,
                       rot=(0, 0 if side < 0 else 180, 0))
             for k in range(rows):
-                y = 2.13 - 2.1 * ((k + 1) / rows - 1.5 / 128)
+                y = (H - 0.07) - (H - 0.1) * ((k + 1) / rows - 1.5 / 128)
                 self.box(p + Vec3(0, y - 0.01, side * 0.285), (CELL * 0.98, 0.028, 0.065), col=board)
             self.box(p + Vec3(0, 0.06, side * 0.285), (CELL, 0.12, 0.07), col=color.rgb32(60, 62, 66) if not light else board)
             for x in (0, CELL / 2):   # 每格中間、格跟格之間的直立柱
                 if x and self.char(c + 1, r) != "B":
                     continue
-                self.box(p + Vec3(x, 1.1, side * 0.285), (0.045, 2.2, 0.07), col=board)
-        self.box(p + Vec3(0, 2.225, 0), (CELL, 0.05, 0.66), col=board)   # 頂蓋
+                self.box(p + Vec3(x, H / 2, side * 0.285), (0.045, H, 0.07), col=board)
+        self.box(p + Vec3(0, H + 0.025, 0), (CELL, 0.05, 0.66), col=board)   # 頂蓋
         for dc in (-1, 1):
             if self.char(c + dc, r) != "B":
                 end = Vec3(dc, 0, 0)
-                self.box(p + end * (CELL / 2) + Vec3(0, 1.1, 0), (0.06, 2.24, 0.66),
+                self.box(p + end * (CELL / 2) + Vec3(0, H / 2, 0), (0.06, H + 0.04, 0.66),
                          col=color.rgb32(240, 240, 238) if white else color.rgb32(90, 96, 100))
                 if self.spec.get("end_style") == "board":   # 2F 學位論文：側面一大塊紅色牌子，白字印區號
                     face = p + end * (CELL / 2 + 0.035)
-                    self.box(face + Vec3(0, 1.45, 0), (0.02, 0.9, 0.62), col=color.rgb32(196, 36, 40))
+                    self.box(face + Vec3(0, H - 0.75, 0), (0.02, 0.9 if not low else 0.75, 0.62), col=color.rgb32(196, 36, 40))
                     code = f"{'TR'[run % 2]}{(run * 37 + c) % 400 + 1:03d}"
                     if r < 26:     # 北邊現期期刊區的架子：紅牌印 2001、2002…（影片裡的樣子）
                         code = f"20{(run * 5 + c) % 12 + 1:02d}"
-                    self.quad(face + end * 0.015 + Vec3(0, 1.62, 0), (0.56, 0.3),
+                    self.quad(face + end * 0.015 + Vec3(0, H - 0.58, 0), (0.56, 0.3),
                               self.text_tex([code], w=160, h=86, bg=(196, 36, 40), fg=(255, 255, 255), sizes=[58]),
                               rot=(0, facing_y(end), 0))
-                    self.quad(face + end * 0.015 + Vec3(0, 1.25, 0), (0.5, 0.36),
-                              self.text_tex(["碩士論文", "博士論文"], w=140, h=100, bg=(250, 250, 250), fg=(60, 40, 40), sizes=[22, 22]),
+                    self.quad(face + end * 0.015 + Vec3(0, H - 0.95, 0), (0.5, 0.36 if not low else 0.26),
+                              self.text_tex(["現期期刊", "Periodicals"] if low else ["碩士論文", "博士論文"], w=140, h=100, bg=(250, 250, 250), fg=(60, 40, 40), sizes=[22, 22]),
                               rot=(0, facing_y(end), 0))
                     continue
                 if blue_end:   # 6F：側板是霧面玻璃，兩邊鑲藍色邊條，上面一塊藍框的索書號牌
@@ -1254,7 +1260,7 @@ class World:
                 self.quad(p + end * (CELL / 2 + 0.045) + Vec3(0, 2.0 if blue_end else 1.75, 0), (0.6 if blue_end else 0.5, 0.28 if blue_end else 0.26),
                           self.text_tex([code, name], w=160, h=80, bg=bg, fg=fg, sizes=[44 if "bay_prefix" in self.spec else 30, 16 if "bay_prefix" in self.spec else 20]),
                           rot=(0, facing_y(end), 0))
-        self.collider(p + Vec3(0, 1.1, 0), (CELL, 2.2, 0.62))
+        self.collider(p + Vec3(0, H / 2, 0), (CELL, H, 0.62))
 
     def compact(self, c, r, p):
         self.box(p + Vec3(0, 1.3, 0), (CELL * 0.9, 2.6, CELL * 0.98), self.t["metal"], col=color.rgb32(150, 160, 150))
@@ -1711,6 +1717,34 @@ class World:
             self.walkable.discard((round(c), round(r)))
         e = Entity(model=sh.mesh(), double_sided=True)
         e.shader = person_shader
+
+    def lake_mural(self, c0, c1, row):
+        """2F 電梯旁的拍照牆：一整面成功湖水墨照片，前面一段木地板和木頭拱橋欄杆（影片 0:10–0:13）。"""
+        import body
+        from shading import person_shader
+        x0, x1 = (c0 - 0.5) * CELL, (c1 + 0.5) * CELL
+        zf = -row * CELL - CELL / 2 - 0.03          # 牆的南面
+        tex = Texture(Image.open(PHOTOS / "lake_mural.png"), filtering="bilinear")
+        self.quad(Vec3((x0 + x1) / 2, 1.45, zf), (x1 - x0, 2.6), tex, rot=(0, 0, 0))
+        sh = body.Shape()
+        wood, wood2 = (214, 160, 96), (190, 132, 74)
+        L = x1 - x0 - 0.6
+        sh.box(((x0 + x1) / 2, 0.06, zf - 0.8), (L, 0.12, 1.5), wood2)          # 木地板平台
+        for k in range(7):                                                      # 拱橋欄杆：立柱＋上面一條弧形扶手
+            t = k / 6
+            x = x0 + 0.3 + L * t
+            hgt = 0.9 + 0.18 * math.sin(math.pi * t)
+            sh.box((x, 0.12 + hgt / 2, zf - 1.45), (0.08, hgt, 0.08), wood)
+        for k in range(24):
+            t0, t1 = k / 24, (k + 1) / 24
+            xa, xb = x0 + 0.3 + L * t0, x0 + 0.3 + L * t1
+            ya, yb = 0.12 + 0.9 + 0.18 * math.sin(math.pi * t0), 0.12 + 0.9 + 0.18 * math.sin(math.pi * t1)
+            ang = -math.degrees(math.atan2(yb - ya, xb - xa))
+            sh.box(((xa + xb) / 2, (ya + yb) / 2, zf - 1.45), (xb - xa + 0.02, 0.07, 0.1), wood, rot=(0, 0, ang))
+            sh.box(((xa + xb) / 2, (ya + yb) / 2 - 0.45, zf - 1.45), (xb - xa + 0.02, 0.05, 0.06), wood, rot=(0, 0, ang))
+        e = Entity(model=sh.mesh(), double_sided=True)
+        e.shader = person_shader
+        self.collider(Vec3((x0 + x1) / 2, 0.5, zf - 1.45), (L, 1.0, 0.15), occludes=False)
 
     def olive_chairs(self, spots):
         """3F 東窗邊：橄欖綠的圓桶單人沙發（影片 3:03、3:22）。"""
