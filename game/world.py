@@ -9,6 +9,7 @@ import math
 from pathlib import Path
 import random
 
+from PIL import Image
 from ursina import Entity, Texture, Vec3, color, destroy, scene
 from ursina.models.procedural.cone import Cone
 from ursina.models.procedural.cylinder import Cylinder
@@ -505,7 +506,9 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                              (35, 22): ("西文圖書", "Western Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文期刊合訂本", "Oriental Bound Periodicals")},
                     posters=[((5, 17), (0, -1), "notice"), ((24, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
-                    art=dict(cells=[28, 29, 31, 32], row=11, title=(30, ("藝想空間 II", "Art Wall II")), style="photo"))
+                    # 新影片：藝想空間 II 其實在核心東面那道長白牆（左邊白牆、右邊 6029–6039 書架），
+                    # 南端靠休息區是黑色波浪形的展覽標題板，往北五張自然攝影，每張右下一塊黑色說明牌
+                    gallery=dict(col=32, row0=11.1, step=0.9))
 
 def cell_pos(c, r):
     return Vec3(c * CELL, 0, -r * CELL)
@@ -754,6 +757,8 @@ class World:
             self.elevator_lobby(**self.spec["elevator"])
         if "art" in self.spec:
             self.art_wall(**self.spec["art"])
+        if "gallery" in self.spec:
+            self.gallery_wall(**self.spec["gallery"])
         if "spiral" in self.spec:
             self.spiral_stair(*self.spec["spiral"])
         for cell in self.spec.get("slat_cells", []):
@@ -2497,6 +2502,28 @@ class World:
             self.quad(p + Vec3(0, 1.5, -0.015), (1.6, 1.4), self.t["glow"], col=color.rgba32(255, 245, 225, 50))
         c, lines = title
         self.wall_text(cell_pos(c, row + 1), Vec3(0, 0, 1), lines)
+
+    def gallery_wall(self, col, row0, step):
+        """6F 藝想空間 II：核心東面白牆。照片是從實拍影片截下來拉正的。"""
+        x = col * CELL + CELL / 2 + 0.03
+        rot = (0, facing_y(Vec3(1, 0, 0)), 0)
+        z = -row0 * CELL
+        title = Texture(Image.open(PHOTOS / "gallery6_title.png"), filtering="bilinear")
+        self.quad(Vec3(x + 0.02, 1.45, z), (0.95, 1.42), title, rot=rot)
+        frame = color.rgb32(28, 28, 30)
+        for i in range(5):
+            z += step * CELL          # 往北
+            p = Vec3(x, 0, z)
+            tex = Texture(Image.open(PHOTOS / f"gallery6_{i}.png"), filtering="bilinear")
+            self.box(p + Vec3(0.02, 1.6, 0), (0.04, 0.78, 1.16), col=frame)            # 無框輸出板的厚度
+            self.quad(p + Vec3(0.045, 1.6, 0), (1.14, 0.76), tex, rot=rot)
+            self.box(p + Vec3(0.012, 1.02, 0.62), (0.02, 0.26, 0.18), col=frame)    # 右下角說明牌
+            self.box(Vec3(x + 0.7, WALL_H - 0.15, z + 0.2), (0.07, 0.07, 0.16), col=color.rgb32(235, 235, 235))  # 軌道燈
+            warm = (255, 214, 160, 70) if i % 2 else (225, 238, 255, 60)
+            self.quad(p + Vec3(0.008, 1.55, 0), (1.9, 1.8), self.t["glow"], col=color.rgba32(*warm), rot=rot)
+        # 天花板上整條白色軌道
+        zm = -row0 * CELL + 2.6 * step * CELL
+        self.box(Vec3(x + 0.7, WALL_H - 0.08, zm), (0.05, 0.04, 5.6 * step * CELL), col=color.rgb32(235, 235, 235))
 
     def spiral_stair(self, cx, cy):
         """研究小間旁邊那座白色螺旋梯（裝飾，走不上去）。"""
