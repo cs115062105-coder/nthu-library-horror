@@ -382,7 +382,8 @@ FLOORS = {
                        {'kind': 'low', 'h': 0.55, 'pts': [(7.7, 7.56), (9.66, 6.91), (12.26, 5.73), (14.86, 5.21), (17.21, 5.34), (18.51, 5.99)]},
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
-    "2F": dict(big_history=True, level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26), (18, 16), (28, 21), (33, 16)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+    "2F": dict(big_history=True, glass_view="atrium",  # 使用者：玻璃外面是旺宏館內部（圖書館在旺宏館裡）
+               level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26), (18, 16), (28, 21), (33, 16)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -957,7 +958,7 @@ class World:
                     continue
                 seg = Entity(model="cube", position=mid + Vec3(0, h / 2, 0), rotation_y=rot,
                              scale=(0.2 if glass else 0.3, h, d.length() + 0.08), collider="box",
-                             texture=self.t["windows"][self.next_glass()] if glass
+                             texture=self.curve_views()[self.next_glass()] if glass
                              else (None if white else self.t["wood"]),
                              texture_scale=(d.length() / CELL, 1) if glass else (1, 1),
                              color=color.rgb(SHADE, SHADE, SHADE) if glass else
@@ -1019,7 +1020,15 @@ class World:
     def next_glass(self):
         """弧形落地窗一段接一段，用全景圖的下一片。"""
         self.glass_k = getattr(self, "glass_k", -1) + 1
-        return self.glass_k % len(self.t["windows"])
+        return self.glass_k % len(self.curve_views())
+
+    def curve_views(self):
+        """弧形玻璃看出去的全景。2F 那面玻璃外面是旺宏館的室內中庭（使用者說的），其他樓層是戶外。"""
+        if self.spec.get("glass_view") != "atrium":
+            return self.t["windows"]
+        if "atrium" not in self.t:
+            self.t["atrium"] = [Texture(im, filtering="mipmap") for im in tx.atrium_panorama()]
+        return self.t["atrium"]
 
     def view(self, c, r):
         """這格窗戶看出去的那一片風景：沿著窗戶那一排接著同一張全景圖，十幾格才會重複。"""
