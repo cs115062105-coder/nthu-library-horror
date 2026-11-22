@@ -508,7 +508,10 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                     lounge6=dict(bench=(28.5, 14.6), sofa=(28.5, 14.6, 1.55, 55, 125), tables=[(26.9, 14.0), (30.2, 16.4)],
                                  chairs=[(26.3, 13.5, 120), (27.4, 13.3, 210), (26.6, 14.8, 40), (30.9, 16.3, 250)]),
                     # 0.5 秒一張：樓梯口出來的休息區上面是深色木條天花板，資訊島上方是黑色格柵
-                    grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[((37, 37), (0, 1))],
+                    grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[],
+                    # 使用者：0:17 的防火門在照片牆右邊、門裡是 D；2:14 那扇在平面圖最右下那個 B 上方的牆上（平面圖畫了門的符號），旁邊是黑色飲水機
+                    fire_walls=[dict(row=11, x0=32.5, x1=34.6, door=33.55, swing="S"),
+                                dict(row=31, x0=31.6, x1=36.5, door=35.8, swing="S", water="W", water_face="N")],
                     # 使用者說：樓梯間右轉再右轉，電梯廳北邊那面牆是一整排藍白色置物櫃，旁邊兩台灰色書車
                     blue_lockers=[((21, 6), (-1, 0)), ((21, 7), (-1, 0))], extra_carts=[(20.6, 5.2, 90), (20.6, 4.6, 90)],
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
@@ -881,6 +884,8 @@ class World:
             self.walkable.discard((c, r))
         for c, r, rot in self.spec.get("extra_carts", []):
             self.book_cart(Vec3(c * CELL, 0, -r * CELL), rot)
+        if "fire_walls" in self.spec:
+            self.fire_walls(self.spec["fire_walls"])
         for (c, r), d in self.spec.get("water", []):
             self.water_dispenser(cell_pos(c, r), Vec3(d[0], 0, -d[1]))
             self.walkable.discard((c, r))
@@ -1909,6 +1914,36 @@ class World:
                 self.quad(pos, (0.35, 0.33), col=color.rgb32(70, 140, 214), rot=rot)
                 self.quad(pos + d * 0.005 + side * 0.12 + Vec3(0, 0.08, 0), (0.03, 0.05), col=color.rgb32(220, 224, 230), rot=rot)
         self.collider(q + Vec3(0, 0.98, 0), wide, occludes=False)
+
+    def fire_walls(self, walls):
+        """6F 防火門：白色隔牆中間一扇開著的灰色鐵門，門板上一條紫色標示（影片 0:17、2:14）。
+        每道牆沿著某一列 (row) 的中線，從 x0 到 x1（以格為單位），門在 door；water='W'/'E' 在門的那一側擺飲水機。"""
+        white, steel, frame = color.rgb32(240, 240, 238), color.rgb32(120, 124, 130), color.rgb32(70, 72, 78)
+        dw, dh = 1.1, 2.15
+        for w in walls:
+            z = -w["row"] * CELL
+            x0, x1, xd = w["x0"] * CELL, w["x1"] * CELL, w["door"] * CELL
+            for a, b in ((x0, xd - dw / 2), (xd + dw / 2, x1)):
+                if b - a > 0.02:
+                    self.box(Vec3((a + b) / 2, WALL_H / 2, z), (b - a, WALL_H, 0.24), col=white)
+                    self.collider(Vec3((a + b) / 2, WALL_H / 2, z), (b - a, WALL_H, 0.24))
+            self.box(Vec3(xd, (dh + WALL_H) / 2, z), (dw, WALL_H - dh, 0.24), col=white)      # 門楣
+            for sx in (-1, 1):                                                                  # 深灰門框
+                self.box(Vec3(xd + sx * (dw / 2 + 0.03), dh / 2, z), (0.06, dh, 0.3), col=frame)
+            self.box(Vec3(xd, dh + 0.03, z), (dw + 0.12, 0.06, 0.3), col=frame)
+            sz = -1 if w.get("swing", "N") == "S" else 1                                        # 門板往哪一邊開
+            hinge = Vec3(xd - dw / 2, 0, z)
+            self.box(hinge + Vec3(0.04, dh / 2, sz * (dw / 2 + 0.12)), (0.06, dh - 0.04, dw - 0.04), col=steel)
+            self.box(hinge + Vec3(0.08, 1.05, sz * (dw / 2 + 0.12)), (0.02, 0.06, 0.5), col=color.rgb32(200, 202, 206))   # 推桿
+            self.box(hinge + Vec3(0.08, 1.35, sz * (dw / 2 + 0.12)), (0.02, 0.12, 0.62), col=color.rgb32(96, 58, 150))    # 紫色標示
+            self.box(hinge + Vec3(0.0, 1.35, sz * (dw / 2 + 0.12)), (0.02, 0.12, 0.62), col=color.rgb32(96, 58, 150))
+            for c in range(int(math.floor(w["x0"] + 0.5)), int(math.ceil(w["x1"] - 0.5)) + 1):
+                if abs(c - w["door"]) > 0.6:
+                    self.walkable.discard((c, w["row"]))
+            if w.get("water"):
+                side = -1 if w["water"] == "W" else 1
+                face = Vec3(0, 0, 1 if w.get("water_face", "N") == "N" else -1)
+                self.water_dispenser(Vec3(xd + side * (dw / 2 + 0.45), 0, z) + face * 1.05, face)
 
     def water_dispenser(self, p, d):
         """黑色的飲水機，靠牆放。"""
