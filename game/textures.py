@@ -967,3 +967,67 @@ def landscape(seed):
 
 # 2F 學位論文的書背：清一色米黃／淺黃精裝，偶爾一本白的
 THESIS = ([(236, 226, 168), (230, 218, 150), (242, 234, 190), (224, 212, 160), (246, 244, 236)], [6, 5, 4, 3, 1])
+
+
+def atrium_panorama(n=12, seed=5):
+    """2F 校史區弧形玻璃外面：圖書館在旺宏館裡面，看出去是館內的挑高中庭（影片 0:40、0:55）。
+    上面是天窗透進來的白光，對面是米色和咖啡色磚的牆、一排排玻璃窗，每層樓有白色樓板和玻璃欄杆，
+    中間一道斜斜的樓梯，下面是 1F 的石材地板和走動的人。"""
+    from PIL import ImageFilter
+    rng = random.Random(seed)
+    sw, h = 256, 384
+    w = sw * n
+    img = Image.new("RGB", (w, h), (236, 236, 232))
+    d = ImageDraw.Draw(img)
+    for y in range(0, 70):          # 天窗：越上面越白
+        t = y / 70
+        d.line([(0, y), (w, y)], fill=(int(250 - 18 * t), int(251 - 16 * t), int(252 - 14 * t)))
+    for x in range(0, w, 48):       # 天窗的鋼骨
+        d.line([(x, 0), (x + 20, 70)], fill=(200, 202, 206), width=3)
+    d.rectangle([0, 66, w, 74], fill=(214, 214, 210))
+    floors = [74, 168, 262]         # 對面每層樓的頂
+    x = 0
+    while x < w:                    # 對面的牆：一段米色、一段咖啡磚
+        bw = rng.randint(160, 340)
+        brick = rng.random() < 0.45
+        wall = (168, 120, 92) if brick else rng.choice([(226, 218, 200), (214, 210, 200), (232, 228, 218)])
+        d.rectangle([x, 74, x + bw, 330], fill=wall)
+        if brick:
+            for yy in range(78, 330, 6):
+                d.line([(x, yy), (x + bw, yy)], fill=(150, 104, 80))
+        for f0 in floors:
+            f1 = f0 + 94
+            gw = rng.choice([18, 24, 30])
+            for xx in range(x + 10, x + bw - gw, gw + 8):   # 一排玻璃窗，白色窗框
+                d.rectangle([xx, f0 + 18, xx + gw, f1 - 14], fill=(176, 196, 206))
+                d.rectangle([xx, f0 + 18, xx + gw, f0 + 26], fill=(206, 220, 226))
+                d.rectangle([xx - 2, f0 + 16, xx + gw + 2, f1 - 12], outline=(244, 244, 242), width=2)
+                if rng.random() < 0.25:     # 窗裡的燈和人影
+                    d.rectangle([xx + 3, f0 + 34, xx + 9, f0 + 52], fill=(90, 92, 100))
+        x += bw
+    for f0 in floors[1:]:           # 每層樓板＋玻璃欄杆
+        d.rectangle([0, f0 - 6, w, f0 + 4], fill=(246, 246, 244))
+        d.rectangle([0, f0 - 24, w, f0 - 6], fill=(214, 226, 230))
+        d.line([(0, f0 - 24), (w, f0 - 24)], fill=(180, 184, 188), width=2)
+    for k in range(2):              # 斜的樓梯
+        sx = rng.randint(k * w // 2, k * w // 2 + w // 3)
+        for i in range(14):
+            d.rectangle([sx + i * 10, 262 - i * 7, sx + i * 10 + 14, 262 - i * 7 + 4], fill=(240, 240, 238))
+        d.line([(sx, 250), (sx + 150, 152)], fill=(170, 176, 180), width=3)
+        d.polygon([(sx, 262), (sx + 150, 164), (sx + 150, 172), (sx, 270)], fill=(206, 208, 210))
+    d.rectangle([0, 330, w, h], fill=(206, 200, 190))   # 1F 中庭的石材地板
+    for xx in range(0, w, 40):
+        d.line([(xx, 330), (xx - 30, h)], fill=(190, 184, 174))
+    for _ in range(n * 4):          # 樓下走動的人
+        px = rng.randint(0, w)
+        col = rng.choice([(40, 44, 60), (200, 200, 205), (120, 60, 60), (60, 90, 120), (30, 30, 30)])
+        d.ellipse([px - 3, 334, px + 3, 340], fill=(70, 56, 48))
+        d.rectangle([px - 4, 340, px + 4, 356], fill=col)
+        d.rectangle([px - 3, 356, px + 3, 366], fill=(50, 52, 60))
+    for _ in range(n):              # 樓下的盆栽
+        px = rng.randint(0, w)
+        d.rectangle([px - 8, 352, px + 8, 368], fill=(150, 150, 146))
+        d.ellipse([px - 16, 326, px + 16, 356], fill=(84, 130, 80))
+    img = img.filter(ImageFilter.GaussianBlur(1.2))
+    img = Image.blend(img, Image.new("RGB", img.size, (245, 246, 247)), 0.18)   # 隔著玻璃，有點霧
+    return [img.crop((i * sw, 0, (i + 1) * sw, h)) for i in range(n)]
