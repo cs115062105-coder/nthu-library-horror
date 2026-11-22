@@ -506,9 +506,9 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                              (35, 22): ("西文圖書", "Western Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
                              (36, 38): ("研究小間", "Individual Study Rooms"), (15, 7): ("中文期刊合訂本", "Oriental Bound Periodicals")},
                     posters=[((5, 17), (0, -1), "notice"), ((24, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
-                    # 新影片：藝想空間 II 其實在核心東面那道長白牆（左邊白牆、右邊 6029–6039 書架），
-                    # 南端靠休息區是黑色波浪形的展覽標題板，往北五張自然攝影，每張右下一塊黑色說明牌
-                    gallery=dict(col=32, row0=11.1, step=0.9))
+                    # 藝想空間 II = 平面圖上 I 那面牆（核心南面，樓梯右邊）。照新影片：
+                    # 靠休息區那端是黑色波浪形的展覽標題板，往東五張自然攝影，每張右下一塊黑色說明牌
+                    gallery=dict(start=(27.4, 11), face="S", step=0.92))
 
 def cell_pos(c, r):
     return Vec3(c * CELL, 0, -r * CELL)
@@ -2503,27 +2503,31 @@ class World:
         c, lines = title
         self.wall_text(cell_pos(c, row + 1), Vec3(0, 0, 1), lines)
 
-    def gallery_wall(self, col, row0, step):
-        """6F 藝想空間 II：核心東面白牆。照片是從實拍影片截下來拉正的。"""
-        x = col * CELL + CELL / 2 + 0.03
-        rot = (0, facing_y(Vec3(1, 0, 0)), 0)
-        z = -row0 * CELL
+    def gallery_wall(self, start, face, step):
+        """6F 藝想空間 II：平面圖上 I 那面牆（核心南面）。照片是從實拍影片截下來拉正的。
+        start=(c, r) 是標題板所在的格子，face 是牆面朝哪邊；照片沿著牆往東排。"""
+        out, along = {"S": (Vec3(0, 0, -1), Vec3(1, 0, 0)), "E": (Vec3(1, 0, 0), Vec3(0, 0, 1))}[face]
+        c, r = start
+        base = cell_pos(c, r) + out * (CELL / 2 + 0.03)
+        rot = (0, facing_y(out), 0)
+        def thick(t, h, w):      # 牆的法線方向厚度 t、高 h、沿牆寬 w
+            return Vec3(abs(out.x) * t + abs(along.x) * w, h, abs(out.z) * t + abs(along.z) * w)
         title = Texture(Image.open(PHOTOS / "gallery6_title.png"), filtering="bilinear")
-        self.quad(Vec3(x + 0.02, 1.45, z), (0.95, 1.42), title, rot=rot)
+        self.quad(base + out * 0.02 + Vec3(0, 1.45, 0), (0.95, 1.42), title, rot=rot)
         frame = color.rgb32(28, 28, 30)
+        light = color.rgb32(235, 235, 235)
         for i in range(5):
-            z += step * CELL          # 往北
-            p = Vec3(x, 0, z)
+            p = base + along * ((i + 1) * step * CELL)
             tex = Texture(Image.open(PHOTOS / f"gallery6_{i}.png"), filtering="bilinear")
-            self.box(p + Vec3(0.02, 1.6, 0), (0.04, 0.78, 1.16), col=frame)            # 無框輸出板的厚度
-            self.quad(p + Vec3(0.045, 1.6, 0), (1.14, 0.76), tex, rot=rot)
-            self.box(p + Vec3(0.012, 1.02, 0.62), (0.02, 0.26, 0.18), col=frame)    # 右下角說明牌
-            self.box(Vec3(x + 0.7, WALL_H - 0.15, z + 0.2), (0.07, 0.07, 0.16), col=color.rgb32(235, 235, 235))  # 軌道燈
+            self.box(p + out * 0.02 + Vec3(0, 1.6, 0), thick(0.04, 0.78, 1.16), col=frame)    # 無框輸出板的厚度
+            self.quad(p + out * 0.045 + Vec3(0, 1.6, 0), (1.14, 0.76), tex, rot=rot)
+            self.box(p + out * 0.012 + along * 0.62 + Vec3(0, 1.02, 0), thick(0.02, 0.26, 0.18), col=frame)   # 右下角說明牌
+            self.box(p + out * 0.7 - along * 0.2 + Vec3(0, WALL_H - 0.15, 0), thick(0.07, 0.07, 0.16), col=light)  # 軌道燈
             warm = (255, 214, 160, 70) if i % 2 else (225, 238, 255, 60)
-            self.quad(p + Vec3(0.008, 1.55, 0), (1.9, 1.8), self.t["glow"], col=color.rgba32(*warm), rot=rot)
+            self.quad(p + out * 0.008 + Vec3(0, 1.55, 0), (1.9, 1.8), self.t["glow"], col=color.rgba32(*warm), rot=rot)
         # 天花板上整條白色軌道
-        zm = -row0 * CELL + 2.6 * step * CELL
-        self.box(Vec3(x + 0.7, WALL_H - 0.08, zm), (0.05, 0.04, 5.6 * step * CELL), col=color.rgb32(235, 235, 235))
+        mid = base + along * (3 * step * CELL) + out * 0.7 + Vec3(0, WALL_H - 0.08, 0)
+        self.box(mid, thick(0.05, 0.04, 5.6 * step * CELL), col=light)
 
     def spiral_stair(self, cx, cy):
         """研究小間旁邊那座白色螺旋梯（裝飾，走不上去）。"""
