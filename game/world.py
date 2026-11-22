@@ -242,11 +242,11 @@ LEVEL_6F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
-    "W...T...T...n..n...........................W",
-    "Wp........................a.......a.....a..W",
-    "W...T...T...T..T..........................pW",
+    "W...T...T...n..n..............BBBBBB.BBBBBBW",
+    "Wp.........................................W",
+    "W...T...T...T..T..............BBBBBB.BBBBBBW",
     "W.O....O....O....O....O....O....O....O.....W",
-    "###########.................a..............W",
+    "###########................................W",
     "#xxxxxxxxxx...n.............BBBB.BBBB.BBBB.W",
     "#xxxxxxxxxxx.....n.......M.................W",
     "#xxxxxxxxxxxxx..............BBBB.BBBB.BBBB.W",
@@ -438,7 +438,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
     "4F": dict(level=LEVEL_4F, floor="carpet_6f", stools=14, carts=4, banks=[], safe=set(),
                # 使用者：4F、5F 整層跟 6F 差不多，只差書櫃跟電梯後面的空間 → 外觀照 6F
-               shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="40",
+               shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="40",
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["000 總類", "010 目錄學", "100 哲學類", "200 宗教類", "300 科學類",
@@ -475,7 +475,7 @@ _UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=T
               elevator=dict(cells=(22, 8, 23, 10), doors=[(24, 8), (24, 10)], buttons=(24, 9), directory=(22, 7)),
               spiral=(31.5, 39.5))    # 南邊研究小間旁的螺旋梯
 FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="carpet_6f", stools=14, carts=4, ceiling_tex="plaster",
-                    shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="50",
+                    shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="50",
                     shelf_labels=["500 社會科學類", "510 統計", "520 教育", "550 經濟", "570 政治", "580 法律",
                                   "600 中國史地類", "700 世界史地類", "800 語言文學類", "850 中國文學", "900 藝術類"],
                     hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
@@ -491,9 +491,12 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                     # 照 6F 實拍影片：灰色條紋地毯、白色書架配藍色分類牌、酒紅色單人沙發
                     label_colors=((40, 110, 190), (245, 248, 252)), bay_prefix="60",
                     # 1 秒一張的影片：電梯廳出來的休息區有一張酒紅色的弧形長椅；研究小間走廊牆邊一台黑色飲水機
-                    red_benches=[(28.6, 13.3, 1.2, 150, 330)],
+                    # 新影片 0:00–0:06：樓梯口出來往東南，照片牆前面的走道是空的；
+                    # 休息區有紅色單人椅、白色小圓几、紅底白靠背的圓形沙發；書架平行照片牆，一排排往南
+                    lounge6=dict(bench=(28.9, 14.5), tables=[(27.3, 13.8), (30.7, 15.3)],
+                                 chairs=[(26.6, 13.5, 120), (27.9, 14.4, 300), (26.9, 14.6, 30), (31.3, 15.7, 250)]),
                     # 0.5 秒一張：樓梯口出來的休息區上面是深色木條天花板，資訊島上方是黑色格柵
-                    grid_ceilings=[(24.5, 11.5, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[((37, 37), (0, 1))],
+                    grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], water=[((37, 37), (0, 1))],
                     # 使用者說：樓梯間右轉再右轉，電梯廳北邊那面牆是一整排藍白色置物櫃，旁邊兩台灰色書車
                     blue_lockers=[((21, 6), (-1, 0)), ((21, 7), (-1, 0))], extra_carts=[(20.6, 5.2, 90), (20.6, 4.6, 90)],
                     shelf_labels=["A General", "B Philosophy", "D History", "H Social", "P Literature",
@@ -850,6 +853,8 @@ class World:
             self.gate_bank(**self.spec["gate_bank"])
         for (c, r), zh, en in self.spec.get("facade_doors", []):
             self.facade_door(Vec3(c * CELL, 0, -r * CELL), zh, en)
+        if "lounge6" in self.spec:
+            self.lounge6(**self.spec["lounge6"])
         for c, r, R, a0, a1 in self.spec.get("red_benches", []):
             self.red_bench(Vec3(c * CELL, 0, -r * CELL), R, a0, a1)
             self.walkable.discard((round(c), round(r)))
@@ -1660,6 +1665,48 @@ class World:
         self.quad(p + inside * 0.12 + Vec3(0, 2.95, 0), (0.9, 0.32), sign, rot=(0, math.degrees(math.atan2(-inside.x, -inside.z)), 0))
         self.quad(p + inside * 1.2 + Vec3(0, 0.012, 0), (1.8, 1.6), col=color.rgb32(46, 46, 50),
                   rot=(90, math.degrees(math.atan2(d.x, d.z)), 0))
+
+    def lounge6(self, bench, tables, chairs):
+        """6F 樓梯口的休息區：圓滑的酒紅色單人椅（十字星腳）、白色小圓几、紅底白靠背圓沙發。"""
+        import body
+        from shading import person_shader
+        sh = body.Shape()
+        red, red2 = (122, 28, 36), (140, 36, 44)
+        chrome = (196, 198, 204)
+        white = (240, 240, 238)
+        for c, r, yaw in chairs:
+            at = (c * CELL, 0, -r * CELL)
+            rot = (0, yaw, 0)
+            sh.ellipsoid((at[0], 0.42, at[2]), (0.38, 0.09, 0.36), red2, rot=rot)                     # 坐墊
+            R = body._rot(*rot)
+            def put(x, y, z):
+                q = R((x, y, z))
+                return (q[0] + at[0], q[1] + y * 0 + 0, q[2] + at[2])
+            for (x, y, z), radii, tilt in [((0, 0.62, 0.28), (0.46, 0.22, 0.08), (-18, 0, 0)),            # 椅背（往外翹的翼形）
+                                          ((0.36, 0.52, 0.04), (0.08, 0.07, 0.3), (0, 0, -25)),            # 扶手：低、往外斜
+                                          ((-0.36, 0.52, 0.04), (0.08, 0.07, 0.3), (0, 0, 25))]:
+                q = put(x, 0, z)
+                sh.ellipsoid((q[0], y, q[2]), radii, red, rot=(tilt[0], yaw, tilt[2]))
+            sh.tube(0.05, 0.36, 0.035, 0.03, chrome, at=at)                                                 # 中柱
+            for k in range(4):                                                                                # 十字星腳
+                sh.tube(0.0, 0.34, 0.018, 0.014, chrome, at=(at[0], 0.04, at[2]), rot=(90, yaw + 45 + k * 90, 0))
+            self.collider(Vec3(at[0], 0.45, at[2]), (0.9, 0.9, 0.9), occludes=False)
+            self.walkable.discard((round(c), round(r)))
+        for c, r in tables:
+            at = (c * CELL, 0, -r * CELL)
+            sh.loft([(0.52, 0, 0), (0.52, 0.3, 0.3), (0.55, 0.3, 0.3), (0.556, 0.2, 0.2), (0.558, 0, 0)], white, seg=20, at=at)
+            sh.tube(0.02, 0.52, 0.018, 0.018, chrome, at=at)
+            sh.loft([(0.0, 0, 0), (0.0, 0.24, 0.24), (0.025, 0.24, 0.24), (0.03, 0.16, 0.16), (0.032, 0, 0)], chrome, seg=20, at=at)
+            self.collider(Vec3(at[0], 0.3, at[2]), (0.6, 0.6, 0.6), occludes=False)
+        c, r = bench
+        at = (c * CELL, 0, -r * CELL)
+        sh.loft([(0.0, 0, 0), (0.0, 0.98, 0.98), (0.36, 0.98, 0.98), (0.4, 0.95, 0.95), (0.4, 0, 0)], (190, 50, 44), seg=32, at=at)
+        sh.loft([(0.4, 0.95, 0.95), (0.44, 0.93, 0.93), (0.47, 0.8, 0.8), (0.48, 0.5, 0.5), (0.485, 0, 0)], (206, 64, 56), seg=32, at=at)   # 坐墊
+        sh.loft([(0.44, 0.5, 0.5), (0.9, 0.5, 0.5), (0.98, 0.44, 0.44), (1.0, 0.3, 0.3), (1.01, 0, 0)], white, seg=24, at=at)  # 白色圓靠背
+        self.collider(Vec3(at[0], 0.5, at[2]), (2.0, 1.0, 2.0), occludes=False)
+        self.walkable.discard((round(c), round(r)))
+        e = Entity(model=sh.mesh(), double_sided=True)
+        e.shader = person_shader
 
     def red_bench(self, p, R, a0, a1):
         """6F 休息區：酒紅色的弧形長椅，上面一層淺色坐墊。"""
