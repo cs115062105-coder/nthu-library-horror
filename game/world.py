@@ -419,7 +419,10 @@ FLOORS = {
                wave_chairs=[(29, 29, 0), (32, 29, 0)],           # 使用者：截圖裡電視座位那兩格其實是白色波浪躺椅
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
                ceiling_regions=[("slats", 24, 12, 38, 17)],
-               racks=[((33, 13), 0), ((35, 13), 0), ((33, 15), 0), ((35, 15), 0)],
+               # 新影片 0:00／3:45：從樓梯出來正前方、柱子 (27,16) 旁邊就是一群黑色 DVD 斜架，服務台在左手邊
+               racks=[((25, 14), 180), ((26, 15), 180), ((28, 15), 200), ((27, 14), 160)],
+               # 新影片 2:27–2:30：波浪躺椅北邊、柱子旁有幾張白色書桌配橘色旋轉椅
+               orange_desks=[(28.4, 27.6), (30.9, 27.6)],
                # 使用者截圖指出：木條牆＋電視是南牆（電視區那面）；北牆的「深色玻璃牆」其實是一整排木框玻璃櫃（格子 w）
                wood_wall=(24, 42, 31, (31, 38), "N"),   # 使用者：牆上有兩台螢幕
                hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (20, 20): ("視聽聆賞席", "Viewing Carrels"),
@@ -878,6 +881,8 @@ class World:
                    texture=self.t["leaf"])
         for (c, r), d, ch in self.spec.get("frames", []):
             self.calligraphy(cell_pos(c, r), Vec3(d[0], 0, -d[1]), ch)
+        if "orange_desks" in self.spec:
+            self.orange_desks(self.spec["orange_desks"])
         for (c, r), rot in self.spec.get("racks", []):
             self.dvd_rack(cell_pos(c, r), rot)
             self.walkable.discard((c, r))
@@ -1669,6 +1674,35 @@ class World:
         self.quad(p + inside * 1.2 + Vec3(0, 0.012, 0), (1.8, 1.6), col=color.rgb32(46, 46, 50),
                   rot=(90, math.degrees(math.atan2(d.x, d.z)), 0))
 
+    def orange_desks(self, spots):
+        """3F 電視區旁：白色長桌，兩邊各兩張圓滑的橘色旋轉椅（十字星腳）。"""
+        import body
+        from shading import person_shader
+        sh = body.Shape()
+        orange, chrome, white = (226, 108, 36), (190, 192, 198), (242, 242, 240)
+        for c, r in spots:
+            x, z = c * CELL, -r * CELL
+            sh.box((x, 0.74, z), (1.6, 0.04, 0.8), white)
+            for dx in (-0.72, 0.72):
+                sh.box((x + dx, 0.37, z), (0.05, 0.72, 0.7), white)
+            sh.box((x, 0.77, z - 0.05), (0.34, 0.24, 0.02), (40, 40, 44), rot=(-12, 0, 0))   # 筆電
+            for dx in (-0.4, 0.4):
+                for side in (1, -1):
+                    cx, cz = x + dx + self.rng.uniform(-0.06, 0.06), z + side * 0.72
+                    yaw = (0 if side > 0 else 180) + self.rng.uniform(-20, 20)
+                    R = body._rot(0, yaw, 0)
+                    sh.ellipsoid((cx, 0.47, cz), (0.25, 0.06, 0.24), orange, rot=(0, yaw, 0))
+                    q = R((0, 0, 0.2))
+                    sh.ellipsoid((cx + q[0], 0.72, cz + q[2]), (0.24, 0.22, 0.06), orange, rot=(-10, yaw, 0))
+                    sh.tube(0.06, 0.42, 0.03, 0.025, chrome, at=(cx, 0, cz))
+                    for k in range(5):
+                        sh.tube(0.0, 0.28, 0.015, 0.012, chrome, at=(cx, 0.05, cz), rot=(90, yaw + k * 72, 0))
+            self.collider(Vec3(x, 0.4, z), (1.7, 0.8, 0.9), occludes=False)
+            self.hides.append(Vec3(x, 0, z))
+            self.walkable.discard((round(c), round(r)))
+        e = Entity(model=sh.mesh(), double_sided=True)
+        e.shader = person_shader
+
     def lounge6(self, bench, tables, chairs, sofa=None):
         """6F 樓梯口的休息區：圓滑的酒紅色單人椅（十字星腳）、白色小圓几、紅底白靠背圓沙發。"""
         import body
@@ -2240,13 +2274,18 @@ class World:
         black = color.rgb32(26, 26, 28)
         for x in (-0.45, 0.45):
             self.box((x, 0.85, 0), (0.04, 1.7, 0.5), col=black, parent=rk)
+            for k in range(11):        # 側板像底片一樣打一排小方孔
+                for zz in (-0.2, 0.2):
+                    self.box((x, 0.12 + k * 0.15, zz), (0.05, 0.06, 0.05), col=color.rgb32(220, 220, 220), parent=rk)
         self.box((0, 0.05, 0), (0.94, 0.1, 0.5), col=black, parent=rk)
         for side in (1, -1):
             for i in range(4):
                 y = 0.45 + i * 0.36
-                face = Entity(parent=rk, model="quad", position=(0, y, side * 0.17), scale=(0.86, 0.3),
+                tex = self.t["covers"][(i + side + 4) % 4]
+                holder = Entity(parent=self.group(tex), position=p, rotation_y=rot)   # 有貼圖的要放在同材質的 group 裡，不然合併時貼圖會掉
+                face = Entity(parent=holder, model="quad", position=(0, y, side * 0.17), scale=(0.86, 0.3),
                               rotation=(-15 * side, 0 if side < 0 else 180, 0),
-                              texture=self.t["covers"][(i + side + 4) % 4], color=color.rgb(0.95, 0.95, 0.95))
+                              texture=tex, color=color.rgb(0.95, 0.95, 0.95))
                 self.box((0, y - 0.16, side * 0.2), (0.86, 0.02, 0.1), col=black, parent=rk)
         self.collider(p + Vec3(0, 0.85, 0), (1.0, 1.7, 1.0), occludes=False)
 
