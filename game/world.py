@@ -117,15 +117,15 @@ LEVEL_3F = [
     "#.u.u..u..u.u..u..............S............W",
     "#.............................S........e...W",
     "#CCC5CCC.C..O....O....O....O....O....O.....W",
-    "###########..............M...............e.W",
-    "#xxxxxxxxxx.................BBBB.BBBB......W",
-    "#xxxxxxxxxxx.............................e.W",
-    "#xxxxxxxxxxxxx..............BBBB.BBBB..Y...W",
+    "###########..............M...BBBBB.BBBBB.e.W",
+    "#xxxxxxxxxx..................BBBBB.BBBBB...W",
+    "#xxxxxxxxxxx.................BBBBB.BBBBB.e.W",
+    "#xxxxxxxxxxxxx...............BBBBB.BBBBB...W",
     "#xxxxxxxxxxxxxxx.O....O....O....O....O.....W",
-    "#xxxxxxxxxxxxxxxx........................e.W",
-    "#xxxxxxxxxxxxxxxxx..........BBBB.BBBB......W",
-    "#xxxxxxxxxxxxxxxxxx......................e.W",
-    "#xxxxxxxxxxxxxxxxxxx........BBBB.BBBB......W",
+    "#xxxxxxxxxxxxxxxx............BBBBB.BBBBB.e.W",
+    "#xxxxxxxxxxxxxxxxx...........BBBBB.BBBBB...W",
+    "#xxxxxxxxxxxxxxxxxx..........BBBBB.BBBBB.e.W",
+    "#xxxxxxxxxxxxxxxxxxx.........BBBBB.BBBBB...W",
     "#xxxxxxxxxxxxxxxxxxxx.O....O....O....O..e..W",
     "#xxxxxxxxxxxxxxxxxxxxx.....................W",
     "#xxxxxxxxxxxxxxxxxxxxx...................e.W",
@@ -415,8 +415,12 @@ FLOORS = {
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
                end_style="blue", end_color=(236, 150, 30),     # 第二批影片：側板霧面玻璃配橘黃邊條
-               grid_ceilings=[(27.5, 17.5, 37.5, 26.5, "grid_white")],   # 書架區上方白色鋁格柵
-               wave_chairs=[(29, 29, 0), (32, 29, 0)],           # 使用者：截圖裡電視座位那兩格其實是白色波浪躺椅
+               grid_ceilings=[(28.5, 16.5, 39.5, 25.5, "grid_white")],   # 書架區上方白色鋁格柵
+               # 0.5 秒逐格（2:44–3:41）：書架是很密的長排，從服務台旁一路排到東邊窗前，端板大大的橘牌 30xx
+               bay_prefix="30", bay_start=1,
+               wave_chairs=[(29, 29, 0), (32, 29, 0), (34, 29, 0, "black")],   # 影片 2:24／2:34：一排白色波浪椅，尾端一張黑色的
+               olive_chairs=[(41.6, 20.5), (41.9, 26.8), (41.2, 13.8)],   # 影片 3:03／3:15／3:22：東窗邊的橄欖綠桶椅
+               lang_rooms=dict(row=16, c0=1, c1=9),   # 影片 1:06–1:22：語言學習區是一間間霧面玻璃小房間 L301…
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
                ceiling_regions=[("slats", 24, 12, 38, 17)],
                # 新影片 0:00／3:45：從樓梯出來正前方、柱子 (27,16) 旁邊就是一群黑色 DVD 斜架，服務台在左手邊
@@ -814,6 +818,10 @@ class World:
             self.ink_panel(Vec3(c * CELL, 0, -r * CELL), rot, word)
         for c, r, *rot in self.spec.get("wave_chairs", []):
             self.wave_chair(cell_pos(c, r), *rot)
+        if "olive_chairs" in self.spec:
+            self.olive_chairs(self.spec["olive_chairs"])
+        if "lang_rooms" in self.spec:
+            self.lang_rooms(**self.spec["lang_rooms"])
             self.walkable.discard((c, r))
         for (c, r), kind in self.spec.get("draped", []):
             self.draped_table(cell_pos(c, r), kind)
@@ -1239,7 +1247,8 @@ class World:
                 label = labels[(run - 1) % len(labels)]
                 code, name = label.split(" ")
                 if "bay_prefix" in self.spec:   # 6F：藍牌上方印大大的架號 60xx，下面才是索書號（影片裡的 6039、6051…）
-                    code, name = f"{self.spec['bay_prefix']}{39 + (run * 2) % 24:02d}", f"{code} {name}"
+                    n = self.spec["bay_start"] + run - 1 if "bay_start" in self.spec else 39 + (run * 2) % 24
+                    code, name = f"{self.spec['bay_prefix']}{n:02d}", f"{code} {name}"
                     code = self.spec.get("bay_codes", {}).get((c, r), code)   # 影片看得到的架號直接指定
                 bg, fg = self.spec.get("label_colors", ((245, 200, 40), (40, 36, 30)) if white else ((30, 34, 40), (235, 235, 225)))
                 self.quad(p + end * (CELL / 2 + 0.045) + Vec3(0, 2.0 if blue_end else 1.75, 0), (0.6 if blue_end else 0.5, 0.28 if blue_end else 0.26),
@@ -1703,6 +1712,48 @@ class World:
         e = Entity(model=sh.mesh(), double_sided=True)
         e.shader = person_shader
 
+    def olive_chairs(self, spots):
+        """3F 東窗邊：橄欖綠的圓桶單人沙發（影片 3:03、3:22）。"""
+        import body
+        from shading import person_shader
+        sh = body.Shape()
+        olive, olive2 = (150, 160, 70), (170, 178, 88)
+        for c, r in spots:
+            x, z = c * CELL, -r * CELL
+            sh.loft([(0.02, 0.40, 0.40), (0.10, 0.44, 0.44), (0.62, 0.46, 0.46), (0.70, 0.42, 0.42),
+                     (0.71, 0.34, 0.34), (0.40, 0.33, 0.33)], olive, seg=20, at=(x, 0, z))
+            sh.ellipsoid((x, 0.42, z), (0.34, 0.07, 0.34), olive2)
+            self.collider(Vec3(x, 0.35, z), (0.9, 0.7, 0.9), occludes=False)
+            self.walkable.discard((round(c), round(r)))
+        e = Entity(model=sh.mesh(), double_sided=True)
+        e.shader = person_shader
+
+    def lang_rooms(self, row, c0, c1):
+        """3F 語言學習區：沿南牆一間間小房間，前面一整片霧面玻璃（中間一道透明帶），每間有門和房號 L301…"""
+        frost, clear = color.rgba32(226, 236, 238, 170), color.rgba32(210, 230, 236, 70)
+        zf = -row * CELL + CELL / 2          # 房間北邊（走道那側）
+        zb = -row * CELL - CELL / 2          # 房間南邊的牆
+        for i, c in enumerate(range(c0, c1 + 1)):
+            x = c * CELL
+            door = x + CELL / 2 - 0.5        # 每間右手邊留 0.9 m 的門（開著）
+            wx0, wx1 = x - CELL / 2, door - 0.45
+            w = wx1 - wx0
+            self.box(Vec3((wx0 + wx1) / 2, 0.6, zf), (w, 1.2, 0.03), col=frost)
+            self.box(Vec3((wx0 + wx1) / 2, 1.5, zf), (w, 0.6, 0.03), col=clear)
+            self.box(Vec3((wx0 + wx1) / 2, 2.35, zf), (w, 1.1, 0.03), col=frost)
+            self.box(Vec3(door, 2.6, zf), (0.9, 0.6, 0.03), col=frost)          # 門楣
+            self.collider(Vec3((wx0 + wx1) / 2, 1.4, zf), (w, 2.8, 0.1), occludes=False)
+            leaf = Entity(parent=self.group(None), position=Vec3(door + 0.45, 0, zf), rotation_y=-70)   # 推開的玻璃門
+            Entity(parent=leaf, model="cube", position=(-0.45, 1.05, 0), scale=(0.88, 2.1, 0.03), color=frost)
+            Entity(parent=leaf, model="cube", position=(-0.8, 1.05, 0.04), scale=(0.025, 0.35, 0.025), color=color.rgb32(200, 202, 206))
+            if c < c1:                       # 房間之間的隔間（霧面玻璃）
+                self.box(Vec3(x + CELL / 2, 1.4, (zf + zb) / 2), (0.03, 2.8, CELL), col=frost)
+                self.collider(Vec3(x + CELL / 2, 1.4, (zf + zb) / 2), (0.1, 2.8, CELL), occludes=False)
+            self.quad(Vec3(x - 0.55, 2.55, zf + 0.02), (0.36, 0.2),
+                      self.text_tex([f"L3{i + 1:02d}"], w=96, h=48, bg=(236, 240, 242), fg=(90, 96, 104), sizes=[30]), rot=(0, 180, 0))
+        self.box(Vec3((c0 - 0.5) * CELL, 1.4, (zf + zb) / 2), (0.03, 2.8, CELL), col=frost)
+        self.box(Vec3((c1 + 0.5) * CELL, 1.4, (zf + zb) / 2), (0.03, 2.8, CELL), col=frost)
+
     def lounge6(self, bench, tables, chairs, sofa=None):
         """6F 樓梯口的休息區：圓滑的酒紅色單人椅（十字星腳）、白色小圓几、紅底白靠背圓沙發。"""
         import body
@@ -2157,7 +2208,7 @@ class World:
         """3F 發呆區：面向窗戶的灰紫色高背蛋椅，下面一塊鍍鉻圓盤。"""
         rot = -90 + self.rng.uniform(-30, 30)   # 背對大廳、面向東邊的窗
         ch = Entity(parent=self.group(None), position=p, rotation_y=rot)
-        col, steel = color.rgb32(52, 52, 56), color.rgb32(200, 202, 206)
+        col, steel = color.rgb32(62, 64, 118), color.rgb32(200, 202, 206)   # 影片 3:03：藏青偏紫
         Entity(parent=ch, model=fastops.cylinder(resolution=16, radius=0.32, height=0.03), color=steel)
         Entity(parent=ch, model="cube", position=(0, 0.22, 0), scale=(0.06, 0.4, 0.06), color=steel)
         Entity(parent=ch, model="sphere", position=(0, 0.5, 0.02), scale=(0.8, 0.3, 0.75), color=col)
@@ -2252,8 +2303,9 @@ class World:
             Entity(parent=b, model="quad", position=(0, 1.2, z), rotation_y=ry, scale=(1.5, 2.25), texture=tex)
         self.collider(p + Vec3(0, 1.2, 0), (1.6, 2.4, 0.15), occludes=False).rotation_y = rot
 
-    def wave_chair(self, p, rot=180):
-        """3F 木條牆前的白色波浪造型躺椅：一塊白色板子彎成 S 形，兩張並排。"""
+    def wave_chair(self, p, rot=180, tone="white"):
+        """3F 木條牆前的白色波浪造型躺椅：一塊白色板子彎成 S 形，兩張並排（影片裡尾端有一組黑色的）。"""
+        top, base = ((246, 246, 244), (238, 238, 236)) if tone == "white" else ((30, 30, 34), (22, 22, 26))
         for x in (-0.45, 0.45):
             ch = Entity(parent=self.group(None), position=p + Vec3(x, 0, 0), rotation_y=rot)
             prev = None
@@ -2262,10 +2314,10 @@ class World:
                 pt = Vec3(0, 0.25 + 0.55 * t * t + 0.12 * math.sin(t * math.pi * 2), -0.45 + 0.85 * t)
                 if prev is not None:
                     seg = Entity(parent=ch, model="cube", position=(prev + pt) / 2, scale=(0.75, 0.06, (pt - prev).length() + 0.03),
-                                 color=color.rgb32(246, 246, 244))
+                                 color=color.rgb32(*top))
                     seg.rotation = (math.degrees(math.atan2(pt.y - prev.y, pt.z - prev.z)), 0, 0)
                 prev = pt
-            Entity(parent=ch, model="cube", position=(0, 0.12, 0), scale=(0.7, 0.24, 0.8), color=color.rgb32(238, 238, 236))
+            Entity(parent=ch, model="cube", position=(0, 0.12, 0), scale=(0.7, 0.24, 0.8), color=color.rgb32(*base))
         self.collider(p + Vec3(0, 0.5, 0), (CELL * 0.9, 1.0, 1.0), occludes=False)
 
     def dvd_rack(self, p, rot):
