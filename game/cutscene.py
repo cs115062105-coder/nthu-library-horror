@@ -77,6 +77,9 @@ class Cutscene:
         self.caption = Text(parent=self.ui, position=(0, -0.37), origin=(0, 0), scale=1.4,
                             color=color.rgb32(245, 240, 230), z=-0.01)
         self.fade = Entity(parent=self.ui, model="quad", scale=(4, 2), color=color.rgba32(0, 0, 0, 0), z=-0.02)
+        self.red = Entity(parent=self.ui, model="quad", scale=(4, 2), color=color.rgba32(200, 0, 0, 0), z=-0.015)
+        self.big = Text(parent=self.ui, position=(0, 0.08), origin=(0, 0), scale=5, z=-0.03,
+                        color=color.rgb32(230, 40, 40))
         self.driver = Entity(update=self.update, enabled=False)
         self.kind, self.t, self.length = None, 0.0, 1.0
         self.on_done = None
@@ -103,6 +106,8 @@ class Cutscene:
         g.hint.text = ""
         self.ui.enabled = True
         self.caption.text = ""
+        self.big.text = ""
+        self.red.color = color.rgba32(200, 0, 0, 0)
         self.fade.color = color.rgba32(0, 0, 0, 0)
         getattr(self, "start_" + kind)()
         self.driver.enabled = True
@@ -374,8 +379,8 @@ class Cutscene:
 
     # ---------- 被室友抓到 ----------
     def start_caught(self):
-        """繃帶室友衝過來，指著你大喊，然後把你手上的書搶走。"""
-        self.length = 2.8
+        """繃帶室友衝過來，指著你大喊，把你手上的書搶走，然後把你痛扁一頓（使用者：被發現偷卷要被室友毆打）。"""
+        self.length = 4.6
         g = self.game
         h = g.hunter
         self.eye = g.player.position + Vec3(0, 1.6, 0)
@@ -383,9 +388,12 @@ class Cutscene:
         self.h_from = Vec3(h.root.position)
         flat = Vec3(g.player.position.x - h.root.x, 0, g.player.position.z - h.root.z)
         dist = flat.length()
-        self.h_to = self.h_from + flat.normalized() * max(0.0, dist - 1.3) if dist > 0.01 else self.h_from
+        self.h_dir = flat.normalized() if dist > 0.01 else Vec3(0, 0, 1)
+        self.h_to = g.player.position - self.h_dir * 1.3
+        self.h_near = g.player.position - self.h_dir * 0.85
         h.alarm.enabled = True
         self.book = self.own(Entity(model="cube", scale=(0.22, 0.3, 0.06), color=color.rgb32(200, 60, 50)))
+        self.hits = 0
         self.caption.text = "室友：「你在讀書？！你不是說要擺爛？」"
 
     def tick_caught(self, t):
@@ -393,31 +401,192 @@ class Cutscene:
         h.alarm.enabled = t < 0.4           # 驚嘆號只亮一下，不然靠近時會擋住整個畫面
         k = ease(t / 0.8)
         h.root.position = self.h_from + (self.h_to - self.h_from) * k
+        if t > 1.9:                          # 走上前開打
+            h.root.position = self.h_to + (self.h_near - self.h_to) * ease((t - 1.9) / 0.2)
         h.root.look_at_2d(g.player.position, "y")
         if t < 0.8:
             h.walk_anim(14)
-        else:
+        elif t < 1.4:
             h.stand()
             h.arms[1].rotation_x = -90                                  # 指著你
             h.elbows[1].rotation_x = 0
+        # 書：一開始在你手上（畫面下方），1.4 秒後被搶到他手上，打你之前丟到旁邊
+        mine = self.eye + camera.forward * 0.6 + camera.down * 0.35 + camera.right * 0.12
+        kb = ease((t - 1.4) / 0.4)
+        if 1.4 < t < 2.0:                                # 搶到書高高舉起來
+            h.arms[0].rotation_x = -150 * kb
+            h.elbows[0].rotation_x = -10
+            h.arms[1].rotation_x = -90 * (1 - kb)
+        if t < 2.0:
+            his = h.hands[0].world_position
+            self.book.position = mine + (his - mine) * kb
+            self.book.look_at(self.eye)
+            if t > 1.5:
+                self.caption.text = "室友：「這本我沒收了！」"
+        else:
+            self.book.enabled = False
+        # 2.0–3.9 秒：左右開弓，一拳一拳打過來
+        shake, hit = Vec3(0, 0, 0), 0.0
+        if 2.0 <= t < 3.9:
+            self.caption.text = "室友：「叫你偷卷！叫你偷卷！」"
+            n = int((t - 2.0) / 0.32)
+            ph = ((t - 2.0) % 0.32) / 0.32
+            punch = math.sin(min(1.0, ph / 0.55) * math.pi)          # 出拳再收回
+            arm, other = h.arms[n % 2], h.arms[1 - n % 2]
+            arm.rotation_x, other.rotation_x = -95 * punch - 20, -35
+            h.elbows[n % 2].rotation_x = -60 * (1 - punch)
+            h.elbows[1 - n % 2].rotation_x = -100
+            h.torso.rotation_y = (12 if n % 2 else -12) * punch
+            if n >= self.hits and ph > 0.25:                         # 打中的那一下：畫面一震、閃紅
+                self.hits = n + 1
+                g.play("punch", volume=0.6)
+            hit = max(0.0, 1 - ((t - 2.0) % 0.32 - 0.08) / 0.18) if ph > 0.25 else 0.0
+            side = camera.right * (0.08 if n % 2 else -0.08)
+            shake = side * hit + Vec3(0, -0.03 * hit, 0)
+            self.big.text = "砰！" if hit > 0.3 else ""
+            self.big.rotation_z = -12 if n % 2 else 10
+            self.big.position = (0.3 if n % 2 else -0.3, 0.18)
+        else:
+            self.big.text = ""
+            if t >= 3.9:
+                h.torso.rotation_y = 0
+                h.arms[0].rotation_x, h.arms[1].rotation_x = -20, -20
+        self.red.color = color.rgba(0.8, 0, 0, 0.35 * hit + (0.25 * ease((t - 3.9) / 0.4) if t > 3.9 else 0))
+        # 鏡頭：先轉向室友；被打完往後倒在地上
         head = h.root.position + Vec3(0, 1.6, 0)
         d0, d1 = Vec3(self.from_dir), (head - self.eye).normalized()
         kk = ease(t / 0.3)
-        look(self.eye, self.eye + (d0 * (1 - kk) + d1 * kk).normalized())
+        eye = Vec3(self.eye)
+        fall = ease((t - 3.9) / 0.5)
+        eye.y -= 1.25 * fall
+        eye -= self.h_dir * 0.6 * fall
+        look(eye + shake, eye + (d0 * (1 - kk) + d1 * kk).normalized() + Vec3(0, 0.5 * fall, 0))
+        camera.rotation_z = 25 * fall + (6 if self.hits % 2 else -6) * hit
         camera.fov = self.saved_fov - 14 * ease((t - 0.8) / 0.4)
-        # 書：一開始在你手上（畫面下方），1.4 秒後被搶到他手上
-        mine = self.eye + camera.forward * 0.6 + camera.down * 0.35 + camera.right * 0.12
-        kb = ease((t - 1.4) / 0.4)
-        if t > 1.4:                                      # 搶到書高高舉起來
-            h.arms[0].rotation_x = -150 * kb
-            h.elbows[0].rotation_x = -10
-        his = h.hands[0].world_position
-        self.book.position = mine + (his - mine) * kb
-        self.book.look_at(self.eye)
-        if t > 1.5:
-            self.caption.text = "室友：「這本我沒收了！」"
+        if t > self.length - 0.35:
+            self.black((t - (self.length - 0.35)) / 0.35)
 
     def end_caught(self):
         h = self.game.hunter
+        h.torso.rotation_y = 0
         h.stand()
         h.alarm.enabled = False
+        camera.rotation_z = 0
+
+    # ---------- GAME OVER ----------
+    def start_gameover(self):
+        """被室友抓到第三次：你被打趴在地上，室友站在旁邊把沒收的書高高舉起來，鏡頭慢慢往上拉，跳出 GAME OVER。"""
+        self.length = 5.0
+        g = self.game
+        h = g.hunter
+        base = Vec3(g.player.position.x, 0, g.player.position.z)
+        walk = g.world.walkable
+
+        def free(p0, a):
+            n = 0
+            for dist in (1.0, 2.0, 3.0):
+                q = p0 + Vec3(math.sin(a), 0, math.cos(a)) * dist
+                n += (round(q.x / 2), round(-q.z / 2)) in walk
+            return n
+        cands = [math.radians(d) for d in range(0, 360, 30)]
+        fa = max(cands, key=lambda a: free(base, a))                # 身體往最空的方向倒，才不會插進牆裡
+        F = Vec3(math.sin(fa), 0, math.cos(fa))
+        self.fwd = F
+        self.base = base + F * 1.0                                    # 畫面中心：身體中間
+        lie = self.own(Entity(position=base + F * 0.9 + Vec3(0, 0.14, 0), rotation_y=math.degrees(fa)))
+        self.you = Person(shirt=color.rgb32(230, 120, 30), pants=color.rgb32(50, 50, 60), hair=color.rgb32(40, 30, 25),
+                          glasses=False)
+        self.own(self.you.root)
+        self.you.root.parent = lie
+        self.you.root.position = (0, 0, -0.85)
+        self.you.root.rotation_x = 90           # 倒在地上，頭朝室友那邊
+        self.you.arms[0].rotation_z, self.you.arms[1].rotation_z = 70, -70
+        self.you.arms[0].rotation_x, self.you.arms[1].rotation_x = -160, -160
+        self.you.legs[0].rotation_z, self.you.legs[1].rotation_z = 8, -8
+        self.h_saved = (h.root.enabled, Vec3(h.root.position))
+        h.root.enabled = True
+        h.alarm.enabled = False
+        right = Vec3(F.z, 0, -F.x)
+        h.root.position = base + F * 2.3 + right * 0.45
+        h.root.look_at_2d(base + F * 1.2, "y")
+        h.stand()
+        h.arms[0].rotation_x, h.elbows[0].rotation_x = -165, -5       # 舉起沒收的書
+        h.arms[1].rotation_x, h.elbows[1].rotation_x = -30, -60      # 另一隻手插腰
+        h.arms[1].rotation_z = 30
+        self.books = []
+        for i in range(3):
+            b = self.own(Entity(model="cube", scale=(0.24, 0.05, 0.32),
+                                color=(color.rgb32(200, 60, 50), color.rgb32(60, 90, 170), color.rgb32(60, 140, 80))[i]))
+            self.books.append(b)
+        # 鏡頭從側面看（跟身體垂直、而且那邊夠空）
+        self.cam_a = max(cands, key=lambda a: (free(self.base, a), -abs(math.cos(a - fa))))
+        self.caption.text = ""
+
+    def tick_gameover(self, t):
+        h = self.game.hunter
+        for i, b in enumerate(self.books):
+            b.position = h.hands[0].world_position + Vec3(0, 0.06 + i * 0.055, 0)
+            b.rotation_y = h.root.rotation_y + i * 9
+        h.head.rotation_y = math.sin(t * 3) * 10
+        k = ease(t / 4.0)
+        a = self.cam_a + math.radians(-20 + 40 * k)       # 往空的那一邊慢慢繞、慢慢拉高（不超過天花板）
+        orbit = Vec3(math.sin(a), 0, math.cos(a)) * (2.6 + 1.0 * k)
+        cam = self.base + orbit + Vec3(0, 1.5 + 1.1 * k, 0)
+        look(cam, self.base + self.fwd * 0.4 + Vec3(0, 0.7, 0))
+        self.red.color = color.rgba(0.5, 0, 0, 0.3 * ease((t - 1.0) / 1.5))
+        if t > 1.2:
+            p = ease((t - 1.2) / 0.5)
+            self.big.text = "GAME OVER"
+            self.big.scale = 5 * (0.4 + 0.6 * p) + 0.6 * math.sin(min(1.0, (t - 1.2) / 0.7) * math.pi)
+            self.big.color = color.rgba(0.95, 0.18, 0.18, p)
+            self.big.rotation_z = 0
+            self.big.position = (0, 0.12)
+            self.caption.text = f"你被室友抓到 {self.game.caught} 次，考試用書全部被沒收。"
+        self.black(1 - t / 0.3 if t < 0.3 else 0)
+
+    def end_gameover(self):
+        h = self.game.hunter
+        h.arms[1].rotation_z = 0
+        h.stand()
+        enabled, pos = self.h_saved
+        h.root.position = pos
+        h.root.enabled = enabled
+        self.big.text = ""
+        self.big.scale = 5
+        self.red.color = color.rgba32(200, 0, 0, 0)
+
+    # ---------- 從樓梯間走出來 ----------
+    def start_arrive(self):
+        """走完樓梯：從這一層真的樓梯門走出來，看到真的樓層（使用者：樓層畫面要用實際的樓層畫面）。"""
+        self.length = 1.8
+        g = self.game
+        stair = g.world.stairs.get("down" if self.kw["came"] == "up" else "up")
+        if not stair:
+            self.length = 0.01
+            self.a = self.b = g.player.position + Vec3(0, 1.6, 0)
+            self.door = None
+            return
+        self.door = stair["door"]
+        d = stair["pos"] - self.door.position
+        d.y = 0
+        d = d.normalized()
+        self.d = d
+        self.a = Vec3(self.door.position.x, 1.6, self.door.position.z) - d * 0.7
+        self.b = Vec3(stair["pos"].x, 1.6, stair["pos"].z)
+        self.door.enabled = False                 # 門打開：走出去的時候不要被門擋住
+        names = {"1F": "借還書 · 清沙龍", "2F": "期刊 · 學位論文", "3F": "視聽 · 語言學習",
+                 "4F": "中文圖書 000–499", "5F": "中文圖書 500–999", "6F": "西文圖書"}
+        self.caption.text = f"{g.world.floor}　{names.get(g.world.floor, '')}"
+
+    def tick_arrive(self, t):
+        k = ease(t / (self.length - 0.1))
+        pos = self.a + (self.b - self.a) * k
+        pos.y += abs(math.sin(t * 9)) * 0.03
+        g = self.game
+        fwd = Vec3(math.sin(math.radians(g.arrival_rot)), 0, math.cos(math.radians(g.arrival_rot)))
+        look(pos, pos + fwd)
+        self.black(1 - t / 0.35)
+
+    def end_arrive(self):
+        if self.door:
+            self.door.enabled = True

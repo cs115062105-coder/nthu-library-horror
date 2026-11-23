@@ -918,7 +918,12 @@ class World:
             self.hanging_sign(cell_pos(c, r), lines)
         for (c, r), (dc, dr), kind in self.spec["posters"]:
             dvec = Vec3(dc, 0, -dr)
-            self.quad(cell_pos(c, r) + dvec * (CELL / 2 + 0.01) + Vec3(self.rng.uniform(-0.4, 0.4), 1.55, 0),
+            back = 0.0
+            if (c, r) in self.recess_cells() and dvec.z < 0:   # 凹進去的電梯／樓梯牆：貼回真正的牆面，不要浮在空中
+                if self.char(c, r) not in "UD":
+                    continue                                    # 電梯門上不貼海報
+                back = BUMP - 0.05                         # 貼在樓梯門外面一點
+            self.quad(cell_pos(c, r) + dvec * (CELL / 2 + 0.01 - back) + Vec3(self.rng.uniform(-0.4, 0.4), 1.55, 0),
                       (0.6, 0.85), self.t[kind], rot=(0, facing_y(dvec), self.rng.uniform(-4, 4)))
         self.ceiling_lights()
 

@@ -259,8 +259,10 @@ class Game:
                 return
             self.flash.color = color.rgba32(0, 0, 0, 255)
             self.load_floor(stair["target"], came=direction)
-            self.enter_floor()
-            self.later(self.flash_fade, 0.3)
+            self.enter_floor(quiet=True)
+            self.flash_fade()
+            # 使用者：走到那層時要看到真的樓層畫面 → 從這層真的樓梯門走出來
+            self.cut.play("arrive", on_done=self.floor_hint, came=direction)
         self.cut.play("stairs", on_done=arrive, direction=direction, target=stair["target"])
 
     # ---------- 卡關提示 ----------
@@ -516,7 +518,7 @@ class Game:
         self.warn()
 
     def hunter_spotted(self):
-        """被繃帶室友抓到：播一小段動畫（他衝過來、把書搶走），懲罰是多找一本書；抓到 CAUGHT_LIMIT 次就 GAME OVER。"""
+        """被繃帶室友抓到：播一小段動畫（他衝過來、把書搶走、把你痛扁一頓），懲罰是多找一本書；抓到 CAUGHT_LIMIT 次就 GAME OVER。"""
         if self.dead:
             return
         self.dead = True
@@ -527,8 +529,9 @@ class Game:
 
         def after():
             self.flash.color = color.rgba32(30, 20, 20, 255)
-            if self.caught >= CAUGHT_LIMIT:
-                self.game_over()
+            if self.caught >= CAUGHT_LIMIT:     # 動畫：你被打趴在地上，室友舉著書，GAME OVER
+                self.flash_fade()
+                self.cut.play("gameover", on_done=self.game_over)
                 return
             extra = next((b for b in EXTRA_BOOKS if b not in self.required), None)
             if extra:
@@ -674,13 +677,17 @@ class Game:
             s.play()
 
     # ---------- 一天 ----------
-    def enter_floor(self):
+    def enter_floor(self, quiet=False):
         """走進一層樓：時間繼續走，只是重設這層的館員和室友。"""
         self.place_player()
         self.librarian.reset(self.world.monster_start)
         self.spawn_roommate()
         self.scares.reset()
         self.dead = False
+        if not quiet:
+            self.floor_hint()
+
+    def floor_hint(self):
         msg = {"1F": "1F。入館閘門旁人來人往，櫃臺的館員抬頭看了你一眼。",
                "2F": "2F。期刊區很安靜，大家都在假裝自己很認真。",
                "3F": "3F。視聽區傳來線性代數的錄音……這聲音好熟。",
