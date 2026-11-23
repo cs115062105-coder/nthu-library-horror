@@ -146,7 +146,7 @@ LEVEL_4F = [
     "#.######...n...n...n.....###################",
     "#.######.................###################",
     "#.######...n...n...n.....###################",
-    "W.######....O....O....O..UD#################",
+    "W.######....O....O....O##UD#################",
     "W.........6..................H.H.H.H...H...W",
     "W...n...n...n...n..........................W",
     "Wp.......................r........a.....a..W",
@@ -355,7 +355,7 @@ FLOORS = {
                ropes=[[(7.2, 18.2), (7.9, 19.0), (8.6, 19.8)], [(9.8, 17.0), (10.6, 17.6)]],   # 入館閘門旁的紅色伸縮圍欄
                tvs=[((10, 16), (-1, 0))],          # 柱子上的公告螢幕
                stands=[(9, 17)],                   # 閘門旁的海報架（照入館閘門實拍）
-               lift_doors=[(6, 0)],                # 樓梯間左邊的電梯（館員專用，按了不會動）
+               lift_doors=[(6, 0), (7, 0)],        # 樓梯間左邊兩部電梯（館員專用，按了不會動）
                # 照 1F 影片：新書展示桌、深藍桌巾小圓桌、自助取書區門口的「教師指定參考書」立牌、牆上的「恕」字、地上的葉子貼紙
                draped=[((8, 9), "books"), ((5, 12), "navy"), ((12, 20), "navy")],
                banners=[(11.9, 4.4, 10), (14.1, 4.4, -10)],
@@ -383,7 +383,7 @@ FLOORS = {
                        {'kind': 'exhibit', 'h': 2.3, 'pts': [(15.78, 9.79), (16.28, 10.2), (16.63, 10.74), (16.8, 11.36), (16.78, 12.01), (16.55, 12.61), (16.15, 13.12), (15.61, 13.48), (14.99, 13.66), (14.35, 13.64), (13.74, 13.42), (13.22, 13.03), (12.86, 12.5), (12.67, 11.88), (12.68, 11.23)]},
                        {'kind': 'low', 'h': 1.0, 'pts': [(8.22, 17.48), (7.95, 17.22), (7.84, 16.86), (7.9, 16.48), (8.13, 16.19), (8.48, 16.03), (8.86, 16.06), (9.18, 16.26), (9.37, 16.59), (9.38, 16.96), (9.21, 17.3)]}]),
     "2F": dict(big_history=True, glass_view="atrium",  # 使用者：玻璃外面是旺宏館內部（圖書館在旺宏館裡）
-               level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26), (18, 16), (28, 21), (33, 16)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11)],
+               level=LEVEL_2F, floor="carpet_2f", floor_shade=0.7, pillar_benches={(23, 26), (18, 16), (28, 21), (33, 16)}, island=((17.1, 15.75), 2.5, 1.6, -29), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(19, 11), (20, 11)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True,
                sign_colors=((236, 236, 246), (72, 58, 128)),
                shelf_labels=["學位論文 Theses"],
@@ -413,7 +413,7 @@ FLOORS = {
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
     "3F": dict(av_line=dict(center=(-1.35, 44.0), R=30.2, mid=-43.0, modules=5),   # 雙人聆賞席：沿著落地窗排一直線
                # 排法（使用者說的）：沙發 玻璃 沙發 電視電視 沙發 玻璃 沙發 …
-               level=LEVEL_3F, floor="carpet_3f", island=((21.08, 15.79), 2.3, 1.4, 25), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10)],
+               level=LEVEL_3F, floor="carpet_3f", island=((21.08, 15.79), 2.3, 1.4, 25), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10), (24, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
                sign_colors=((236, 236, 246), (72, 58, 128)), blind_col=(58, 58, 64, 240),
                shelf_labels=["DVD 影片", "CD 音樂"], shelf_fill="dvd", label_colors=((232, 104, 30), (255, 255, 255)),
@@ -447,7 +447,7 @@ FLOORS = {
                curves=[{'kind': 'glass', 'pts': [(10.5, 16.5), (10.53, 17.98), (11.82, 18.61), (13.07, 19.3), (14.29, 20.05), (15.47, 20.87), (16.61, 21.74), (17.7, 22.66), (18.75, 23.64), (19.74, 24.67), (20.68, 25.75), (21.57, 26.88), (22.39, 28.05), (23.16, 29.25), (23.87, 30.5)]},
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 35, 145)},    # 資訊島
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((21.08, 15.79), 2.3, 1.4, 25, 215, 325)}]),
-    "4F": dict(level=LEVEL_4F, floor="carpet_6f", stools=14, carts=4, banks=[], safe=set(),
+    "4F": dict(level=LEVEL_4F, floor="carpet_6f", stools=14, carts=4, banks=[], safe=set(), lift_doors=[(23, 11), (24, 11)],
                # 使用者：4F、5F 整層跟 6F 差不多，只差書櫃跟電梯後面的空間 → 外觀照 6F
                shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="40",
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
@@ -482,15 +482,15 @@ _UPPER = dict(banks=[], safe=set(), wall_tex="wallw", white=True, band_windows=T
               sign_colors=((236, 236, 246), (72, 58, 128)), halo=dict(center=(21.04, 15.47), radius=2.4),
               island=((21.04, 15.47), 2.3, 1.6, 25),
               curves=FLOORS["4F"]["curves"],
-              # 中間核心西側的電梯廳：黑色亮面牆、東牆兩部電梯、北牆樓層指引
-              elevator=dict(cells=(22, 8, 23, 10), doors=[(24, 8), (24, 10)], buttons=(24, 9), directory=(22, 7)),
+              # 使用者：電梯就在樓梯間左邊（核心南面），兩部銀灰色電梯，左邊黑色亮面牆掛樓層指引
+              lift_doors=[(23, 11), (24, 11)],
               spiral=(31.5, 39.5))    # 南邊研究小間旁的螺旋梯
 FLOORS["5F"] = dict(_UPPER, level=LEVEL_5F, floor="carpet_6f", stools=14, carts=4, ceiling_tex="plaster",
                     shelf_fill="light", end_style="blue", label_colors=((40, 110, 190), (245, 248, 252)), grid_ceilings=[(24.5, 12.6, 34.5, 17.5, "slats"), (16.5, 12.5, 24.5, 18.5, "grid")], bay_prefix="50",
                     shelf_labels=["500 社會科學類", "510 統計", "520 教育", "550 經濟", "570 政治", "580 法律",
                                   "600 中國史地類", "700 世界史地類", "800 語言文學類", "850 中國文學", "900 藝術類"],
                     hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
-                             (1, 9): ("影印室", "Photocopy Room"), (21, 9): ("電梯", "Elevators"),
+                             (1, 9): ("影印室", "Photocopy Room"),
                              (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("閱覽區", "Reading Area"),
                              (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("中文圖書 500–999", "Oriental Language Books"),
                              (35, 22): ("中文圖書 500–999", "Oriental Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
@@ -519,7 +519,7 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                                   "Q Science", "QA Math", "T Technology"],
                     west_labels=(22, ["期刊 中文合訂本"]),
                     hanging={(25, 13): ("樓梯間 · 電梯", "Stairs · Elevator"), (1, 1): ("討論室", "Discussion Rooms"),
-                             (1, 9): ("影印室", "Photocopy Room"), (21, 9): ("電梯", "Elevators"),
+                             (1, 9): ("影印室", "Photocopy Room"),
                              (21, 13): ("資訊島", "Information Retrieval"), (6, 14): ("安靜閱覽區", "Quiet Reading Area"),
                              (18, 5): ("閱覽區", "Reading Area"), (37, 7): ("西文圖書", "Western Language Books"),
                              (35, 22): ("西文圖書", "Western Language Books"), (34, 3): ("研究小間", "Individual Study Rooms"),
@@ -806,11 +806,8 @@ class World:
         for c, r in self.spec.get("stands", []):
             self.stand(cell_pos(c, r))
             self.walkable.discard((c, r))
-        for c, r in self.spec.get("lift_doors", []):
-            p = cell_pos(c, r) + Vec3(0, 0, -(CELL / 2 + 0.03))
-            self.box(p + Vec3(0, 1.15, 0), (1.5, 2.3, 0.06), col=color.rgb32(150, 152, 156))
-            self.box(p + Vec3(0, 1.1, -0.035), (0.02, 2.1, 0.01), col=color.rgb32(70, 70, 74))
-            self.box(p + Vec3(1.0, 1.15, -0.02), (0.14, 0.3, 0.03), col=color.rgb32(185, 188, 192))
+        if self.spec.get("lift_doors"):
+            self.lifts(self.spec["lift_doors"])
         if self.spec.get("stools"):     # 書架走道上的白色圓形踏凳（踢凳）
             aisles = sorted(cell for cell in self.walkable
                             if self.char(cell[0], cell[1] - 1) == "B" or self.char(cell[0], cell[1] + 1) == "B")
@@ -2761,6 +2758,37 @@ class World:
                          color=color.rgb(1.3, 1.3, 1.45))
             seg.look_at(p1)
             seg.rotation_x = 0
+
+    def lifts(self, cells):
+        """樓梯間左邊的電梯（照 6F 電梯廳的樣子）：白牆上兩部銀灰色電梯、中間叫車按鈕，
+        再往左一格是黑色亮面牆，掛樓層指引和公告。cells 是牆格，電梯畫在它的南面。"""
+        white, black = color.rgb32(236, 236, 234), color.rgb32(16, 17, 22)
+        rot = (0, facing_y(Vec3(0, 0, -1)), 0)
+        def face(c, r):
+            return cell_pos(c, r) + Vec3(0, 0, -(CELL / 2 + 0.02))
+        for c, r in cells:
+            f = face(c, r)
+            self.quad(f + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H), col=white, rot=rot)
+            self.box(f + Vec3(0, 1.2, -0.01), (1.36, 2.46, 0.03), col=color.rgb32(96, 98, 102))      # 門框
+            self.box(f + Vec3(0, 1.18, -0.03), (1.28, 2.36, 0.02), col=color.rgb32(140, 142, 146))   # 不鏽鋼門
+            self.box(f + Vec3(0, 1.18, -0.045), (0.02, 2.36, 0.01), col=color.rgb32(70, 72, 76))     # 門縫
+            self.box(f + Vec3(0, 2.6, -0.02), (0.36, 0.14, 0.02), col=color.rgb32(20, 20, 24))        # 樓層顯示
+            self.box(f + Vec3(0, 2.6, -0.032), (0.12, 0.07, 0.005), col=color.rgb(1.4, 0.55, 0.2))
+        (c0, r0), (c1, r1) = cells[0], cells[-1]
+        mid = (face(c0, r0) + face(c1, r1)) / 2
+        self.box(mid + Vec3(0, 1.2, -0.02), (0.16, 0.34, 0.03), col=color.rgb32(150, 150, 154))      # 叫車按鈕
+        for y in (1.27, 1.13):
+            self.box(mid + Vec3(0, y, -0.04), (0.06, 0.06, 0.01), col=color.rgb(1.3, 1.3, 1.1))
+        side = (c0 - 1, r0)
+        if self.char(*side) == "#":
+            f = face(*side)
+            self.quad(f + Vec3(0, WALL_H / 2, -0.005), (CELL, WALL_H), col=black, rot=rot)
+            self.quad(f + Vec3(-0.6, 1.6, -0.01), (0.12, WALL_H * 0.9), col=color.rgba32(120, 130, 160, 60), rot=rot)
+            lines = ["6F 西文圖書", "5F 中文圖書 500–999", "4F 中文圖書 000–499",
+                     "3F 視聽 · 語言學習", "2F 期刊 · 學位論文", "1F 借還書 · 清沙龍"]
+            tex = self.text_tex(lines, w=160, h=320, bg=(20, 20, 24), fg=(235, 225, 200), sizes=[16] * 6)
+            self.quad(f + Vec3(0.45, 1.5, -0.015), (0.6, 1.4), tex, rot=rot)
+            self.quad(f + Vec3(-0.45, 1.9, -0.015), (0.7, 0.9), self.t["notice"], col=color.rgb(1.25, 1.25, 1.3), rot=rot)
 
     def elevator_lobby(self, cells, doors, buttons, directory):
         """5F／6F 電梯廳：牆面貼黑色亮面板，東牆是白牆配兩部銀灰色電梯，北牆掛樓層指引。"""
