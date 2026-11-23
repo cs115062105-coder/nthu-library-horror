@@ -788,7 +788,19 @@ class Game:
                 self.dead = False
                 self.new_day(why="你被館員請出了圖書館……")
                 self.later(self.flash_fade, 0.4)
-            self.cut.play("expel", on_done=out)
+
+            def go():               # 先黑畫面換到 1F（隔天也從大門口重新進來），在真的出入口演
+                if self.world.floor != "1F":
+                    self.load_floor("1F", came="start")
+                self.arrival, self.arrival_rot = self.world.start, 90
+                self.librarian.reset(self.world.monster_start)
+                self.spawn_roommate()
+                self.flash_fade()
+                self.cut.play("expel", on_done=out)
+            self.update_prompt(off=True)
+            self.hide_help()
+            self.flash.color = color.rgba32(0, 0, 0, 255)
+            self.later(go, 0.05)
             return
         line = "館內請勿奔跑！" if self.running else "請保持安靜！"
         text = f"館員：「噓——同學，{line}」（警告 {self.warnings}/3）"
