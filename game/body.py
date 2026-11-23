@@ -135,6 +135,49 @@ class Shape:
             self.t += [(base, base + 1, base + 2), (base, base + 2, base + 3)]
         return self
 
+    def sweep(self, path, width, thick, col, at=(0, 0, 0), rot=(0, 0, 0), r=0.03, seg=5):
+        """一條圓角長方形斷面的帶子沿著側面曲線 path=[(z, y), ...] 掃過去，寬 width（x 方向）、厚 thick。
+        做彎成一片的家具（3F 的波浪搖椅）。兩端封口。"""
+        R = _rot(*rot)
+        col = self._col(col)
+        hw, ht = width / 2 - r, thick / 2 - r
+        sec = []          # 斷面一圈：圓角長方形 (u, v, nu, nv)
+        for cu, cv, a0 in ((hw, ht, 0), (-hw, ht, 90), (-hw, -ht, 180), (hw, -ht, 270)):
+            for k in range(seg + 1):
+                a = math.radians(a0 + 90 * k / seg)
+                sec.append((cu + r * math.cos(a), cv + r * math.sin(a), math.cos(a), math.sin(a)))
+        m = len(sec)
+        base = len(self.v)
+        n_path = len(path)
+        for i, (z, y) in enumerate(path):
+            z0, y0 = path[max(i - 1, 0)]
+            z1, y1 = path[min(i + 1, n_path - 1)]
+            tz, ty = z1 - z0, y1 - y0
+            l = math.hypot(tz, ty) or 1.0
+            nz, ny = -ty / l, tz / l
+            for u, v, nu, nv in sec:
+                q = R((u, y + v * ny, z + v * nz))
+                self.v.append((q[0] + at[0], q[1] + at[1], q[2] + at[2]))
+                self.n.append(_norm(R((nu, nv * ny, nv * nz))))
+                self.c.append(col)
+        for i in range(n_path - 1):
+            for j in range(m):
+                a, b = base + i * m + j, base + i * m + (j + 1) % m
+                self.t += [(a, b, b + m), (a, b + m, a + m)]
+        for i, sgn in ((0, -1), (n_path - 1, 1)):     # 兩端封口
+            z, y = path[i]
+            z2, y2 = path[i - sgn] if 0 <= i - sgn < n_path else path[i]
+            tz, ty = (z - z2) * sgn, (y - y2) * sgn
+            l = math.hypot(tz, ty) or 1.0
+            c0 = len(self.v)
+            cq = R((0, y, z))
+            self.v.append((cq[0] + at[0], cq[1] + at[1], cq[2] + at[2]))
+            self.n.append(_norm(R((0, ty * sgn / l, tz * sgn / l))))
+            self.c.append(col)
+            for j in range(m):
+                self.t.append((c0, base + i * m + j, base + i * m + (j + 1) % m))
+        return self
+
     def mesh(self):
         if not getattr(self, "_oriented", False):     # 每個三角形都轉成「從外面看是正面」，背面才能被剔除
             tris = []

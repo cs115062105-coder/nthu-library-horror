@@ -421,7 +421,8 @@ FLOORS = {
                grid_ceilings=[(28.5, 16.5, 39.5, 25.5, "grid_white")],   # 書架區上方白色鋁格柵
                # 0.5 秒逐格（2:44–3:41）：書架是很密的長排，從服務台旁一路排到東邊窗前，端板大大的橘牌 30xx
                bay_prefix="30", bay_start=1,
-               wave_chairs=[(29, 29, 0), (32, 29, 0), (34, 29, 0, "black")],   # 影片 2:24／2:34：一排白色波浪椅，尾端一張黑色的
+               # 使用者新影片 IMG_1322：柱子旁一小群亮面波浪搖椅，兩排、都朝同一邊；後排右邊兩張黑色
+               wave_chairs=[(33.9, 28.4, 270, "white"), (33.9, 28.77, 270, "black"), (33.9, 29.14, 270, "black"), (33.0, 28.4, 270, "white"), (33.0, 28.77, 270, "white"), (33.0, 29.14, 270, "white")],
                olive_chairs=[(41.6, 20.5), (41.9, 26.8), (41.2, 13.8)],   # 影片 3:03／3:15／3:22：東窗邊的橄欖綠桶椅
                lang_rooms=dict(row=16, c0=1, c1=9),   # 影片 1:06–1:22：語言學習區是一間間霧面玻璃小房間 L301…
                # 照 3F 影片：服務台上方深色木條天花板、旁邊一排黑色 DVD 斜架、北牆一整面木條牆配電視
@@ -824,6 +825,7 @@ class World:
             self.ink_panel(Vec3(c * CELL, 0, -r * CELL), rot, word)
         for c, r, *rot in self.spec.get("wave_chairs", []):
             self.wave_chair(cell_pos(c, r), *rot)
+            self.walkable.discard((round(c), round(r)))
         if "lake_mural" in self.spec:
             self.lake_mural(*self.spec["lake_mural"])
         if "olive_chairs" in self.spec:
@@ -1704,29 +1706,34 @@ class World:
                   rot=(90, math.degrees(math.atan2(d.x, d.z)), 0))
 
     def orange_desks(self, spots):
-        """3F 電視區旁：白色長桌，兩邊各兩張圓滑的橘色旋轉椅（十字星腳）。"""
+        """3F 搖搖椅旁（IMG_1322）：淺木色圓弧桌、中間一片霧面隔板，兩邊是橘／駝色天鵝椅（十字星腳）。"""
         import body
         from shading import person_shader
         sh = body.Shape()
-        orange, chrome, white = (226, 108, 36), (190, 192, 198), (242, 242, 240)
+        wood, wood2, chrome = (226, 196, 150), (200, 166, 118), (190, 192, 198)
+        tones = [(226, 108, 36), (204, 148, 88)]
         for c, r in spots:
             x, z = c * CELL, -r * CELL
-            sh.box((x, 0.74, z), (1.6, 0.04, 0.8), white)
-            for dx in (-0.72, 0.72):
-                sh.box((x + dx, 0.37, z), (0.05, 0.72, 0.7), white)
-            sh.box((x, 0.77, z - 0.05), (0.34, 0.24, 0.02), (40, 40, 44), rot=(-12, 0, 0))   # 筆電
+            sh.ellipsoid((x, 0.725, z), (0.86, 0.03, 0.46), wood, seg=32, rings=6)
+            sh.tube(0.06, 0.7, 0.3, 0.3, wood2, seg=24, at=(x, 0, z), sx=2.0)
+            for dx in (-0.55, 0.55):                       # 金屬腳
+                sh.box((x + dx, 0.03, z), (0.08, 0.04, 0.7), chrome)
             for dx in (-0.4, 0.4):
                 for side in (1, -1):
-                    cx, cz = x + dx + self.rng.uniform(-0.06, 0.06), z + side * 0.72
-                    yaw = (0 if side > 0 else 180) + self.rng.uniform(-20, 20)
+                    cx, cz = x + dx + self.rng.uniform(-0.05, 0.05), z + side * 0.78
+                    yaw = (0 if side > 0 else 180) + self.rng.uniform(-25, 25)
+                    col = self.rng.choice(tones)
                     R = body._rot(0, yaw, 0)
-                    sh.ellipsoid((cx, 0.47, cz), (0.25, 0.06, 0.24), orange, rot=(0, yaw, 0))
-                    q = R((0, 0, 0.2))
-                    sh.ellipsoid((cx + q[0], 0.72, cz + q[2]), (0.24, 0.22, 0.06), orange, rot=(-10, yaw, 0))
-                    sh.tube(0.06, 0.42, 0.03, 0.025, chrome, at=(cx, 0, cz))
+                    sh.ellipsoid((cx, 0.5, cz), (0.27, 0.08, 0.26), col, rot=(0, yaw, 0))
+                    for lobe in (-1, 1):                   # 天鵝椅：上緣分成兩瓣的高椅背
+                        q = R((lobe * 0.07, 0, 0.17))
+                        sh.ellipsoid((cx + q[0], 0.78, cz + q[2]), (0.19, 0.28, 0.08), col, rot=(-14, yaw + lobe * 8, lobe * -6))
+                    sh.tube(0.06, 0.44, 0.03, 0.025, chrome, at=(cx, 0, cz))
                     for k in range(5):
                         sh.tube(0.0, 0.28, 0.015, 0.012, chrome, at=(cx, 0.05, cz), rot=(90, yaw + k * 72, 0))
-            self.collider(Vec3(x, 0.4, z), (1.7, 0.8, 0.9), occludes=False)
+            self.box((0, 0, 0), (1.5, 0.5, 0.03), col=color.rgba32(225, 235, 238, 150),
+                     parent=Entity(position=(x, 1.0, z)))   # 霧面隔板
+            self.collider(Vec3(x, 0.4, z), (1.8, 0.8, 1.0), occludes=False)
             self.hides.append(Vec3(x, 0, z))
             self.walkable.discard((round(c), round(r)))
         e = Entity(model=sh.mesh(), double_sided=True)
@@ -2382,21 +2389,27 @@ class World:
         self.collider(p + Vec3(0, 1.2, 0), (1.6, 2.4, 0.15), occludes=False).rotation_y = rot
 
     def wave_chair(self, p, rot=180, tone="white"):
-        """3F 木條牆前的白色波浪造型躺椅：一塊白色板子彎成 S 形，兩張並排（影片裡尾端有一組黑色的）。"""
-        top, base = ((246, 246, 244), (238, 238, 236)) if tone == "white" else ((30, 30, 34), (22, 22, 26))
-        for x in (-0.45, 0.45):
-            ch = Entity(parent=self.group(None), position=p + Vec3(x, 0, 0), rotation_y=rot)
-            prev = None
-            for k in range(8):       # 從前緣往後彎上去的曲面，用一段段薄板接起來
-                t = k / 7
-                pt = Vec3(0, 0.25 + 0.55 * t * t + 0.12 * math.sin(t * math.pi * 2), -0.45 + 0.85 * t)
-                if prev is not None:
-                    seg = Entity(parent=ch, model="cube", position=(prev + pt) / 2, scale=(0.75, 0.06, (pt - prev).length() + 0.03),
-                                 color=color.rgb32(*top))
-                    seg.rotation = (math.degrees(math.atan2(pt.y - prev.y, pt.z - prev.z)), 0, 0)
-                prev = pt
-            Entity(parent=ch, model="cube", position=(0, 0.12, 0), scale=(0.7, 0.24, 0.8), color=color.rgb32(*base))
-        self.collider(p + Vec3(0, 0.5, 0), (CELL * 0.9, 1.0, 1.0), occludes=False)
+        """3F 的白色亮面波浪搖椅（使用者新影片 IMG_1322）：一整片彎成迴圈的板子，
+        底下是貼地的弧形搖腳，前緣往上捲成座面，再往後升成高高的椅背；兩側是空的。尾端有兩張黑色的。"""
+        import body
+        from shading import person_shader
+
+        def build():
+            pts = [(-0.30, 0.05), (-0.05, 0.02), (0.22, 0.03), (0.40, 0.10), (0.46, 0.24), (0.40, 0.36),
+                   (0.22, 0.38), (0.02, 0.37), (-0.16, 0.46), (-0.28, 0.64), (-0.35, 0.84), (-0.36, 1.0), (-0.32, 1.08)]
+            path = []      # Catmull-Rom 細分，讓弧線圓滑
+            for k in range(len(pts) - 1):
+                p0, p1, p2, p3 = pts[max(k - 1, 0)], pts[k], pts[k + 1], pts[min(k + 2, len(pts) - 1)]
+                for t in (0, 0.25, 0.5, 0.75):
+                    t2, t3 = t * t, t * t * t
+                    path.append(tuple(0.5 * (2 * p1[a] + (-p0[a] + p2[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2
+                                            + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * t3) for a in (0, 1)))
+            path.append(pts[-1])
+            col = (246, 246, 244) if tone == "white" else (26, 26, 30)
+            return body.Shape().sweep(path, 0.6, 0.07, col, r=0.03)
+        e = Entity(model=body.cached(("wave_chair", tone), build), position=p, rotation_y=rot, double_sided=True)
+        e.shader = person_shader
+        self.collider(p + Vec3(0, 0.5, 0), (0.62, 1.0, 0.8), occludes=False)
 
     def dvd_rack(self, p, rot):
         """3F 媒體區的黑色斜架：兩面都斜斜地擺著 DVD 封面。"""
