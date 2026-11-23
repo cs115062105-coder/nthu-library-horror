@@ -541,7 +541,7 @@ def facing_y(d):
     return {(0, -1): 0, (0, 1): 180, (1, 0): -90, (-1, 0): 90}[(round(d.x), round(d.z))]
 
 
-BUMP = 0.5      # 電梯／樓梯間凸出走道的深度（公尺）
+BUMP = 0.5      # 電梯／樓梯間凹進牆裡的深度（公尺）
 
 class World:
     _textures = None   # 材質只產生一次，換樓層時沿用
@@ -1005,9 +1005,26 @@ class World:
             if self.char(c + dc, r + dr) not in "#W":
                 yield Vec3(dc, 0, -dr)
 
+    def recess_cells(self):
+        """電梯＋樓梯門那幾格牆：使用者說是往牆裡凹進去的（南面退 BUMP 公尺）。"""
+        if not hasattr(self, "_recess"):
+            cells = list(self.spec.get("lift_doors", []))
+            if cells:
+                c, r = cells[-1]
+                while self.char(c + 1, r) in "UD":
+                    c += 1
+                    cells.append((c, r))
+            self._recess = set(cells)
+        return self._recess
+
     def wall(self, c, r, p):
         if not any(True for _ in self.open_sides(c, r)):
             return   # 被牆包住的格子看不到，不用蓋
+        if (c, r) in self.recess_cells():      # 南面凹進去
+            q = p + Vec3(0, WALL_H / 2, BUMP / 2)
+            self.box(q, (CELL, WALL_H, CELL - BUMP), self.t[self.spec.get("wall_tex", "wall")])
+            self.collider(q, (CELL, WALL_H, CELL - BUMP))
+            return
         self.box(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL), self.t[self.spec.get("wall_tex", "wall")])
         self.collider(p + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H, CELL))
 
@@ -2066,8 +2083,8 @@ class World:
         side = next(Vec3(dc, 0, -dr) for dc, dr in ((0, 1), (0, -1), (1, 0), (-1, 0))
                     if self.char(c + dc, r + dr) not in BLOCKED)   # 朝向可以走的那一格
         self.wall(c, r, p)
-        if self.spec.get("lift_doors") and side.z < 0:
-            p = p + side * BUMP          # 樓梯間跟電梯一起往外凸
+        if (c, r) in self.recess_cells() and side.z < 0:
+            p = p - side * BUMP          # 樓梯門跟電梯一起凹進牆裡
         door = Entity(model="cube", position=p + side * (CELL / 2 + 0.03) + Vec3(0, 1.1, 0),
                       scale=(1.2 if side.z else 0.06, 2.2, 0.06 if side.z else 1.2), color=color.rgb32(48, 70, 60))
         i = ORDER.index(self.floor) + (1 if direction == "up" else -1)
@@ -2772,21 +2789,15 @@ class World:
         def wallface(c, r):
             return cell_pos(c, r) + Vec3(0, 0, -(CELL / 2 + 0.02))
         def face(c, r):
-            return wallface(c, r) + Vec3(0, 0, -DEP)
-        # 使用者：電梯和樓梯間是往走道凸出來的量體，不是跟旁邊同一面平牆
+            return wallface(c, r) + Vec3(0, 0, DEP)
+        # 使用者：電梯和樓梯間是往牆裡凹進去的（不是凸出來）；凹槽底部的頂上補一條門楣
         (c0, r0), (c1, r1) = cells[0], cells[-1]
-        ce = c1
-        while self.char(ce + 1, r1) in "UD":
-            ce += 1
+        ce = max(c for c, _ in self.recess_cells())
         a, b = wallface(c0, r0) + Vec3(-CELL / 2, 0, 0), wallface(ce, r1) + Vec3(CELL / 2, 0, 0)
-        mid0 = (a + b) / 2 + Vec3(0, WALL_H / 2, -DEP / 2)
-        size = (b.x - a.x, WALL_H, DEP)
-        self.box(mid0, size, col=white)
-        self.box(mid0 + Vec3(0, -WALL_H / 2 + 0.05, -DEP / 2 - 0.005), (size[0], 0.1, 0.01), col=color.rgb32(70, 70, 74))   # 踢腳板
-        self.collider(mid0, size)
-        if ce > c1:     # 電梯和樓梯之間一道深色分隔縫
+        self.box(Vec3((a.x + b.x) / 2, WALL_H - 0.03, a.z + DEP / 2), (b.x - a.x, 0.06, DEP), col=white)
+        if ce > c1:     # 電梯和樓梯之間一道淺灰分隔縫
             xg = (wallface(c1, r1).x + wallface(c1 + 1, r1).x) / 2
-            self.box(Vec3(xg, WALL_H / 2, a.z - DEP - 0.005), (0.04, WALL_H, 0.012), col=color.rgb32(150, 150, 152))
+            self.box(Vec3(xg, WALL_H / 2, a.z + DEP - 0.005), (0.04, WALL_H, 0.012), col=color.rgb32(150, 150, 152))
         for c, r in cells:
             f = face(c, r)
             self.quad(f + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H), col=white, rot=rot)
