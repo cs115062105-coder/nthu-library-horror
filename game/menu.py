@@ -4,7 +4,7 @@
 """
 import math
 
-from ursina import Button, Entity, Text, camera, color, time, window
+from ursina import Button, Entity, Slider, Text, camera, color, time, window
 
 DIFFICULTIES = {
     "簡單": dict(help_after=60, speed=1.6, seconds=300, sight=9, flee=4.6, hits=18, fight_time=7.0,
@@ -49,6 +49,7 @@ Ctrl　　 躡手躡腳地走（不會發出聲音）
 C　　　　躲到旁邊的桌子底下／出來
 E　　　　互動、上下樓、抓室友、痛扁（狂按）
 M　　　　小地圖開關
+- / =　　 背景音樂音量（大廳左下也能調）
 ESC　　　回到大廳
 
 小提示
@@ -73,7 +74,7 @@ def _button(parent, text, y, on_click, x=0.34, width=0.36):
 
 
 class Lobby:
-    def __init__(self, on_start, on_quit, aim_camera):
+    def __init__(self, on_start, on_quit, aim_camera, music=0.5, on_music=None):
         self.on_start = on_start
         self.aim_camera = aim_camera      # 背景鏡頭由遊戲決定要擺在哪
         self.difficulty = "普通"
@@ -103,7 +104,13 @@ class Lobby:
         _button(self.col, "故事介紹", -0.205, lambda: self.show_panel("故事", STORY))
         _button(self.col, "操作說明", -0.28, lambda: self.show_panel("操作", CONTROLS))
         _button(self.col, "離開", -0.355, on_quit)
-        Text(parent=self.col, text="清大程設 Final Project 原型", position=(0.34, -0.45), origin=(0, 0),
+        # 背景音樂音量（使用者要求）：0–100，拖了馬上生效，下次開遊戲會記得
+        Text(parent=self.col, text="音樂", position=(0.16, -0.405), scale=0.9, color=color.light_gray)
+        self.music = Slider(min=0, max=100, default=int(round(music * 100)), step=5, dynamic=True,
+                            parent=self.col, position=(0.235, -0.415), scale=0.5)
+        self.music.knob.color = ACCENT
+        self.music.on_value_changed = lambda: on_music and on_music(self.music.value / 100)
+        Text(parent=self.col, text="清大程設 Final Project 原型", position=(0.34, -0.47), origin=(0, 0),
              scale=0.7, color=color.rgb32(90, 88, 84))
 
         self.panel = Entity(parent=camera.ui, z=-0.6, enabled=False)
