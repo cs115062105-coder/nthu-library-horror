@@ -541,6 +541,8 @@ def facing_y(d):
     return {(0, -1): 0, (0, 1): 180, (1, 0): -90, (-1, 0): 90}[(round(d.x), round(d.z))]
 
 
+BUMP = 0.5      # 電梯／樓梯間凸出走道的深度（公尺）
+
 class World:
     _textures = None   # 材質只產生一次，換樓層時沿用
 
@@ -2064,6 +2066,8 @@ class World:
         side = next(Vec3(dc, 0, -dr) for dc, dr in ((0, 1), (0, -1), (1, 0), (-1, 0))
                     if self.char(c + dc, r + dr) not in BLOCKED)   # 朝向可以走的那一格
         self.wall(c, r, p)
+        if self.spec.get("lift_doors") and side.z < 0:
+            p = p + side * BUMP          # 樓梯間跟電梯一起往外凸
         door = Entity(model="cube", position=p + side * (CELL / 2 + 0.03) + Vec3(0, 1.1, 0),
                       scale=(1.2 if side.z else 0.06, 2.2, 0.06 if side.z else 1.2), color=color.rgb32(48, 70, 60))
         i = ORDER.index(self.floor) + (1 if direction == "up" else -1)
@@ -2764,8 +2768,25 @@ class World:
         再往左一格是黑色亮面牆，掛樓層指引和公告。cells 是牆格，電梯畫在它的南面。"""
         white, black = color.rgb32(236, 236, 234), color.rgb32(16, 17, 22)
         rot = (0, facing_y(Vec3(0, 0, -1)), 0)
-        def face(c, r):
+        DEP = BUMP
+        def wallface(c, r):
             return cell_pos(c, r) + Vec3(0, 0, -(CELL / 2 + 0.02))
+        def face(c, r):
+            return wallface(c, r) + Vec3(0, 0, -DEP)
+        # 使用者：電梯和樓梯間是往走道凸出來的量體，不是跟旁邊同一面平牆
+        (c0, r0), (c1, r1) = cells[0], cells[-1]
+        ce = c1
+        while self.char(ce + 1, r1) in "UD":
+            ce += 1
+        a, b = wallface(c0, r0) + Vec3(-CELL / 2, 0, 0), wallface(ce, r1) + Vec3(CELL / 2, 0, 0)
+        mid0 = (a + b) / 2 + Vec3(0, WALL_H / 2, -DEP / 2)
+        size = (b.x - a.x, WALL_H, DEP)
+        self.box(mid0, size, col=white)
+        self.box(mid0 + Vec3(0, -WALL_H / 2 + 0.05, -DEP / 2 - 0.005), (size[0], 0.1, 0.01), col=color.rgb32(70, 70, 74))   # 踢腳板
+        self.collider(mid0, size)
+        if ce > c1:     # 電梯和樓梯之間一道深色分隔縫
+            xg = (wallface(c1, r1).x + wallface(c1 + 1, r1).x) / 2
+            self.box(Vec3(xg, WALL_H / 2, a.z - DEP - 0.005), (0.04, WALL_H, 0.012), col=color.rgb32(150, 150, 152))
         for c, r in cells:
             f = face(c, r)
             self.quad(f + Vec3(0, WALL_H / 2, 0), (CELL, WALL_H), col=white, rot=rot)
@@ -2774,14 +2795,13 @@ class World:
             self.box(f + Vec3(0, 1.18, -0.045), (0.02, 2.36, 0.01), col=color.rgb32(70, 72, 76))     # 門縫
             self.box(f + Vec3(0, 2.6, -0.02), (0.36, 0.14, 0.02), col=color.rgb32(20, 20, 24))        # 樓層顯示
             self.box(f + Vec3(0, 2.6, -0.032), (0.12, 0.07, 0.005), col=color.rgb(1.4, 0.55, 0.2))
-        (c0, r0), (c1, r1) = cells[0], cells[-1]
         mid = (face(c0, r0) + face(c1, r1)) / 2
         self.box(mid + Vec3(0, 1.2, -0.02), (0.16, 0.34, 0.03), col=color.rgb32(150, 150, 154))      # 叫車按鈕
         for y in (1.27, 1.13):
             self.box(mid + Vec3(0, y, -0.04), (0.06, 0.06, 0.01), col=color.rgb(1.3, 1.3, 1.1))
         side = (c0 - 1, r0)
         if self.char(*side) == "#":
-            f = face(*side)
+            f = wallface(*side)
             self.quad(f + Vec3(0, WALL_H / 2, -0.005), (CELL, WALL_H), col=black, rot=rot)
             self.quad(f + Vec3(-0.6, 1.6, -0.01), (0.12, WALL_H * 0.9), col=color.rgba32(120, 130, 160, 60), rot=rot)
             lines = ["6F 西文圖書", "5F 中文圖書 500–999", "4F 中文圖書 000–499",
