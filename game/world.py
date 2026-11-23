@@ -541,7 +541,7 @@ def facing_y(d):
     return {(0, -1): 0, (0, 1): 180, (1, 0): -90, (-1, 0): 90}[(round(d.x), round(d.z))]
 
 
-BUMP = 0.5      # 電梯／樓梯間凹進牆裡的深度（公尺）
+BUMP = 1.2      # 電梯／樓梯間凹進牆裡的深度（公尺）
 
 class World:
     _textures = None   # 材質只產生一次，換樓層時沿用
