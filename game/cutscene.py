@@ -2,10 +2,10 @@
 
 · stairs：走樓梯間，鏡頭沿著一段水泥樓梯往上／往下走，轉角牆上寫著要去的樓層
 · warn：被館員警告，鏡頭轉向館員，館員搖手指「噓——」
-· expel：被警告三次，館員在大門口指著外面，你垂頭喪氣走出圖書館
+· expel：被警告三次，換到 1F 真的出入口，館員在出口閘門旁指著外面，你垂頭喪氣走出去
 · caught：第二階段被繃帶室友抓到，室友衝過來指著你、把書搶走
 
-除了 warn、caught 是在原地演（用場上真的館員／室友），stairs、expel 蓋在離圖書館很遠的地方，
+除了 warn、caught 是在原地演（用場上真的館員／室友），stairs 蓋在離圖書館很遠的地方，expel 在 1F 真的出入口演，
 只有鏡頭看得到。播放時玩家停用（Ursina 會把鏡頭交還給場景），播完再啟用就會回到玩家眼睛。
 Esc／空白鍵可以跳過。
 """
@@ -17,7 +17,6 @@ import textures as tx
 from npc import Person
 
 STAIR_BASE = Vec3(-600, 0, 600)
-DOOR_BASE = Vec3(-600, 0, -600)
 
 
 def _stone_tile():
@@ -133,7 +132,7 @@ class Cutscene:
             self.finish()
 
     def update(self):
-        self.t += time.dt
+        self.t += min(time.dt, 0.05)    # 剛換完樓層那一幀 dt 很大，不要讓動畫一下跳到後面
         getattr(self, "tick_" + self.kind)(self.t)
         if self.t >= self.length:
             self.finish()
@@ -308,58 +307,63 @@ class Cutscene:
 
     # ---------- 被請出去 ----------
     def start_expel(self):
-        """總圖大門：館員站在門邊指著外面，你低著頭走出玻璃門，門外是晚上的清大。"""
-        self.length = 4.2
-        g = self.game
-        root = self.own(Entity(position=DOOR_BASE))
-        floor, wall = color.rgb32(120, 122, 126), color.rgb32(232, 230, 224)
-        self.box(root, (0, -0.05, 0), (14, 0.1, 14), floor)
-        self.box(root, (0, -0.06, 7), (20, 0.1, 6), color.rgb32(70, 72, 78))                    # 門外的地
-        Entity(parent=root, model="quad", position=(0, 4, 14), scale=(40, 14),
-               color=color.rgb32(26, 34, 64))                                                     # 夜空
-        self.box(root, (0, 3.6, 4), (14, 0.8, 0.3), wall)                                          # 門楣
-        Entity(parent=root, model="quad", position=(0, 3.6, 3.84), scale=(5.2, 0.62), rotation=(0, 0, 0),
-               texture=self.sign(["國立清華大學圖書館", "NTHU Library"], w=512, h=72, bg=(72, 58, 128), sizes=[36, 18]))
-        for x in (-5.5, 5.5):
-            self.box(root, (x, 1.6, 4), (3, 3.2, 0.3), wall)
-        for x in (-3.0, -1.0, 1.0, 3.0):                                                           # 玻璃門片
-            if abs(x) < 2:
-                continue
-            Entity(parent=root, model="cube", position=(x, 1.6, 4), scale=(1.95, 3.2, 0.05),
-                   color=color.rgba32(170, 200, 215, 90))
-        self.box(root, (-2, 1.6, 4), (0.08, 3.2, 0.12), color.rgb32(60, 62, 66))
-        self.box(root, (2, 1.6, 4), (0.08, 3.2, 0.12), color.rgb32(60, 62, 66))
-        for x in (-6, 6):                                                                          # 路燈
-            self.box(root, (x, 1.8, 9), (0.12, 3.6, 0.12), color.rgb32(50, 50, 54))
-            Entity(parent=root, model="sphere", position=(x, 3.7, 9), scale=0.35, color=color.rgb(1.6, 1.5, 1.2))
+        """在遊戲裡真的 1F 出入口演（使用者：驅逐的畫面用我們的出入口）：館員站在出口閘門旁指著門外，
+        你低著頭穿過出口閘門、走出斜面落地窗上的「出口」玻璃門。main 會先把樓層換成 1F 才播。"""
+        self.length = 4.6
+        g, w = self.game, self.game.world
+        C = 2.0
+        gb = w.spec["gate_bank"]
+        dc, dr = gb["dir"]
+        along = Vec3(dc, 0, -dr).normalized()
+        inside = Vec3(-along.z, 0, along.x)
+        c0 = Vec3(gb["center"][0] * C, 0, -gb["center"][1] * C)
+        (ec, er), _, _ = w.spec["facade_doors"][0]          # 出口門
+        door = Vec3(ec * C, 0, -er * C) + inside * 0.3
+        lane = c0 + along * (-0.5 * gb["step"] * C)          # 出口那兩道裡靠中間的一道
+        self.path = [lane + inside * 3.2, lane + inside * 0.9, lane - inside * 0.9,
+                     door + inside * 0.9, door, door - inside * 2.5]
+        self.along, self.inside, self.c0 = along, inside, c0
         self.you = Person(shirt=color.rgb32(230, 120, 30), pants=color.rgb32(50, 50, 60), hair=color.rgb32(40, 30, 25),
                           glasses=False)
         self.own(self.you.root)
-        self.you.root.position = DOOR_BASE + Vec3(-0.6, 0, -2.5)
+        self.you.root.position = self.path[0]
         self.lib = g.librarian
         self.lib_saved = (Vec3(self.lib.root.position), self.lib.root.rotation_y)
-        self.lib.root.position = DOOR_BASE + Vec3(1.6, 0, 2.6)
-        self.lib.root.rotation_y = -150
+        spot = c0 + along * (-2.4 * gb["step"] * C) + inside * 1.0   # 出口閘門靠門那一頭
+        self.lib.root.position = spot
+        d = door - spot
+        self.lib.root.rotation_y = math.degrees(math.atan2(d.x, d.z))
         self.lib.stand()
         self.caption.text = "館員：「同學，你已經被警告三次了。請你出去。」"
+
+    def _along_path(self, k):
+        pts = self.path
+        segs = [(pts[i + 1] - pts[i]).length() for i in range(len(pts) - 1)]
+        s = k * sum(segs)
+        for i, L in enumerate(segs):
+            if s <= L or i == len(segs) - 1:
+                q = pts[i] + (pts[i + 1] - pts[i]) * (min(s, L) / L)
+                return q, pts[i + 1] - pts[i]
+            s -= L
 
     def tick_expel(self, t):
         you, lib = self.you, self.lib
         lib.arms[1].rotation_x = -85 * ease(t / 0.5)                     # 手臂伸直指向門外
         lib.arms[1].rotation_z = 25 * ease(t / 0.5)
         lib.elbows[1].rotation_x = -5
-        walk = ease((t - 0.6) / 2.8)
-        you.root.position = DOOR_BASE + Vec3(-0.6, 0, -2.5 + 9.0 * walk)
-        you.root.rotation_y = 0
-        if 0.6 < t < 3.4:
+        k = max(0.0, min(1.0, (t - 0.6) / 3.4))
+        q, d = self._along_path(k)
+        you.root.position = q
+        you.root.rotation_y = math.degrees(math.atan2(d.x, d.z))
+        if 0.6 < t < 4.0:
             you.walk_anim(5)
         else:
             you.stand()
         you.head.rotation_x = 22                                          # 垂頭喪氣
-        if t > 2.2:
+        if t > 2.4:
             self.caption.text = "你被館員請出了圖書館……明天再來吧。"
-        side = DOOR_BASE + Vec3(-5.5 + t * 0.4, 1.7, -0.5)
-        look(side, you.root.position + Vec3(0, 1.1, 0.8))
+        cam = self.c0 + self.inside * 5.0 + self.along * (2.6 - t * 0.3) + Vec3(0, 2.1, 0)
+        look(cam, q * 0.7 + self.path[4] * 0.3 + Vec3(0, 1.0, 0))
         self.black(1 - t / 0.3 if t < 0.3 else (t - (self.length - 0.6)) / 0.6)
 
     def end_expel(self):
