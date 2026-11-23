@@ -586,6 +586,19 @@ class World:
     def unload(self):
         fastops.bulk_destroy(self.owned)
 
+    def hide(self):
+        """換到別層時整層藏起來（stash：不畫、不參與碰撞），不拆掉，回來時 show() 就好。
+        只動最上層的物件；記下藏之前開著的那些，回來時只打開它們（遊戲中被關掉的東西維持關著）。"""
+        ids = set(map(id, self.owned))
+        self._hidden = [e for e in self.owned if e and e.enabled and id(getattr(e, "_parent", None)) not in ids]
+        for e in self._hidden:
+            e.enabled = False
+
+    def show(self):
+        for e in getattr(self, "_hidden", []):
+            e.enabled = True
+        self._hidden = []
+
     # ---------- 小工具 ----------
     def load_textures(self):
         if World._textures:

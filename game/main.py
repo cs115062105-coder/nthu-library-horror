@@ -143,6 +143,7 @@ class Game:
         self.session = 0             # 每開一局加一，舊的延遲事件就不會跑到新的一局
         self.font_path = font_path
         self.world = None
+        self.floor_cache = {}      # 這一局蓋過的樓層（藏起來，不拆）
         self.in_safe_zone = False
         self.hidden = False
         self.minimap = Minimap()     # 右上角的小地圖，每換一層重畫
@@ -225,12 +226,25 @@ class Game:
         self.apply_view()
 
     # ---------- 樓層 ----------
-    def load_floor(self, name, came="up"):
-        """拆掉目前的樓層，蓋出新的一層。每層是 world.FLOORS 裡的一張格子圖。
-        came 是玩家怎麼來的：往上走來的就出現在新樓層的「往下」樓梯口，反之亦然。"""
+    def load_floor(self, name, came="up", fresh=False):
+        """換到另一層。每層是 world.FLOORS 裡的一張格子圖。
+        came 是玩家怎麼來的：往上走來的就出現在新樓層的「往下」樓梯口，反之亦然。
+        使用者：每上一層樓黑畫面有點久 → 蓋過的樓層不拆，只是藏起來，下次回來直接打開（同一局內）。
+        fresh=True（開新的一局）才把全部拆掉重蓋，東西回到原狀。"""
+        cache = self.floor_cache
+        if fresh:
+            for w in cache.values():
+                w.unload()
+            cache.clear()
+            self.world = None
         if self.world:
-            self.world.unload()
-        self.world = World(self.font_path, name)
+            self.world.hide()
+        built = name not in cache
+        if built:
+            cache[name] = World(self.font_path, name)
+        else:
+            cache[name].show()
+        self.world = cache[name]
         self.world.set_code(self.code)
         self.notes = self.world.notes
         self.solids = self.world.solids
@@ -242,7 +256,7 @@ class Game:
             self.arrival, self.arrival_rot = stair["pos"], math.degrees(math.atan2(d.x, d.z))
         self.refresh_paths()
         self.minimap.load(self.world)
-        self.apply_view()   # 霧的參數要重新套到新蓋的東西上
+        self.apply_view(built)   # 新蓋的才要套光影 shader
 
     def refresh_paths(self):
         """館員只走得到跟他出發點連在一起的走道（知識集圓形展區裡面那幾格走不進去），也不巡夜讀區。"""
@@ -617,7 +631,7 @@ class Game:
         self.total_warnings = self.spotted = 0
         self.cleared = False
         self.tape_playing = False
-        self.load_floor("1F", came="start")   # 重蓋一次，東西都回到原狀
+        self.load_floor("1F", came="start", fresh=True)   # 重蓋一次，東西都回到原狀
         self.hide_note()
         self.flash_fade()
         self.state = "play"
@@ -671,11 +685,12 @@ class Game:
         invoke(lambda: fn() if session == self.session else None, delay=delay)
 
     # ---------- 場景 ----------
-    def apply_view(self):
+    def apply_view(self, built=True):
         """白天：燈全亮，只留一層很淡的霧讓遠處柔和一點。"""
-        light_scene(self.world.owned if getattr(self, "_lit_once", False) else None)   # 新蓋的這層換成有光影的 shader
-        self._lit_once = True
-        fastops.unlist_static(self.world.owned)   # 靜態的東西不用每一幀被引擎掃
+        if built:
+            light_scene(self.world.owned if getattr(self, "_lit_once", False) else None)   # 新蓋的這層換成有光影的 shader
+            self._lit_once = True
+            fastops.unlist_static(self.world.owned)   # 靜態的東西不用每一幀被引擎掃
         set_fog(SKY, 28.0, 110.0)         # 霧設在場景根節點，大家一起繼承（不用逐個物件設）
 
     def setup_audio(self):
