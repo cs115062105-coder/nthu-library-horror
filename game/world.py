@@ -411,7 +411,7 @@ FLOORS = {
                        {'kind': 'glow', 'h': 2.6, 'pts': ellipse_pts((18.0, 26.0), 1.9, 1.9, 0, 225, 385)},    # 校史展示區發光的弧牆
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 35, 145)},   # 資訊島的橢圓矮櫃
                        {'kind': 'low', 'h': 1.0, 'pts': ellipse_pts((17.1, 15.75), 2.5, 1.6, -29, 215, 325)}]),
-    "3F": dict(av_line=dict(center=(-1.35, 44.0), R=30.2, mid=-43.0, modules=5),   # 雙人聆賞席：沿著落地窗排一直線
+    "3F": dict(av_line=dict(center=(-1.35, 44.0), R=31.0, mid=-43.0, modules=5),   # 雙人聆賞席：沿著落地窗排一直線（R 30.2→31 讓後面柱子旁留得出走道）
                # 排法（使用者說的）：沙發 玻璃 沙發 電視電視 沙發 玻璃 沙發 …
                level=LEVEL_3F, floor="carpet_3f", island=((21.08, 15.79), 2.3, 1.4, 25), stools=8, carts=3, banks=[], safe=set(), lift_doors=[(23, 10), (24, 10)],
                wall_tex="wallw", ceiling_tex="plaster", white=True, band_windows=True, white_shelves=True,
