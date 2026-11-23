@@ -695,7 +695,7 @@ class Game:
         self.bgm = None
         self.bgm_next = 0.0          # 下一次開始放音樂的時間（使用者：偶爾也要有沒音樂的時候）
         try:
-            self.bgm = Audio(str(Path(__file__).parent / "music" / "bgm.ogg"), loop=False, autoplay=False,
+            self.bgm = Audio(Path(__file__).parent / "music" / "bgm.ogg", loop=False, autoplay=False,
                              volume=self.bgm_volume)
         except Exception as e:
             print("背景音樂載入失敗：", e)
