@@ -242,9 +242,9 @@ LEVEL_6F = [
     "##.#####..BB.BBBB.BBB...#########.BBB.BBBB.#",
     "W......O....O....O....###UD######....O.....#",
     "W..........................................W",
-    "W...T...T...n..n.................BBBB.BBBB.W",
+    "W................................BBBB.BBBB.W",
     "Wp...............................BBBB.BBBB.W",
-    "W...T...T...T..T.................BBBB.BBBB.W",
+    "W................................BBBB.BBBB.W",
     "W.O....O....O....O....O....O....O....O.....W",
     "###########................................W",
     "#xxxxxxxxxx...n.............BBBB.BBBB.BBBB.W",
@@ -527,7 +527,10 @@ FLOORS["6F"] = dict(_UPPER, level=LEVEL_6F, floor="carpet_6f", ceiling_tex="plas
                     posters=[((5, 17), (0, -1), "notice"), ((24, 11), (0, 1), "missing"), ((36, 34), (1, 0), "notice")],
                     # 藝想空間 II = 平面圖上 I 那面牆（核心南面，樓梯右邊）。照新影片：
                     # 靠休息區那端是黑色波浪形的展覽標題板，往東五張自然攝影，每張右下一塊黑色說明牌
-                    gallery=dict(start=(27.4, 11), face="S", step=0.92))
+                    gallery=dict(start=(27.4, 11), face="S", step=0.92),
+                    # 使用者：問題四的閱覽室 = 電梯出去右轉（往西）＝平面圖 A 安靜閱覽區。
+                    # 影片 5:04：一排排長木桌，桌子中間一道白色隔板，兩邊木椅，走道一路通到西邊窗簾
+                    quiet_tables=[(c, 12.8, 15.2) for c in (4, 6, 9, 11, 14, 16)])
 
 def cell_pos(c, r):
     return Vec3(c * CELL, 0, -r * CELL)
@@ -901,6 +904,8 @@ class World:
                    texture=self.t["leaf"])
         for (c, r), d, ch in self.spec.get("frames", []):
             self.calligraphy(cell_pos(c, r), Vec3(d[0], 0, -d[1]), ch)
+        if "quiet_tables" in self.spec:
+            self.quiet_tables(self.spec["quiet_tables"])
         if "orange_desks" in self.spec:
             self.orange_desks(self.spec["orange_desks"])
         for (c, r), rot in self.spec.get("racks", []):
@@ -1738,6 +1743,31 @@ class World:
             self.walkable.discard((round(c), round(r)))
         e = Entity(model=sh.mesh(), double_sided=True)
         e.shader = person_shader
+
+    def quiet_tables(self, runs):
+        """6F 安靜閱覽區：南北向的長木桌，桌子中線一道白色隔板，兩邊各一排木椅面對隔板。"""
+        steel, white = color.rgb32(60, 60, 64), color.rgb32(242, 242, 238)
+        for c, r0, r1 in runs:
+            x = c * CELL
+            z0, z1 = -r0 * CELL, -r1 * CELL
+            L, zc = abs(z1 - z0), (z0 + z1) / 2
+            self.box(Vec3(x, 0.74, zc), (1.3, 0.05, L), self.t["wood"], tscale=(1, L / 2))
+            self.box(Vec3(x, 1.0, zc), (0.04, 0.5, L - 0.1), col=white)                  # 白色隔板
+            for k in range(int(L // 2) + 1):
+                zz = z0 - min(k * 2.0, L - 0.1) + (0.05 if k == 0 else 0)
+                self.box(Vec3(x, 0.36, zz), (1.1, 0.72, 0.05), col=steel)               # 桌腳板
+            n = int(L / 0.95)
+            for i in range(n):
+                zz = z0 - (i + 0.5) * L / n
+                self.hides.append(Vec3(x, 0, zz))
+                for side, rot in ((-1, 90), (1, 270)):
+                    if self.rng.random() < 0.85:
+                        self.chair(Vec3(x + side * 0.85, 0, zz + self.rng.uniform(-0.08, 0.08)), rot + self.rng.uniform(-12, 12))
+                if self.rng.random() < 0.35:
+                    self.clutter(Vec3(x + self.rng.choice((-0.35, 0.35)), 0.76, zz), 0.25)
+            self.collider(Vec3(x, 0.45, zc), (1.3, 0.9, L), occludes=False)
+            for r in range(math.ceil(r0), math.floor(r1) + 1):
+                self.walkable.discard((round(c), r))
 
     def lake_mural(self, c0, c1, row):
         """2F 電梯旁的拍照牆：一整面成功湖水墨照片，前面一段木地板和木頭拱橋欄杆（影片 0:10–0:13）。"""
