@@ -33,6 +33,26 @@ from shading import light_scene, set_fog, update_camera
 from ursina.shaders import unlit_shader
 from world import ORDER, World, cell_pos
 
+SETTINGS = Path.home() / ".tou_juan_settings.json"
+
+
+def load_setting(key, default):
+    try:
+        import json
+        return json.loads(SETTINGS.read_text()).get(key, default)
+    except Exception:
+        return default
+
+
+def save_setting(key, value):
+    try:
+        import json
+        data = json.loads(SETTINGS.read_text()) if SETTINGS.exists() else {}
+        data[key] = value
+        SETTINGS.write_text(json.dumps(data))
+    except Exception:
+        pass
+
 MENU_SPOT = (7, 13)     # 大廳背景：1F 入口旁，望向圓形的知識集展區
 MENU_LIBRARIAN = (9, 13)
 SKY = color.rgb32(226, 226, 218)   # 白天的霧：遠處淡淡的米白色
@@ -668,6 +688,18 @@ class Game:
             self.sounds["hum"] = Audio(paths["hum"], loop=True, autoplay=True, volume=0.06)   # 冷氣和日光燈
         except Exception as e:   # 沒有音效卡也能玩
             print("音效載入失敗：", e)
+        # 背景音樂（使用者給的 the_mountain-retro-game）：一直循環；有重要音效時（走路聲除外）自動調小
+        self.bgm_volume = load_setting("bgm_volume", 0.5)
+        self.bgm_duck_until = 0.0
+        self.bgm_level = 1.0
+        self.bgm = None
+        self.bgm_next = 0.0          # 下一次開始放音樂的時間（使用者：偶爾也要有沒音樂的時候）
+        try:
+            self.bgm = Audio(str(Path(__file__).parent / "music" / "bgm.ogg"), loop=False, autoplay=False,
+                             volume=self.bgm_volume)
+        except Exception as e:
+            print("背景音樂載入失敗：", e)
+        Entity(update=self.update_bgm)
 
     def play(self, name, volume=None):
         s = self.sounds.get(name)
@@ -675,6 +707,37 @@ class Game:
             if volume is not None:
                 s.volume = volume
             s.play()
+            if name not in ("step", "hum"):          # 重要音效：背景音樂先讓開
+                try:
+                    length = float(s.length) or 1.0
+                except Exception:
+                    length = 1.0
+                import time as _t
+                self.bgm_duck_until = max(self.bgm_duck_until, _t.time() + min(length, 4.0) + 0.5)
+
+    def update_bgm(self):
+        """背景音樂音量：重要音效播放時降到 25%，播完再慢慢回來。"""
+        if not self.bgm:
+            return
+        import time as _t
+        now = _t.time()
+        if now >= self.bgm_next:     # 放完一整首（約 1 分 48 秒）之後安靜 25–60 秒，只剩冷氣聲，再重新放
+            self.bgm.play()
+            try:
+                length = float(self.bgm.length) or 109.0
+            except Exception:
+                length = 109.0
+            self.bgm_next = now + length + random.uniform(25, 60)
+        target = 0.25 if _t.time() < self.bgm_duck_until else 1.0
+        rate = 6.0 if target < self.bgm_level else 1.2          # 壓下去快、回來慢
+        self.bgm_level += (target - self.bgm_level) * min(1.0, time.dt * rate)
+        self.bgm.volume = self.bgm_volume * self.bgm_level
+
+    def set_bgm_volume(self, v, show=False):
+        self.bgm_volume = max(0.0, min(1.0, round(v, 2)))
+        save_setting("bgm_volume", self.bgm_volume)
+        if show:
+            self.show_hint(f"音樂音量 {int(self.bgm_volume * 100)}%（- / = 調整）", 1.5)
 
     # ---------- 一天 ----------
     def enter_floor(self, quiet=False):
@@ -1265,7 +1328,8 @@ font_path = find_font()
 setup_font(font_path)
 window.color = SKY
 game = Game(font_path)
-lobby = Lobby(on_start=game.start, on_quit=application.quit, aim_camera=game.aim_menu_camera)
+lobby = Lobby(on_start=game.start, on_quit=application.quit, aim_camera=game.aim_menu_camera,
+              music=game.bgm_volume, on_music=game.set_bgm_volume)
 game.to_lobby()
 
 
@@ -1297,6 +1361,9 @@ def handle_input(key):
         game.toggle_hide()
     elif key == "m":
         game.minimap.toggle()
+    elif key in ("-", "="):          # 遊戲中調背景音樂音量
+        game.set_bgm_volume(game.bgm_volume + (0.1 if key == "=" else -0.1), show=True)
+        lobby.music.value = int(game.bgm_volume * 100)
 
 
 # 用一個空 Entity 掛每幀更新與按鍵處理，不依賴 __main__ 裡的全域函式
