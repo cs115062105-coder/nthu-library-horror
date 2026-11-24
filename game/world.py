@@ -74,11 +74,11 @@ LEVEL_2F = [
     "#######.###.############################",
     "####.........#GGGG######################",
     "####.........#GT.G######################",
-    "####.kk...kk.#G..G######################",
+    "####.kkk.kkk.#G..G######################",
     "####.........#GGGG######################",
-    "####..t.O..t.########UD#################",
+    "####....O....########UD#################",
     "####.........#..........mmmmmmmmmmmmll.W",
-    "####.kk...kk..................c........W",
+    "####.kkk.kkk..................c........W",
     "####.....................N.N.N.N.....d.W",
     "####.........#.......c.............c...W",
     "##############....O....O....O....O....OW",
@@ -404,6 +404,13 @@ FLOORS = {
                grid_ceilings=[(34.5, 11.5, 39, 30.5)],
                tri_lights=[(6, 8), (10, 8), (6, 12), (10, 12), (8, 14)],
                label_counter=dict(a=(7.6, 18.0), b=(11.6, 19.6), lines=("校史展示區", "University History")),
+               # 影片 0:20–0:34 電腦共學區：一排排白色電腦長桌、鋪綠格子桌巾的圓桌、海報板、左手邊一道霧面玻璃牆
+               check_tables=[(6.0, 11.0), (10.5, 11.0)], poster_boards=[(12.4, 7.6, 225), (4.6, 15.2, 45)],
+               frost_wall=((4.45, 7.4), (4.45, 15.2)),     # 走進來左手邊（西牆）那道霧面玻璃
+               # 影片 0:37–2:03 校史展示區（沿著弧形玻璃）：校園模型旁的白色圓展示櫃、梅貽琦校長與梅園玻璃展示牆、玻璃展示桌
+               round_cases=[(7.4, 17.0), (12.6, 17.6)], mei_wall=((12.6, 20.0), (14.2, 21.6)),
+               glass_tables=[(16.6, 19.6, -40), (20.8, 24.6, -45)],
+               wave_chairs=[(28.0, 16.75, 180, "orange")],      # 柱子旁的橘色波浪躺椅
                curves=[{'kind': 'glass', 'pts': [[5.41, 17.71], [6.39, 18.11], [7.34, 18.55], [8.28, 19.03], [9.2, 19.54], [10.1, 20.08], [10.98, 20.66], [11.84, 21.27], [12.68, 21.92], [13.48, 22.59], [14.27, 23.29], [15.02, 24.03], [15.75, 24.79], [16.45, 25.58], [17.12, 26.39], [17.75, 27.23], [18.36, 28.09], [18.93, 28.97], [19.47, 29.88], [19.97, 30.8], [20.44, 31.75]]},
                        {'kind': 'low', 'h': 2.4, 'pts': [[13.24, 16.19], [13.93, 16.66], [14.62, 17.14], [15.29, 17.65], [15.94, 18.17], [16.59, 18.7], [17.22, 19.26]]},
                        {'kind': 'low', 'h': 2.4, 'pts': [[18.87, 20.85], [19.42, 21.44], [19.95, 22.03], [20.48, 22.64], [20.98, 23.27], [21.47, 23.9]]},
@@ -806,6 +813,7 @@ class World:
             self.tri_light(cell_pos(*cell))
         if "label_counter" in self.spec:
             self.label_counter(**self.spec["label_counter"])
+        self.exhibit_2f()
         if "plank_ceiling" in self.spec:
             self.plank_ceiling(*self.spec["plank_ceiling"])
         for rect in self.spec.get("grid_ceilings", []):
@@ -1173,11 +1181,103 @@ class World:
         self.hides.append(p)
         self.collider(p + Vec3(0, 0.45, 0), sz(0.9, 0.9, CELL * 0.98), occludes=False)
 
+    def exhibit_2f(self):
+        """2F 依影片補上的東西：電腦共學區的格子桌巾圓桌、海報板、霧面玻璃牆；校史展示區的圓展示櫃、梅園展示牆、玻璃展示桌。"""
+        sp = self.spec
+
+        def at(c, r):
+            return Vec3(c * CELL, 0, -r * CELL)
+
+        def block(c, r):
+            self.walkable.discard((round(c), round(r)))
+        if sp.get("check_tables"):
+            cloth = Texture(tx.check_cloth(), filtering="mipmap")
+            for c, r in sp["check_tables"]:
+                p = at(c, r)
+                Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.6, height=0.03),
+                       position=p + Vec3(0, 0.74, 0), color=color.rgb32(70, 130, 80))
+                self.quad(p + Vec3(0, 0.775, 0), (1.15, 1.15), cloth, rot=(90, 45, 0))
+                for k in range(4):        # 布垂下來的四個角
+                    a = math.radians(k * 90)
+                    self.box(p + Vec3(math.sin(a) * 0.62, 0.6, math.cos(a) * 0.62), (0.3, 0.3, 0.02), cloth).rotation_y = k * 90
+                self.box(p + Vec3(0, 0.37, 0), (0.06, 0.74, 0.06), col=color.rgb32(220, 220, 220))
+                for k in range(3):
+                    a = k * 120 + self.rng.uniform(-15, 15)
+                    q = p + Vec3(math.sin(math.radians(a)) * 0.95, 0, math.cos(math.radians(a)) * 0.95)
+                    self.swivel_chair(q, a + 180 + self.rng.uniform(-15, 15))
+                self.collider(p + Vec3(0, 0.4, 0), (1.3, 0.8, 1.3), occludes=False)
+                block(c, r)
+        if sp.get("poster_boards"):
+            for i, (c, r, rot) in enumerate(sp["poster_boards"]):
+                p = at(c, r)
+                b = Entity(parent=self.group(None), position=p, rotation_y=rot)
+                for x in (-0.55, 0.55):
+                    self.box((x, 0.9, 0), (0.04, 1.8, 0.04), col=color.rgb32(70, 70, 74), parent=b)
+                self.box((0, 1.2, 0), (1.1, 1.3, 0.03), col=color.rgb32(246, 246, 246), parent=b)
+                tex = self.t["missing" if i % 2 else "notice"]
+                hold = Entity(parent=self.group(tex), position=p, rotation_y=rot)
+                for z, ry in ((-0.02, 0), (0.02, 180)):
+                    Entity(parent=hold, model="quad", position=(0, 1.22, z), rotation_y=ry, scale=(0.95, 1.15), texture=tex)
+                self.collider(p + Vec3(0, 0.9, 0), (0.6, 1.8, 0.6), occludes=False)
+        if sp.get("frost_wall"):
+            a, b = at(*sp["frost_wall"][0]), at(*sp["frost_wall"][1])
+            d = b - a
+            rot = math.degrees(math.atan2(d.x, d.z))
+            mid = (a + b) / 2
+            Entity(parent=self.group(None), model="cube", position=mid + Vec3(0, 1.3, 0), rotation_y=rot,
+                   scale=(0.04, 2.6, d.length()), color=color.rgba32(226, 236, 238, 175))
+            for t in (0, 0.25, 0.5, 0.75, 1):      # 鋁框
+                self.box(a + d * t + Vec3(0, 1.3, 0), (0.05, 2.6, 0.05), col=color.rgb32(200, 202, 206))
+            Entity(model="cube", position=mid + Vec3(0, 1.3, 0), rotation_y=rot, scale=(0.1, 2.6, d.length()),
+                   collider="box", visible=False)
+        for c, r in sp.get("round_cases", []):     # 白色圓柱展示台，上面一個玻璃圓罩
+            p = at(c, r)
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.42, height=0.95),
+                   position=p, color=color.rgb(1.15, 1.15, 1.13))
+            for k in range(3):
+                self.box(p + Vec3(-0.18 + k * 0.18, 1.0, 0), (0.12, 0.08, 0.16),
+                         col=color.rgb32(*self.rng.choice([(196, 160, 90), (150, 110, 70), (226, 208, 168)])))
+            Entity(parent=self.group(None), model=fastops.cylinder(resolution=20, radius=0.4, height=0.5),
+                   position=p + Vec3(0, 0.96, 0), color=color.rgba32(210, 232, 238, 50))
+            self.collider(p + Vec3(0, 0.7, 0), (0.9, 1.4, 0.9), occludes=False)
+            block(c, r)
+        if sp.get("mei_wall"):        # 梅貽琦校長與梅園：一道玻璃展示牆，後面白板上有標題、照片和梅花
+            a, b = at(*sp["mei_wall"][0]), at(*sp["mei_wall"][1])
+            d = b - a
+            rot = math.degrees(math.atan2(d.x, d.z)) + 90
+            mid = (a + b) / 2
+            L = d.length()
+            Entity(model="cube", position=mid + Vec3(0, 1.2, 0), rotation_y=rot, scale=(L, 2.4, 0.16),
+                   collider="box", color=color.rgb32(246, 246, 246))
+            tex = Texture(tx.mei_board(self.font_path), filtering="mipmap")
+            hold = Entity(parent=self.group(tex), position=mid, rotation_y=rot)
+            for z, ry in ((-0.085, 0), (0.085, 180)):
+                Entity(parent=hold, model="quad", position=(0, 1.25, z), rotation_y=ry, scale=(L - 0.15, 2.0), texture=tex)
+            glass = Entity(parent=self.group(None), position=mid, rotation_y=rot)
+            for z in (-0.3, 0.3):
+                self.box((0, 1.2, z), (L, 2.3, 0.02), col=color.rgba32(214, 234, 240, 45), parent=glass)
+                self.box((0, 0.04, z), (L, 0.08, 0.05), col=color.rgb32(196, 198, 202), parent=glass)
+            for t in range(6):
+                self.walkable.discard((round((a.x + d.x * t / 5) / CELL), round(-(a.z + d.z * t / 5) / CELL)))
+        for c, r, rot in sp.get("glass_tables", []):     # 白色長台，上面一整片玻璃罩，裡面平放老照片和文件
+            p = at(c, r)
+            g = Entity(parent=self.group(None), position=p, rotation_y=rot)
+            self.box((0, 0.42, 0), (1.8, 0.84, 0.8), col=color.rgb(1.15, 1.15, 1.13), parent=g)
+            self.box((0, 1.0, 0), (1.76, 0.3, 0.76), col=color.rgba32(210, 230, 236, 45), parent=g)
+            for k in range(4):
+                self.box((-0.62 + k * 0.42, 0.85, self.rng.uniform(-0.1, 0.1)), (0.3, 0.01, 0.36),
+                         col=color.rgb32(*self.rng.choice([(226, 208, 168), (214, 194, 150), (80, 78, 74), (236, 226, 200)])), parent=g)
+            self.collider(p + Vec3(0, 0.6, 0), (1.6, 1.2, 1.6), occludes=False)
+            block(c, r)
+
     def tub_chairs(self, p):
         """期刊區的白色桶狀單人椅，兩張對坐，中間一張鍍鉻小圓桌。2F 照影片換成白色／黃色的多角形扶手椅。"""
-        if self.spec.get("facet_chairs"):
+        green = None
+        if self.spec.get("facet_chairs") and self.rng.random() < 0.35:     # 影片裡也有幾組綠色的桶椅
+            green = color.rgb32(96, 150, 92)
+        if self.spec.get("facet_chairs") and green is None:
             for side in (1, -1):
-                col = color.rgb32(*self.rng.choice([(244, 244, 242), (244, 244, 242), (240, 200, 40)]))
+                col = color.rgb32(*self.rng.choice([(244, 244, 242), (240, 200, 40), (236, 128, 40)]))
                 ch = Entity(parent=self.group(None), position=p + Vec3(side * 0.62, 0, 0), rotation_y=90 * side + self.rng.uniform(-20, 20))
                 Entity(parent=ch, model="cube", position=(0, 0.36, 0), scale=(0.8, 0.22, 0.72), color=col)
                 back = Entity(parent=ch, model="cube", position=(0, 0.68, 0.3), scale=(0.84, 0.5, 0.16), color=col)
@@ -1193,8 +1293,8 @@ class World:
             return
         for side in (1, -1):
             ch = Entity(parent=self.group(None), position=p + Vec3(side * 0.6, 0, 0), rotation_y=90 * side + self.rng.uniform(-15, 15))
-            Entity(parent=ch, model=fastops.cylinder(resolution=12, radius=0.38, height=0.42), color=color.rgb32(242, 242, 242))
-            Entity(parent=ch, model="cube", position=(0, 0.6, 0.25), scale=(0.72, 0.36, 0.2), color=color.rgb32(242, 242, 242))
+            Entity(parent=ch, model=fastops.cylinder(resolution=12, radius=0.38, height=0.42), color=green or color.rgb32(242, 242, 242))
+            Entity(parent=ch, model="cube", position=(0, 0.6, 0.25), scale=(0.72, 0.36, 0.2), color=green or color.rgb32(242, 242, 242))
             Entity(parent=ch, model="cube", position=(0, 0.44, 0), scale=(0.6, 0.06, 0.55), color=color.rgb32(210, 210, 212))
         Entity(parent=self.group(None), model=fastops.cylinder(resolution=12, radius=0.25, height=0.03), position=p + Vec3(0, 0.5, 0),
                color=color.rgb32(200, 202, 206))
@@ -2476,7 +2576,7 @@ class World:
                     path.append(tuple(0.5 * (2 * p1[a] + (-p0[a] + p2[a]) * t + (2 * p0[a] - 5 * p1[a] + 4 * p2[a] - p3[a]) * t2
                                             + (-p0[a] + 3 * p1[a] - 3 * p2[a] + p3[a]) * t3) for a in (0, 1)))
             path.append(pts[-1])
-            col = (246, 246, 244) if tone == "white" else (26, 26, 30)
+            col = {"white": (246, 246, 244), "orange": (238, 120, 36)}.get(tone, (26, 26, 30))
             return body.Shape().sweep(path, 0.6, 0.07, col, r=0.03)
         e = Entity(model=body.cached(("wave_chair", tone), build), position=p, rotation_y=rot, double_sided=True)
         e.shader = person_shader
