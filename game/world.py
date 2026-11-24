@@ -2316,13 +2316,18 @@ class World:
             self.box((0, 0.58, z * 2), (0.05, 0.18, 0.04), col=color.rgb32(28, 28, 30), parent=e)
             self.box((0, 0.92, z * 2), (0.98, 0.58, 0.04), col=color.rgb32(16, 16, 18), parent=e)
             q = (0, 0.92, z * 2 + side * 0.025)
-            ry = 0 if side > 0 else 180
+            ry = 180 if side > 0 else 0          # quad 的正面朝 -z：+z 那台要轉 180 才看得到
+            # 使用者：視聽區螢幕沒有亮 → 每台都在播片（亮度 >1 會發光）。
+            # 有貼圖的面要放在那張貼圖自己的 group 底下，不然合併模型時貼圖會被丟掉（之前就是因為這樣全黑）
             if live and side < 0:
-                Entity(parent=e, model="quad", position=q, scale=(0.92, 0.52), rotation_y=ry,
-                       texture=self.text_tex(["▶ 錄音帶", "03:00"], w=200, h=120, bg=(20, 40, 90), sizes=[34, 30]),
-                       color=color.rgb(1.4, 1.4, 1.4))
+                tex = self.text_tex(["▶ 錄音帶", "03:00"], w=200, h=120, bg=(20, 40, 90), sizes=[34, 30])
             else:
-                Entity(parent=e, model="quad", position=q, scale=(0.92, 0.52), rotation_y=ry, color=color.rgb32(24, 26, 30))
+                if not hasattr(self, "_movies"):
+                    self._movies = [Texture(tx.movie_frame(k), filtering="bilinear") for k in range(4)]
+                tex = self._movies[self.rng.randrange(4)]
+            holder = Entity(parent=self.group(tex), position=e.world_position, rotation_y=e.world_rotation_y)
+            Entity(parent=holder, model="quad", position=q, scale=(0.92, 0.52), rotation_y=ry,
+                   texture=tex, color=color.rgb(1.35, 1.35, 1.35))
 
     def av_glass(self, e):
         """背對背兩張沙發中間：橢圓矮櫃上立一片霧面玻璃屏風。"""
@@ -2509,7 +2514,10 @@ class World:
             for c in ((tv_at,) if isinstance(tv_at, (int, float)) else tv_at or ()):
                 x = c * CELL
                 self.box(Vec3(x, 1.7, z + 0.04), (1.5, 0.9, 0.06), col=color.rgb32(18, 18, 20))
-                self.box(Vec3(x, 1.7, z + 0.072), (1.38, 0.78, 0.005), col=color.rgb32(70, 110, 150))
+                if not hasattr(self, "_movies"):
+                    self._movies = [Texture(tx.movie_frame(k), filtering="bilinear") for k in range(4)]
+                Entity(model="quad", position=Vec3(x, 1.7, z + 0.075), scale=(1.38, 0.78), rotation_y=180,
+                       texture=self._movies[int(c) % 4], color=color.rgb(1.35, 1.35, 1.35))   # 螢幕在播片（會發光）
             return
         z = -row * CELL - CELL / 2 - 0.02
         if self.spec.get("dark_glass_wall") and tv_at is not None:
@@ -2539,8 +2547,10 @@ class World:
         if tv_at is not None:
             x = tv_at * CELL
             self.box(Vec3(x, 1.7, z - 0.04), (1.5, 0.9, 0.06), col=color.rgb32(18, 18, 20))
+            if not hasattr(self, "_movies"):
+                self._movies = [Texture(tx.movie_frame(k), filtering="bilinear") for k in range(4)]
             Entity(model="quad", position=Vec3(x, 1.7, z - 0.075), scale=(1.38, 0.78),
-                   color=color.rgb32(70, 110, 150))
+                   texture=self._movies[int(x) % 4], color=color.rgb(1.35, 1.35, 1.35))
 
     def _dark_glass(self, c0, c1, row):
         """一段深色玻璃牆：後面淡淡看得到書架，一段段黑色直框，底下一條黑色踢腳。"""

@@ -15,7 +15,7 @@ import random
 from pathlib import Path
 
 from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera, color, destroy,
-                    held_keys, invoke, raycast, scene, time, window)
+                    held_keys, invoke, mouse, raycast, scene, time, window)
 
 import sfx
 from events import Scares
@@ -144,6 +144,14 @@ class Game:
         self.font_path = font_path
         self.world = None
         self.floor_cache = {}      # 這一局蓋過的樓層（藏起來，不拆）
+        self.prebuild, self.prebuild_wait = [], 0
+        self.loading = Entity(parent=camera.ui, z=-0.9, enabled=False)
+        Entity(parent=self.loading, model="quad", scale=(4, 2), color=color.rgb32(20, 18, 28))
+        self.loading_text = Text(parent=self.loading, position=(0, 0.06, -0.03), origin=(0, 0), scale=1.6,
+                                 color=color.rgb32(235, 228, 210))
+        Entity(parent=self.loading, model="quad", position=(0, -0.05, -0.01), scale=(0.62, 0.035), color=color.rgb32(60, 56, 70))
+        self.loading_bar = Entity(parent=self.loading, model="quad", origin=(-0.5, 0), position=(-0.3, -0.05, -0.02),
+                                  scale=(0.0, 0.025), color=color.rgb32(226, 112, 42))
         self.in_safe_zone = False
         self.hidden = False
         self.minimap = Minimap()     # 右上角的小地圖，每換一層重畫
@@ -593,6 +601,26 @@ class Game:
                                "他把你的考試用書全部沒收，還在宿舍門口貼了一張「偷卷者」。\n\n"
                                f"{self.difficulty}·第 {self.day} 天·館員警告 {self.total_warnings} 次\n按 Enter 回到大廳")
 
+    def demo_jump(self, key):
+        """Demo 快速跳關（使用者 pitch 用）：F1 線索都拿到、直接到 4F 認室友；F2 直接進第二階段的 5F。"""
+        if self.dialog.active or self.entry:
+            return
+        self.items.update({"locker_known", "trail2", "trail3", "trail4", "clue_hat", "clue_bag", "clue_jacket"})
+        if key == "f2":
+            self.items.add("phase2")
+            self.roommate.hide()
+            self.player.mouse_sensitivity = Vec2(40, 40)
+        target = "4F" if key == "f1" else "5F"
+        self.flash.color = color.rgba32(0, 0, 0, 255)
+
+        def go():
+            self.load_floor(target, came="up")
+            self.enter_floor(quiet=True)
+            self.flash_fade()
+            self.show_hint("（Demo 跳關）" + ("線索都到手了：在 4F 的人群裡認出室友！" if key == "f1"
+                                             else "第二階段：在 5F、6F 找發光的考試用書，小心繃帶室友！"), 4)
+        self.later(go, 0.05)
+
     def start_phase2(self):
         def go():
             self.items.add("phase2")
@@ -632,6 +660,39 @@ class Game:
         self.cleared = False
         self.tape_playing = False
         self.load_floor("1F", came="start", fresh=True)   # 重蓋一次，東西都回到原狀
+        # 使用者：第一次上樓也不要等 → 開局先把 2F–6F 都蓋好藏起來，畫面上顯示進度
+        self.prebuild = ["2F", "3F", "4F", "5F", "6F"]
+        self.prebuild_wait = 1
+        self.state = "loading"
+        self.player.enabled = False
+        self.loading.enabled = True
+        self.loading_text.text = "準備圖書館中……"
+
+    def step_prebuild(self):
+        """每一幀蓋一層（中間空一幀讓進度字先畫出來），全部蓋完才開始這一局。"""
+        if self.prebuild_wait > 0:
+            self.prebuild_wait -= 1
+            return
+        if self.prebuild:
+            name = self.prebuild.pop(0)
+            if name not in self.floor_cache:
+                w = World(self.font_path, name)
+                w.set_code(self.code)
+                light_scene(w.owned)
+                fastops.unlist_static(w.owned)
+                w.hide()
+                self.floor_cache[name] = w
+            done = 6 - len(self.prebuild)
+            nxt = self.prebuild[0] if self.prebuild else ""
+            self.loading_text.text = (f"準備圖書館中……　{done}/6" + (f"\n正在蓋 {nxt}" if nxt else ""))
+            self.loading_bar.scale_x = 0.6 * done / 6
+            self.prebuild_wait = 1
+            return
+        self.loading.enabled = False
+        set_fog(SKY, 28.0, 110.0)
+        self.begin_game()
+
+    def begin_game(self):
         self.hide_note()
         self.flash_fade()
         self.state = "play"
@@ -646,6 +707,8 @@ class Game:
             self.cut.finish()
         self.session += 1
         self.state = "menu"
+        self.prebuild = []
+        self.loading.enabled = False
         self.dead = False
         for t in (self.clock_text, self.goal_text, self.hint, self.note_text):
             t.text = ""
@@ -714,7 +777,7 @@ class Game:
                              volume=self.bgm_volume)
         except Exception as e:
             print("背景音樂載入失敗：", e)
-        Entity(update=self.update_bgm)
+        Entity(update=self.update_bgm, ignore_paused=True)
 
     def play(self, name, volume=None):
         s = self.sounds.get(name)
@@ -1249,6 +1312,9 @@ class Game:
     def update(self):
         update_camera()
         self.ui_left.x = -window.aspect_ratio / 2
+        if self.state == "loading":
+            self.step_prebuild()
+            return
         if self.state != "play" or self.cleared or self.dead:
             return
         self.minimap.update(self.player, self.librarian)
@@ -1348,6 +1414,54 @@ lobby = Lobby(on_start=game.start, on_quit=application.quit, aim_camera=game.aim
 game.to_lobby()
 
 
+class PauseMenu:
+    """使用者：Esc 不要直接回大廳 → 暫停選單（繼續／音樂音量／回大廳）。暫停時整個遊戲（館員、時鐘、計時）都停住。"""
+
+    def __init__(self):
+        from menu import _button
+        from ursina import Slider
+        self.root = Entity(parent=camera.ui, z=-0.8, enabled=False, ignore_paused=True)
+        Entity(parent=self.root, model="quad", scale=(4, 2), color=color.rgba32(0, 0, 0, 150), ignore_paused=True)
+        Entity(parent=self.root, model="quad", scale=(0.62, 0.56), color=color.rgba32(18, 18, 22, 235), ignore_paused=True)
+        Text(parent=self.root, text="暫停", position=(0, 0.2), origin=(0, 0), scale=2.2, color=color.rgb32(225, 218, 200))
+        self.buttons = [_button(self.root, "繼續遊戲", 0.07, self.resume, x=0, width=0.4),
+                        _button(self.root, "回到大廳（這局會結束）", -0.17, self.quit, x=0, width=0.4)]
+        Text(parent=self.root, text="音樂", position=(-0.19, -0.035), scale=0.9, color=color.light_gray)
+        self.music = Slider(min=0, max=100, default=int(game.bgm_volume * 100), step=5, dynamic=True,
+                            parent=self.root, position=(-0.1, -0.045), scale=0.5, ignore_paused=True)
+        self.music.on_value_changed = lambda: game.set_bgm_volume(self.music.value / 100)
+        for e in [self.music, *self.buttons] + list(self.music.children) + [c for b in self.buttons for c in b.children]:
+            e.ignore_paused = True
+
+    @property
+    def active(self):
+        return self.root.enabled
+
+    def open(self):
+        game.state = "pause"
+        game.update_prompt(off=True)
+        self.music.value = int(round(game.bgm_volume * 100))
+        self.root.enabled = True
+        application.paused = True
+        mouse.locked = False
+        mouse.visible = True
+
+    def resume(self):
+        self.root.enabled = False
+        application.paused = False
+        game.state = "play"
+        lobby.music.value = int(round(game.bgm_volume * 100))
+        mouse.locked = True
+
+    def quit(self):
+        self.resume()
+        game.to_lobby()
+
+
+pause_menu = PauseMenu()
+mouse.ignore_paused = True
+
+
 def handle_input(key):
     if game.state == "intro":
         game.intro.input(key)
@@ -1365,10 +1479,19 @@ def handle_input(key):
     if game.entry:
         game.entry_key(key)
         return
+    if game.state == "pause":
+        if key == "escape":
+            pause_menu.resume()
+        return
+    if key in ("f1", "f2") and not game.cleared and not game.fight:   # Demo 用：直接跳到 4F 認人／第二階段
+        game.demo_jump(key)
+        return
     if game.fight and key in ("e", "left mouse down"):
         game.hit()
         return
-    if key == "escape" or (game.cleared and key == "enter"):
+    if key == "escape" and not game.cleared:
+        pause_menu.open()
+    elif key == "escape" or (game.cleared and key == "enter"):
         game.to_lobby()
     elif key == "e" and not game.cleared and not game.fight:
         game.interact()
@@ -1382,7 +1505,7 @@ def handle_input(key):
 
 
 # 用一個空 Entity 掛每幀更新與按鍵處理，不依賴 __main__ 裡的全域函式
-driver = Entity(update=game.update, input=handle_input)
+driver = Entity(update=game.update, input=handle_input, ignore_paused=True)   # 暫停時還要收得到 Esc
 
 
 if __name__ == "__main__":

@@ -1031,3 +1031,28 @@ def atrium_panorama(n=12, seed=5):
     img = img.filter(ImageFilter.GaussianBlur(1.2))
     img = Image.blend(img, Image.new("RGB", img.size, (245, 246, 247)), 0.18)   # 隔著玻璃，有點霧
     return [img.crop((i * sw, 0, (i + 1) * sw, h)) for i in range(n)]
+
+
+def movie_frame(kind=0):
+    """3F 視聽區電視上正在播的影片畫面（256×144）：天空漸層、山、地面、下方一行字幕，kind 換不同的片。"""
+    palettes = [((40, 90, 170), (250, 170, 110), (60, 80, 70), (90, 120, 80)),      # 夕陽山景
+                ((10, 20, 60), (60, 70, 150), (30, 30, 50), (50, 50, 70)),          # 夜景
+                ((110, 180, 230), (210, 235, 250), (70, 120, 90), (120, 160, 90)),   # 白天草原
+                ((60, 30, 70), (230, 110, 90), (40, 30, 50), (90, 60, 70))]         # 紫色黃昏
+    top, bot, mtn, ground = palettes[kind % len(palettes)]
+    w, h = 256, 144
+    img = Image.new("RGB", (w, h))
+    d = ImageDraw.Draw(img)
+    for y in range(h):
+        k = y / (h * 0.62)
+        k = min(1.0, k)
+        d.line([(0, y), (w, y)], fill=tuple(int(a + (b - a) * k) for a, b in zip(top, bot)))
+    rng = random.Random(kind)
+    pts = [(0, 100)] + [(x, 60 + rng.randint(0, 40)) for x in range(0, w + 32, 32)] + [(w, 100), (w, h), (0, h)]
+    d.polygon(pts, fill=mtn)
+    d.rectangle([0, 104, w, h], fill=ground)
+    if kind % 2 == 0:
+        d.ellipse([170, 34, 196, 60], fill=(255, 236, 190))                # 太陽／月亮
+    d.rectangle([60, 124, 196, 132], fill=(240, 240, 240))                  # 字幕
+    d.rectangle([0, 0, w - 1, h - 1], outline=(10, 10, 12), width=2)
+    return img
