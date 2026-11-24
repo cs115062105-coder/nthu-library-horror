@@ -1,4 +1,4 @@
-"""偷卷仔，給我站住！—— 第一人稱 3D 搞笑潛行解謎。
+"""痛扁偷卷室友—— 第一人稱 3D 搞笑潛行解謎。
 
 操作：
   WASD 移動、滑鼠看、Shift 跑、Ctrl 躡手躡腳、E 互動／抓人／痛扁、C 躲到桌子底下、ESC 回大廳
@@ -1404,7 +1404,7 @@ class Game:
         self.show_hint("你縮到桌子底下。館員和室友都看不到你。（C 出來）", 3)
 
 
-app = Ursina(title="偷卷仔，給我站住！", borderless=False, development_mode=False)
+app = Ursina(title="痛扁偷卷室友", borderless=False, development_mode=False)
 font_path = find_font()
 setup_font(font_path)
 window.color = SKY
