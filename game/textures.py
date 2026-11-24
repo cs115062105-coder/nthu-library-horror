@@ -1056,3 +1056,41 @@ def movie_frame(kind=0):
     d.rectangle([60, 124, 196, 132], fill=(240, 240, 240))                  # 字幕
     d.rectangle([0, 0, w - 1, h - 1], outline=(10, 10, 12), width=2)
     return img
+
+
+def check_cloth():
+    """電腦共學區圓桌上的綠白格子桌巾。"""
+    img = Image.new("RGB", (128, 128), (244, 246, 240))
+    d = ImageDraw.Draw(img)
+    for i in range(0, 128, 16):
+        d.rectangle([i, 0, i + 7, 127], fill=(150, 196, 140))
+        d.rectangle([0, i, 127, i + 7], fill=(150, 196, 140))
+    for i in range(0, 128, 16):
+        for j in range(0, 128, 16):
+            d.rectangle([i, j, i + 7, j + 7], fill=(60, 130, 70))
+    return img
+
+
+def mei_board(font_path):
+    """「梅貽琦校長與梅園」展示牆：白底標題、幾張老照片和梅花枝。"""
+    rng = random.Random(77)
+    w, h = 384, 256
+    img = Image.new("RGB", (w, h), (248, 246, 240))
+    d = ImageDraw.Draw(img)
+    d.text((24, 14), "梅貽琦校長與梅園", font=_font(font_path, 30), fill=(40, 36, 34))
+    d.text((26, 52), "President Mei Yi-Chi and Mei Garden", font=_font(font_path, 12), fill=(110, 104, 98))
+    for k, (x, y, pw, ph) in enumerate(((24, 82, 110, 140), (148, 82, 96, 64), (148, 156, 96, 66), (258, 82, 100, 90))):
+        base = rng.randint(70, 120)
+        d.rectangle([x, y, x + pw, y + ph], fill=(base + 40, base + 30, base + 10))
+        for _ in range(18):     # 泛黃老照片的模糊色塊
+            cx, cy, r = x + rng.randrange(pw), y + rng.randrange(ph), rng.randint(4, 16)
+            v = rng.randint(base - 40, base + 80)
+            d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=(v, int(v * 0.92), int(v * 0.78)))
+        d.rectangle([x, y, x + pw, y + ph], outline=(60, 54, 48), width=2)
+    for _ in range(4):          # 梅花枝
+        x, y = 262 + rng.randrange(90), 190 + rng.randrange(50)
+        d.line([x, y, x + rng.randint(-40, 40), y - rng.randint(10, 30)], fill=(70, 50, 40), width=3)
+        for _ in range(6):
+            px, py = x + rng.randint(-34, 34), y - rng.randint(0, 30)
+            d.ellipse([px - 4, py - 4, px + 4, py + 4], fill=(232, 150, 170))
+    return _noise(img, 4, rng)
