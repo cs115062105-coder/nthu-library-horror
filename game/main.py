@@ -1443,6 +1443,8 @@ class PauseMenu:
         self.music.value = int(round(game.bgm_volume * 100))
         self.root.enabled = True
         application.paused = True
+        game.player.relative = False
+        mouse.enabled = True       # 玩家平常把 Ursina 的 mouse 關掉自己算視角，暫停時要打開，不然按鈕點不到
         mouse.locked = False
         mouse.visible = True
 
@@ -1452,6 +1454,9 @@ class PauseMenu:
         game.state = "play"
         lobby.music.value = int(round(game.bgm_volume * 100))
         mouse.locked = True
+        if game.player.enabled:
+            mouse.enabled = False
+            game.player.grab_mouse()
 
     def quit(self):
         self.resume()
