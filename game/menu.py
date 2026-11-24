@@ -85,7 +85,7 @@ class Lobby:
         # 左半邊壓暗，字比較清楚
         Entity(parent=self.col, model="quad", position=(0.34, 0), scale=(0.9, 1.2),
                color=color.rgba32(0, 0, 0, 170), z=0.1)
-        Text(parent=self.col, text="偷卷仔，給我站住！", position=(0.34, 0.36), origin=(0, 0), scale=2.3,
+        Text(parent=self.col, text="痛扁偷卷室友", position=(0.34, 0.36), origin=(0, 0), scale=2.3,
              color=color.rgb32(225, 218, 200))
         Text(parent=self.col, text="NTHU Library · Catch the Secret Studier", position=(0.34, 0.285), origin=(0, 0),
              scale=1.0, color=color.rgb32(150, 145, 135))
