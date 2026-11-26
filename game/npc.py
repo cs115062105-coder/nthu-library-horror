@@ -287,14 +287,20 @@ class Roommate(Person):
         return self.root.position
 
     def find_spots(self, world):
-        """每張桌子旁邊可以坐的位置：(座位, 走過去要站的那格, 面向)。"""
+        """桌子旁邊真的椅子：(椅子的位置, 起身後站的那格, 面向)。
+        使用者：每個人坐下要坐在椅子上 → 不再用桌子位置推算，直接用蓋椅子時記下來的位置。"""
         spots = []
-        for p in world.hides:
-            c, r = to_cell(p)
-            for dr in (-1, 1):
-                if (c, r + dr) in world.walkable:
-                    seat = p + Vec3(0.45, 0, -dr * 0.75)
-                    spots.append((seat, (c, r + dr), 180 if dr < 0 else 0))
+        for pos, rot in getattr(world, "seats", []):
+            if not any((pos - t).length() < 1.4 for t in world.hides):     # 只要桌邊的椅子（沙發、躺椅不算）
+                continue
+            c0, r0 = to_cell(pos)
+            near = [(c, r) for c in range(c0 - 1, c0 + 2) for r in range(r0 - 1, r0 + 2) if (c, r) in world.walkable]
+            if not near:
+                continue
+            cell = min(near, key=lambda k: (cell_pos(*k) - pos).length())
+            if any((pos - s[0]).length() < 0.4 for s in spots):
+                continue
+            spots.append((Vec3(pos.x, 0, pos.z), cell, rot))
         return spots
 
     def spawn(self, world, avoid):

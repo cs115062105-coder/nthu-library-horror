@@ -670,7 +670,7 @@ class Game:
         self.loading.enabled = True
         self.loading_text.text = "準備圖書館中……"
 
-    def start_versus(self, net, role, seed):
+    def start_versus(self, net, role, seed, mode="hide"):
         """雙人模式：只蓋 4F，路人和對方的身體由 versus.py 處理。"""
         from versus import Versus
         self.session += 1
@@ -683,7 +683,7 @@ class Game:
         self.loading.enabled = True
         self.loading_text.text = "雙人模式：準備 4F 中……"
         self.loading_bar.scale_x = 0.3
-        self.versus = Versus(self, net, role, seed)
+        self.versus = Versus(self, net, role, seed, mode)
 
         def go():
             self.load_floor("4F", came="up", fresh=True)
@@ -1532,6 +1532,8 @@ def handle_input(key):
     if game.state == "pause":
         if key == "escape":
             pause_menu.resume()
+        return
+    if game.versus and game.state == "play" and not game.cleared and game.versus.input(key):
         return
     if key in ("f1", "f2") and not game.cleared and not game.fight and not game.versus:   # Demo 用：直接跳到 4F 認人／第二階段
         game.demo_jump(key)
