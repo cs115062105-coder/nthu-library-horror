@@ -578,6 +578,7 @@ class World:
         self.shelf_runs = {}    # 第幾排書架 → 格子
         self.walkable = set()
         self.hides = []         # 可以躲進去的桌子底下（位置）
+        self.seats = []         # 真的椅子：(位置, 坐的人面向的角度)，路人和室友坐下就坐在這裡
         self.groups = {}        # 不會動的裝飾依材質分組，最後每組合併成一個 mesh，顯示卡才跑得動
         self.load_textures()
         self.build()
@@ -1435,6 +1436,7 @@ class World:
         self.collider(p + Vec3(0, 1.3, 0), (CELL * 0.9, 2.6, CELL * 0.98))
 
     def chair(self, pos, rot):
+        self.seats.append((Vec3(pos), rot))
         ch = Entity(parent=self.group(None), position=pos, rotation_y=rot)
         dark, cloth = color.rgb32(45, 45, 50), color.rgb32(70, 80, 110)
         self.box((0, 0.44, 0), (0.45, 0.03, 0.45), col=dark, parent=ch)              # 椅面底板
@@ -1449,6 +1451,7 @@ class World:
 
     def shell_chair(self, pos, rot, col):
         """1F 那種一體成型的塑膠殼椅：彎彎的椅背，四支細鐵腳。"""
+        self.seats.append((Vec3(pos), rot + 180))      # 殼椅的椅背在 +z，坐的人面向 -z
         ch = Entity(parent=self.group(None), position=pos, rotation_y=rot)
         leg = color.rgb32(180, 182, 186)
         self.box((0, 0.46, 0), (0.44, 0.05, 0.42), col=col, parent=ch)
@@ -1580,6 +1583,7 @@ class World:
 
     def swivel_chair(self, pos, rot):
         """白色辦公旋轉椅：殼椅加上五爪腳和輪子。"""
+        self.seats.append((Vec3(pos), rot))
         ch = Entity(parent=self.group(None), position=pos, rotation_y=rot)
         white, steel = color.rgb32(240, 240, 240), color.rgb32(185, 188, 192)
         self.box((0, 0.5, 0), (0.46, 0.05, 0.44), col=white, parent=ch)
