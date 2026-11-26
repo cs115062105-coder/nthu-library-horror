@@ -92,22 +92,24 @@ class Lobby:
         Text(parent=self.col, text="說好一起擺爛，結果你偷卷？", position=(0.34, 0.235), origin=(0, 0),
              scale=0.9, color=ACCENT)
 
-        _button(self.col, "開始遊戲", 0.14, self.start)
-        Text(parent=self.col, text="難度", position=(0.16, 0.075), scale=0.9, color=color.light_gray)
+        self.duo = None      # 雙人連線面板（versus.DuoPanel），main 建好遊戲之後才掛上來
+        _button(self.col, "單人模式", 0.165, self.start)
+        _button(self.col, "雙人連線", 0.09, lambda: self.duo and self.duo.open())
+        Text(parent=self.col, text="難度（單人）", position=(0.16, 0.035), scale=0.9, color=color.light_gray)
         self.diff_buttons = {}
         for i, name in enumerate(DIFFICULTIES):
-            self.diff_buttons[name] = _button(self.col, name, 0.02, lambda n=name: self.pick(n),
+            self.diff_buttons[name] = _button(self.col, name, -0.02, lambda n=name: self.pick(n),
                                               x=0.22 + i * 0.12, width=0.11)
-        self.diff_desc = Text(parent=self.col, position=(0.16, -0.03), scale=0.75,
+        self.diff_desc = Text(parent=self.col, position=(0.16, -0.07), scale=0.75,
                               color=color.rgb32(180, 175, 165))
-        _button(self.col, "怎麼過關", -0.13, lambda: self.show_panel("怎麼過關", GOAL))
-        _button(self.col, "故事介紹", -0.205, lambda: self.show_panel("故事", STORY))
-        _button(self.col, "操作說明", -0.28, lambda: self.show_panel("操作", CONTROLS))
-        _button(self.col, "離開", -0.355, on_quit)
+        _button(self.col, "怎麼過關", -0.155, lambda: self.show_panel("怎麼過關", GOAL))
+        _button(self.col, "故事介紹", -0.225, lambda: self.show_panel("故事", STORY))
+        _button(self.col, "操作說明", -0.295, lambda: self.show_panel("操作", CONTROLS))
+        _button(self.col, "離開", -0.365, on_quit)
         # 背景音樂音量（使用者要求）：0–100，拖了馬上生效，下次開遊戲會記得
-        Text(parent=self.col, text="音樂", position=(0.16, -0.405), scale=0.9, color=color.light_gray)
+        Text(parent=self.col, text="音樂", position=(0.16, -0.41), scale=0.9, color=color.light_gray)
         self.music = Slider(min=0, max=100, default=int(round(music * 100)), step=5, dynamic=True,
-                            parent=self.col, position=(0.235, -0.415), scale=0.5)
+                            parent=self.col, position=(0.235, -0.42), scale=0.5)
         self.music.knob.color = ACCENT
         self.music.on_value_changed = lambda: on_music and on_music(self.music.value / 100)
         Text(parent=self.col, text="清大程設 Final Project 原型", position=(0.34, -0.47), origin=(0, 0),
@@ -146,9 +148,13 @@ class Lobby:
         self.panel_title.text = title
         self.panel_text.text = text
         self.panel.enabled = True
+        if self.duo:
+            self.duo.cancel()
 
     def hide_panel(self):
         self.panel.enabled = False
+        if self.duo:
+            self.duo.cancel()
 
     def start(self):
         self.hide()
@@ -163,6 +169,8 @@ class Lobby:
     def hide(self):
         self.root.enabled = False
         self.panel.enabled = False
+        if self.duo:
+            self.duo.root.enabled = False
         self.driver.enabled = False
 
     def update(self):

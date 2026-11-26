@@ -28,6 +28,7 @@ from quiz import LOCKER_RIDDLES, pick as pick_quiz
 from minimap import Minimap, bang_texture, triangle
 from npc import Hunter, Librarian, Roommate, to_cell
 from player import Player
+from versus import DuoPanel
 import fastops
 from shading import light_scene, set_fog, update_camera
 from ursina.shaders import unlit_shader
@@ -231,6 +232,7 @@ class Game:
         self.bob = 0.0
         self.step_timer = 0.0
         self.time_left = 0
+        self.versus = None            # 雙人模式（versus.py）；單人時是 None
         self.apply_view()
 
     # ---------- 樓層 ----------
@@ -668,6 +670,39 @@ class Game:
         self.loading.enabled = True
         self.loading_text.text = "準備圖書館中……"
 
+    def start_versus(self, net, role, seed):
+        """雙人模式：只蓋 4F，路人和對方的身體由 versus.py 處理。"""
+        from versus import Versus
+        self.session += 1
+        self.items.clear()
+        self.cleared = self.dead = False
+        self.fight = None
+        self.prebuild = []
+        self.state = "loading_vs"
+        self.player.enabled = False
+        self.loading.enabled = True
+        self.loading_text.text = "雙人模式：準備 4F 中……"
+        self.loading_bar.scale_x = 0.3
+        self.versus = Versus(self, net, role, seed)
+
+        def go():
+            self.load_floor("4F", came="up", fresh=True)
+            self.loading.enabled = False
+            set_fog(SKY, 28.0, 110.0)
+            self.roommate.hide()
+            self.hunter.hide()
+            self.librarian.root.enabled = False
+            self.hide_note()
+            self.flash_fade()
+            self.state = "play"
+            self.noise_bg.enabled = False
+            self.hud_bg.enabled = True
+            self.minimap.show(True)
+            self.player.enabled = True
+            self.player.mouse_sensitivity = Vec2(40, 40)
+            self.versus.build()
+        self.later(go, 0.1)
+
     def step_prebuild(self):
         """每一幀蓋一層（中間空一幀讓進度字先畫出來），全部蓋完才開始這一局。"""
         if self.prebuild_wait > 0:
@@ -702,6 +737,9 @@ class Game:
         self.new_day(first=True)
 
     def to_lobby(self):
+        if self.versus:
+            self.versus.stop()
+            self.versus = None
         if self.cut.active:          # 動畫播到一半回大廳：直接收掉，不跑播完要做的事
             self.cut.on_done = None
             self.cut.finish()
@@ -1046,6 +1084,8 @@ class Game:
 
     def targets(self):
         """附近所有可以按 E 的東西：(看的位置, 要站的位置, 提示文字, 動作)。"""
+        if self.versus:
+            return self.versus.targets()
         out = []
         r = self.roommate
         if r.active and r.state in ("study", "look"):
@@ -1315,6 +1355,10 @@ class Game:
         if self.state == "loading":
             self.step_prebuild()
             return
+        if self.versus:
+            if self.state in ("play", "loading_vs"):
+                self.versus.update()
+            return
         if self.state != "play" or self.cleared or self.dead:
             return
         self.minimap.update(self.player, self.librarian)
@@ -1412,6 +1456,7 @@ game = Game(font_path)
 lobby = Lobby(on_start=game.start, on_quit=application.quit, aim_camera=game.aim_menu_camera,
               music=game.bgm_volume, on_music=game.set_bgm_volume)
 game.to_lobby()
+lobby.duo = DuoPanel(lobby, game)
 
 
 class PauseMenu:
@@ -1488,7 +1533,7 @@ def handle_input(key):
         if key == "escape":
             pause_menu.resume()
         return
-    if key in ("f1", "f2") and not game.cleared and not game.fight:   # Demo 用：直接跳到 4F 認人／第二階段
+    if key in ("f1", "f2") and not game.cleared and not game.fight and not game.versus:   # Demo 用：直接跳到 4F 認人／第二階段
         game.demo_jump(key)
         return
     if game.fight and key in ("e", "left mouse down"):
@@ -1500,7 +1545,7 @@ def handle_input(key):
         game.to_lobby()
     elif key == "e" and not game.cleared and not game.fight:
         game.interact()
-    elif key == "c" and not game.cleared and not game.fight:
+    elif key == "c" and not game.cleared and not game.fight and not game.versus:
         game.toggle_hide()
     elif key == "m":
         game.minimap.toggle()
