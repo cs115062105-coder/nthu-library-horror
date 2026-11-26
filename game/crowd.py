@@ -109,6 +109,13 @@ class NPC(Person):
         self.path = []
         self.timer = None        # 坐著的人：還要讀多久才起來走走（None = 一直坐著）
         self.trips = rng.randint(1, 3)
+        # 使用者：NPC 走路和轉頭太快、太固定，真人模仿不來 → 每個人速度不一樣、轉身有慣性、看書時偶爾慢慢抬頭張望
+        self.speed = rng.uniform(1.0, 1.45)
+        self.turn_rate = rng.uniform(140, 220)       # 每秒最多轉幾度
+        self.look_cd = rng.uniform(4, 14)            # 看書的人：多久抬頭看一次
+        self.look_yaw = 0.0                          # 現在頭／身體偏了幾度
+        self.look_goal = 0.0
+        self.look_hold = 0.0
 
     @property
     def position(self):
@@ -163,9 +170,9 @@ class NPC(Person):
                     self.path = path_to(walkable, self.root.position, self.goal)
                     self.pause = self.rng.uniform(1.0, 4.0)
                     return
-                if step_toward(self.root, self.path[0], 1.3):
+                if self.walk_to(self.path[0]):
                     self.path.pop(0)
-                self.walk_anim(6)
+                self.walk_anim(6 * self.speed / 1.3)
         elif self.mode == "read" and self.timer is not None:
             self.timer -= time.dt
             if self.timer <= 0:      # 讀累了：起來走一走、去找書、去廁所……
@@ -177,9 +184,11 @@ class NPC(Person):
                 self.stand()
                 return
         if self.mode in ("read", "decoy"):
-            self.root.rotation_y = self.face + (math.sin(self.t * 0.7) * 50 if math.sin(self.t * 0.31) > 0.85 else 0)
-            self.torso.rotation_x = 15
-            self.head.rotation = (22 + math.sin(self.t * 5) * 2, 0, 0)
+            self.update_glance()
+            self.root.rotation_y = self.face + self.look_yaw * 0.35          # 身體只轉一點，主要是頭在轉
+            lift = min(1.0, abs(self.look_yaw) / 30)                         # 抬頭張望時頭也抬起來
+            self.torso.rotation_x = 15 - 9 * lift
+            self.head.rotation = (22 - 24 * lift + math.sin(self.t * 1.3) * 1.5, self.look_yaw * 0.65, 0)
         elif self.mode == "talk":
             d = game.player.position - self.root.position
             d.y = 0
@@ -188,6 +197,50 @@ class NPC(Person):
             if self.mark:      # 走到旁邊就收起頭上的「？」，不然會擋住整個畫面
                 self.mark.enabled = d.length() > 2.6
             self.head.rotation_y = math.sin(self.t) * 8
+
+
+    def turn_to(self, yaw):
+        """身體慢慢轉向 yaw（每個人轉的速度不一樣）。"""
+        d = (yaw - self.root.rotation_y + 180) % 360 - 180
+        step = self.turn_rate * time.dt
+        self.root.rotation_y += max(-step, min(step, d))
+        return abs(d) <= step
+
+    def walk_to(self, target):
+        """往 target 走，轉彎時先放慢、邊走邊轉，不會原地瞬間轉 90 度。到了回傳 True。"""
+        move = target - self.root.position
+        move.y = 0
+        dist = move.length()
+        if dist < 0.05:
+            return True
+        yaw = math.degrees(math.atan2(move.x, move.z))
+        self.turn_to(yaw)
+        off = abs((yaw - self.root.rotation_y + 180) % 360 - 180)
+        slow = max(0.25, 1 - off / 120)              # 還沒轉過去就走慢一點
+        step = self.speed * slow * time.dt * (0.92 + 0.08 * math.sin(self.t * 1.7))
+        if dist <= max(step, 0.35):                  # 快到轉角就換下一個點，路線比較圓滑
+            if dist <= step:
+                self.root.position = Vec3(target.x, 0, target.z)
+            return True
+        self.root.position += move.normalized() * step
+        return False
+
+    def update_glance(self):
+        """看書的人：偶爾慢慢抬頭往旁邊看幾秒，再慢慢低頭回去。時間、角度、快慢每次都不一樣。"""
+        dt = time.dt
+        if self.look_hold > 0:
+            self.look_hold -= dt
+            if self.look_hold <= 0:
+                self.look_goal = 0.0
+        else:
+            self.look_cd -= dt
+            if self.look_cd <= 0 and self.look_goal == 0.0:
+                self.look_goal = self.rng.choice([-1, 1]) * self.rng.uniform(20, 70)
+                self.look_hold = self.rng.uniform(1.0, 3.5)
+                self.look_cd = self.rng.uniform(5, 18)
+        rate = self.turn_rate * 0.35
+        d = self.look_goal - self.look_yaw
+        self.look_yaw += max(-rate * dt, min(rate * dt, d))
 
 
 class Crowd:

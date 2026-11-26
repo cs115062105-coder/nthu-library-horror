@@ -610,7 +610,7 @@ class Versus:
         g.sneaking = bool(held_keys["control"] or held_keys["left control"])
         g.moving = any(held_keys[k] for k in "wasd") and not sitting and not frozen
         g.running = g.moving and bool(held_keys["shift"]) and not g.sneaking
-        speed = 6.5 if g.running else 1.8 if g.sneaking else 3.5
+        speed = 3.2 if g.running else 0.9 if g.sneaking else 1.25     # 走路速度跟路人差不多（1.0–1.45），Shift 是快走
         speed *= 1.7 if self.boost > 0 else 0.6 if self.boost < 0 else 1.0
         g.player.speed = 0 if (sitting or frozen) else speed
         g.update_body()
@@ -660,16 +660,18 @@ class Versus:
             target = Vec3(x, 0, z)
             d = target - n.root.position
             n.root.position = target if d.length() > 3 else n.root.position + d * k
-            n.root.rotation_y = angle_lerp(n.root.rotation_y, yaw, k)
+            n.root.rotation_y = angle_lerp(n.root.rotation_y, yaw, min(1.0, time.dt * 6))
             last = getattr(n, "net_pose", None)
             if pose == 2:
                 if last != 2:
                     n.sit()
                 n.t += time.dt
-                n.torso.rotation_x = 15
-                n.head.rotation = (22 + math.sin(n.t * 5) * 2, 0, 0)
+                n.update_glance()           # 抬頭張望兩台各自算（身體方向照房主的）
+                lift = min(1.0, abs(n.look_yaw) / 30)
+                n.torso.rotation_x = 15 - 9 * lift
+                n.head.rotation = (22 - 24 * lift + math.sin(n.t * 1.3) * 1.5, n.look_yaw * 0.65, 0)
             elif pose == 1:
-                n.walk_anim(6)
+                n.walk_anim(6 * n.speed / 1.3)
             elif last != 0:
                 n.stand()
             n.net_pose = pose
