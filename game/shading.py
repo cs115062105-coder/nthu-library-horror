@@ -7,10 +7,40 @@ Ursina 預設的 shader 不算光，所有面都一樣亮，東西看起來像�
 · 跟原本的一樣有霧
 會發光的東西（顏色調得比 1 還亮的燈、螢幕）不算光，保持亮。
 """
+import os
+import re
+import sys
+
 from ursina import Vec2, Vec3, color
 from ursina.shader import Shader
 
-lit_shader = Shader(name="library_lit", language=Shader.GLSL, vertex="""\
+# Mac 的 Panda3D 預設只開 OpenGL 2.1，看不懂 #version 140 的 shader，會整個退回沒有光影的畫面。
+# 所以在 Mac 上把 shader 自動翻成舊版（GLSL 1.20）的寫法，內容完全一樣，Windows/Linux 不受影響。
+OLD_GLSL = sys.platform == "darwin" or os.environ.get("TJ_GLSL120") == "1"
+
+
+def _v(src):
+    """頂點 shader：in → attribute、out → varying。"""
+    if not OLD_GLSL:
+        return src
+    src = src.replace("#version 140", "#version 120")
+    src = re.sub(r"^in ", "attribute ", src, flags=re.M)
+    return re.sub(r"^out ", "varying ", src, flags=re.M)
+
+
+def _f(src):
+    """片段 shader：in → varying，輸出改成 gl_FragColor，texture() → texture2D()。"""
+    if not OLD_GLSL:
+        return src
+    src = src.replace("#version 140", "#version 120")
+    src = re.sub(r"^in ", "varying ", src, flags=re.M)
+    m = re.search(r"^out vec4 (\w+);\n", src, flags=re.M)
+    if m:
+        src = src.replace(m.group(0), "")
+        src = re.sub(r"\b%s\b" % m.group(1), "gl_FragColor", src)
+    return re.sub(r"\btexture\(", "texture2D(", src)
+
+lit_shader = Shader(name="library_lit", language=Shader.GLSL, vertex=_v("""\
 #version 140
 uniform mat4 p3d_ModelViewProjectionMatrix;
 uniform mat4 p3d_ModelMatrix;
@@ -29,7 +59,7 @@ void main() {
     vertex_color = p3d_Color;
     world_pos = (p3d_ModelMatrix * p3d_Vertex).xyz;
 }
-""", fragment="""\
+"""), fragment=_f("""\
 #version 140
 uniform sampler2D p3d_Texture0;
 uniform vec4 p3d_ColorScale;
@@ -67,7 +97,7 @@ void main() {
     float t = clamp((length(to_cam) - fog_start) / (fog_end - fog_start), 0.0, 1.0);   // 霧從 fog_start 才開始
     color.rgb = mix(color.rgb, fog_color.rgb, t * fog_color.a);
 }
-""", default_input={
+"""), default_input={
     "texture_scale": Vec2(1, 1),
     "texture_offset": Vec2(0, 0),
     "wall_height": 3.2,
@@ -128,7 +158,7 @@ def light_scene(entities=None):
 
 
 # 人物用：模型自己帶平滑的法線，看起來圓圓的，不會一格一格；另外加一點輪廓光讓人從背景跳出來。
-person_shader = Shader(name="person_lit", language=Shader.GLSL, vertex="""\
+person_shader = Shader(name="person_lit", language=Shader.GLSL, vertex=_v("""\
 #version 140
 uniform mat4 p3d_ModelViewProjectionMatrix;
 uniform mat4 p3d_ModelMatrix;
@@ -145,7 +175,7 @@ void main() {
     world_pos = (p3d_ModelMatrix * p3d_Vertex).xyz;
     world_normal = normalize(mat3(p3d_ModelMatrix) * p3d_Normal);
 }
-""", fragment="""\
+"""), fragment=_f("""\
 #version 140
 uniform vec4 p3d_ColorScale;
 uniform vec3 camera_world_position;
@@ -172,4 +202,4 @@ void main() {
     float t = clamp((length(to_cam) - fog_start) / (fog_end - fog_start), 0.0, 1.0);   // 霧從 fog_start 才開始
     color.rgb = mix(color.rgb, fog_color.rgb, t * fog_color.a);
 }
-""", default_input={})
+"""), default_input={})
