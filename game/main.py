@@ -12,7 +12,19 @@
 import math
 import os
 import random
+import sys
 from pathlib import Path
+
+# Mac 的 Panda3D 預設用 OpenGL 2.1，我們的光影 shader（GLSL 140）在 Mac 上全部編譯失敗，畫面只剩最陽春的畫法。
+# 在 Mac 上改要 OpenGL 3.2，並把 ursina 內建、寫死 GLSL 130 的兩個 shader（文字、介面、一般物件預設用的）升到 140。
+if sys.platform == "darwin":
+    from panda3d.core import loadPrcFileData
+    loadPrcFileData("", "gl-version 3 2")
+    from ursina.shaders.unlit_shader import unlit_shader as _u
+    from ursina.shaders.unlit_with_fog_shader import unlit_with_fog_shader as _uf
+    for _sh in (_u, _uf):
+        _sh.vertex = _sh.vertex.replace("#version 130", "#version 140")
+        _sh.fragment = _sh.fragment.replace("#version 130", "#version 140")
 
 from ursina import (Ursina, Audio, Entity, Text, Vec2, Vec3, application, camera, color, destroy,
                     held_keys, invoke, mouse, raycast, scene, time, window)
