@@ -251,6 +251,7 @@ class Crowd:
         self.cells = []
         self.rng = random.Random()
         self.global_cd = 0.0
+        self.world = None       # 雙人模式每層一個 Crowd，記住自己是哪層；單人模式用 game.world
 
     def clear(self):
         """拆掉所有路人（連身體各部位一起拆，不然它們會留在場景清單裡每一幀被掃）。"""
@@ -300,7 +301,7 @@ class Crowd:
             self.free.append(spot)
 
     def near_walk(self, pos):
-        cells = sorted(self.game.world.walkable, key=lambda c: (cell_pos(*c) - pos).length())
+        cells = sorted((self.world or self.game.world).walkable, key=lambda c: (cell_pos(*c) - pos).length())
         return cell_pos(*cells[0]) if cells else pos
 
     def stand_spot(self, world, anchor, near=3.5):
@@ -345,7 +346,7 @@ class Crowd:
 
     def update(self):
         g = self.game
-        walkable = g.world.walkable
+        walkable = (self.world or g.world).walkable
         self.global_cd -= time.dt
         for n in self.npcs:
             n.update(g, walkable, self)
@@ -353,6 +354,6 @@ class Crowd:
                 n.bark_cd -= time.dt
                 d = g.player.position - n.position
                 d.y = 0
-                if d.length() < 2.2 and n.bark_cd <= 0 and self.global_cd <= 0 and not g.hint.text:
+                if d.length() < 2.2 and (self.world is None or self.world is g.world) and n.bark_cd <= 0 and self.global_cd <= 0 and not g.hint.text:
                     g.show_hint(f"{n.who}：「{self.rng.choice(BARKS[n.who])}」", 2.5)
                     n.bark_cd, self.global_cd = 25, 8

@@ -671,37 +671,35 @@ class Game:
         self.loading_text.text = "準備圖書館中……"
 
     def start_versus(self, net, role, seed, mode="hide"):
-        """雙人模式：只蓋 4F，路人和對方的身體由 versus.py 處理。"""
+        """雙人模式：整棟 1F–6F 都蓋好（跟單人一樣先蓋完藏起來），路人和對方的身體由 versus.py 處理。"""
         from versus import Versus
         self.session += 1
         self.items.clear()
         self.cleared = self.dead = False
         self.fight = None
-        self.prebuild = []
-        self.state = "loading_vs"
+        self.versus = Versus(self, net, role, seed, mode)
+        self.roommate.hide()
+        self.hunter.hide()
+        self.crowd.clear()
+        self.librarian.root.enabled = False
+        self.load_floor("1F", came="start", fresh=True)
+        self.prebuild = ["2F", "3F", "4F", "5F", "6F"]
+        self.prebuild_wait = 1
+        self.state = "loading"
         self.player.enabled = False
         self.loading.enabled = True
-        self.loading_text.text = "雙人模式：準備 4F 中……"
-        self.loading_bar.scale_x = 0.3
-        self.versus = Versus(self, net, role, seed, mode)
+        self.loading_text.text = "雙人模式：準備整棟圖書館中……"
 
-        def go():
-            self.load_floor("4F", came="up", fresh=True)
-            self.loading.enabled = False
-            set_fog(SKY, 28.0, 110.0)
-            self.roommate.hide()
-            self.hunter.hide()
-            self.librarian.root.enabled = False
-            self.hide_note()
-            self.flash_fade()
-            self.state = "play"
-            self.noise_bg.enabled = False
-            self.hud_bg.enabled = True
-            self.minimap.show(True)
-            self.player.enabled = True
-            self.player.mouse_sensitivity = Vec2(40, 40)
-            self.versus.build()
-        self.later(go, 0.1)
+    def begin_versus(self):
+        self.hide_note()
+        self.flash_fade()
+        self.state = "play"
+        self.noise_bg.enabled = False
+        self.hud_bg.enabled = True
+        self.minimap.show(True)
+        self.player.enabled = True
+        self.player.mouse_sensitivity = Vec2(40, 40)
+        self.versus.build()
 
     def step_prebuild(self):
         """每一幀蓋一層（中間空一幀讓進度字先畫出來），全部蓋完才開始這一局。"""
@@ -725,7 +723,10 @@ class Game:
             return
         self.loading.enabled = False
         set_fog(SKY, 28.0, 110.0)
-        self.begin_game()
+        if self.versus:
+            self.begin_versus()
+        else:
+            self.begin_game()
 
     def begin_game(self):
         self.hide_note()

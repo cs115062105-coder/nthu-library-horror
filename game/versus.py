@@ -1,20 +1,21 @@
-"""雙人模式（4F），兩種玩法：
+"""雙人模式（整棟 1F–6F），兩種玩法：
 
 【躲貓貓】偷卷室友 vs 抓人的
-· 室友（真人）今天的穿著隨機，這層還有 7 個同學穿得一模一樣。室友要混在他們裡面：E 坐到椅子上假裝讀書、
-  起來走走，撐到閉館就贏。
-· 抓人的前 10 秒閉眼，之後要從一模一樣的人裡找出「動作怪怪的」真人，靠近按 E 抓住他。抓錯 3 次就輸。
+· 室友（真人）今天的穿著隨機，每層樓都有幾個同學穿得一模一樣。室友一開始坐在 2F–6F 隨便一層，
+  要混在他們裡面：E 坐到椅子上假裝讀書、起來走走、走樓梯換樓層，撐到閉館就贏。
+· 抓人的從 1F 大門進來，前 10 秒閉眼，之後要一層一層找出「動作怪怪的」真人，靠近按 E 抓住他。抓錯 3 次就輸。
 · 道具（兩格，1、2 鍵使用）：飲水機裝水倒在地上讓對方滑倒、桌上的腎上腺素加速、書櫃拿書丟人（對方滿畫面都是書）。
-  抓人的另外有一次「問館員」：小地圖標出室友大概在哪一帶。NPC 不會跑、不會丟書，用道具就等於露餡。
+  抓人的另外有一次「問館員」：告訴你室友在哪一層，小地圖標出大概哪一帶。NPC 不會跑、不會丟書，用道具就等於露餡。
 
 【巡館】抓人的 vs 館員
-· 室友是 AI，坐在 4F 讀書；旁邊坐著穿得很像的同學。抓人的照線索認出他、抓到就贏，但要裝成普通同學。
+· 室友是 AI，坐在 2F–6F 其中一層讀書；旁邊坐著穿得很像的同學。抓人的照線索一層層找、抓到就贏，但要裝成普通同學。
 · 館員（真人）要從人群裡找出抓人的，E 盤查。盤查錯 3 次就輸；閉館前沒被找到，抓人的也沒抓到室友，館員贏。
-· 館員可以到監控室看監視器（A/D 切換，E 離開），看的時候本人站在監控室不能動。
-· 抓人的可以去廁所換衣服（每局 2 次，要 4 秒）；館員如果正在看監視器，會看到有人進廁所。
+· 館員可以到 1F 監控室看全館監視器（每層兩支，A/D 切換，E 離開），看的時候本人站在監控室不能動。
+· 抓人的可以去廁所換衣服（每層都有廁所，每局 2 次，要 4 秒）；館員如果正在看監視器，會知道有人進了哪層的廁所。
 
-連線分工：開房間的那台（host）負責算路人怎麼走和倒數計時，每秒傳 10 次給對方；兩邊各自傳自己的位置
-（每秒 20 次），對方的身體在畫面上平滑地跟過去。地圖和路人的長相用同一個亂數種子，兩台蓋出來一模一樣。
+連線分工：開房間的那台（host）負責算路人怎麼走和倒數計時：只算兩個人正在看的那一兩層，
+把對方那層的路人每秒傳 10 次過去；兩邊各自傳自己的位置和樓層（每秒 20 次），對方的身體在畫面上平滑地跟過去。
+地圖和路人的長相用同一個亂數種子，兩台蓋出來一模一樣。
 """
 import math
 import random
@@ -22,34 +23,38 @@ import random
 from ursina import Entity, Text, Vec3, camera, color, held_keys, scene, time
 
 import fastops
-from crowd import BAGS, HATS, JACKETS, NPC, dress_outfit, random_outfit
+from crowd import BAGS, HATS, JACKETS, NPC, Crowd, dress_outfit, random_outfit
 from net import Net, local_ip
 from npc import to_cell
 from world import CELL, cell_pos
 
+FLOORS = ["1F", "2F", "3F", "4F", "5F", "6F"]
+UPPER = FLOORS[1:]
 MODES = {"hide": ("roommate", "catcher"), "patrol": ("catcher", "librarian")}
 MODE_NAME = {"hide": "躲貓貓：偷卷室友 vs 抓人的", "patrol": "巡館：抓人的 vs 館員"}
-ROUND = {"hide": 240, "patrol": 300}
+ROUND = {"hide": 360, "patrol": 420}
 HEADSTART = 10         # 躲貓貓：抓人的先閉眼幾秒
 WARN_LIMIT = 3
-LOOK_READERS, LOOK_WALKERS = 5, 2     # 躲貓貓：跟室友穿一樣的同學（坐著的、走動的）
+CROWD = {"1F": (5, 8), "2F": (4, 6), "3F": (4, 6), "4F": (5, 10), "5F": (5, 10), "6F": (5, 10)}   # 每層（走動、坐著）
+LOOK_READERS, LOOK_WALKERS = 2, 1     # 躲貓貓：每層跟室友穿一樣的同學（坐著的、走動的）
 ROLE_NAME = {"catcher": "抓人的", "roommate": "偷卷室友", "librarian": "館員"}
 ITEM_NAME = {"water": "一瓶水", "boost": "腎上腺素", "book": "一本書", "ask": "問館員"}
 TOILET_USES = 2
+BLOCKED = {("1F", "down"): "B1 密集書庫：館員專用。", ("6F", "up"): "7F 是行政中心，不對外開放。"}
 
 HELP = {
     "hide": ("兩台電腦連同一個 Wi-Fi 或手機熱點。一台選模式按「開房間」，\n"
-             "另一台按「自動找房間」或輸入對方的 IP。\n\n"
-             "偷卷室友：7 個同學跟你穿得一模一樣。E 坐到椅子上假裝讀書、\n"
-             "　起來走走，撐到 22:00（4 分鐘）就贏。\n"
-             "抓人的：前 10 秒閉眼，之後找出動作怪怪的人按 E 抓。抓錯 3 次輸。\n"
+             "另一台按「自動找房間」或輸入對方的 IP。整棟 1F–6F 都能跑。\n\n"
+             "偷卷室友：每層都有同學跟你穿得一模一樣。E 坐到椅子上假裝讀書、\n"
+             "　起來走走、走樓梯換樓層，撐到 22:00（6 分鐘）就贏。\n"
+             "抓人的：前 10 秒閉眼，之後一層層找出動作怪怪的人按 E 抓。抓錯 3 次輸。\n"
              "道具（1、2 鍵）：水倒地上讓人滑倒、腎上腺素加速、丟書擋視線。"),
     "patrol": ("兩台電腦連同一個 Wi-Fi 或手機熱點。一台選模式按「開房間」，\n"
-               "另一台按「自動找房間」或輸入對方的 IP。\n\n"
-               "抓人的：照穿著認出 AI 室友抓住他，但要裝成普通同學。\n"
-               "　可以去廁所換衣服（2 次）。抓錯人館員會收到通報。\n"
+               "另一台按「自動找房間」或輸入對方的 IP。整棟 1F–6F 都能跑。\n\n"
+               "抓人的：AI 室友在 2F–6F 某一層，照穿著認出他抓住他，但要裝成普通同學。\n"
+               "　每層都有廁所可以換衣服（2 次）。抓錯人館員會收到通報。\n"
                "館員：找出混在人群裡的抓人的，E 盤查，錯 3 次輸。\n"
-               "　監控室可以看監視器；撐到閉館（5 分鐘）也算贏。"),
+               "　1F 監控室可以看全館監視器；撐到閉館（7 分鐘）也算贏。"),
 }
 
 
@@ -80,16 +85,32 @@ def spread(cells, n, rng):
     return out
 
 
+def wall_cells(w):
+    """靠牆的走道格子，和「往牆的方向」。"""
+    out = []
+    for c, r in sorted(w.walkable):
+        for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            if w.char(c + dc, r + dr) in "#W":
+                out.append(((c, r), Vec3(dc, 0, -dr)))
+                break
+    return out
+
+
 class Versus:
     def __init__(self, game, net, role, seed, mode="hide"):
         self.g, self.net, self.role, self.seed, self.mode = game, net, role, seed, mode
         self.host = net.is_host
         self.outfit = random_outfit(random.Random(seed))
         self.avatar = None
-        self.spots = []
-        self.seat = None            # 我（室友）坐在哪個位子（spots 的索引）
+        self.built = False
+        self.floor = self.view = "1F"   # 我在哪層；正在看哪層（看監視器時可以不一樣）
+        self.crowds = {}            # 樓層 → Crowd
+        self.spots = {}             # 樓層 → 椅子
+        self.roots = {}             # 樓層 → 這層道具的根節點（換樓層時整個開關）
+        self.seat = None            # 我（室友）坐在哪個位子（這層 spots 的索引）
         self.remote = None          # 對方最新的狀態
-        self.remote_seat = None
+        self.remote_seat = None     # (樓層, 索引)
+        self.npc_rows = None        # (樓層, 路人位置)
         self.ready_me = self.ready_them = False
         self.started = False
         self.over = False
@@ -102,19 +123,21 @@ class Versus:
         self.rng = random.Random()
         # 道具
         self.inv = [None, None]
-        self.pickups = []
+        self.pickups = {}           # 樓層 → [dict]
         self.puddles = {}           # id → Entity
         self.books = []             # 飛行中的書
         self.boost = 0.0            # >0 加速中；<0 喘氣變慢
         self.slip = 0.0
         self.blind = 0.0
         self.ping_t = 0.0
+        self.ping_at = None         # (樓層, 位置)
         self.fx_id = 0
         # 巡館
-        self.target_npc = None      # AI 室友是第幾個路人
+        self.target = None          # AI 室友：(樓層, 第幾個路人)
         self.cctv = None            # 正在看第幾支監視器
-        self.cams = []
-        self.desk = self.toilet = None
+        self.cams = []              # (樓層, 位置, (pitch, yaw))
+        self.desk = None
+        self.toilets = {}
         self.changing = 0.0
         self.toilet_left = TOILET_USES
         self.props = []
@@ -135,34 +158,51 @@ class Versus:
                      color=color.white, enabled=False)
             self.slots.append((bg, t))
 
+    # ---------- 小工具 ----------
+    @property
+    def crowd(self):
+        """我正在看的那層的路人。"""
+        return self.crowds[self.view]
+
+    def world_of(self, f):
+        return self.g.floor_cache[f]
+
     # ---------- 開局 ----------
     def build(self):
-        """4F 蓋好之後：放路人（兩台一模一樣）、道具、對方的身體、自己的位置。"""
+        """六層都蓋好之後：每層放路人（兩台一模一樣）、道具、對方的身體、自己的位置。"""
         g = self.g
-        world = g.world
-        g.crowd.rng = random.Random(self.seed + 1)
-        g.crowd.spawn(world, (), walkers=8, readers=14)
-        readers = [n for n in g.crowd.npcs if n.mode == "read"]
-        walkers = [n for n in g.crowd.npcs if n.mode == "walk"]
+        g.crowd.clear()
         layout = random.Random(self.seed + 3)
-        if self.mode == "hide":
-            for n in readers[:LOOK_READERS] + walkers[:LOOK_WALKERS]:
-                dress_outfit(n, self.outfit)
-        else:   # 巡館：第一個坐著的就是 AI 室友，旁邊幾個穿得很像（至少一樣相同）
-            mate = readers[0]
-            dress_outfit(mate, self.outfit)
-            mate.timer = None
-            self.target_npc = g.crowd.npcs.index(mate)
-            for n in readers[1:7]:
-                o = random_outfit(layout, avoid=self.outfit)
-                k = layout.randrange(3)
-                o = tuple(self.outfit[i] if i == k else o[i] for i in range(3))
-                if o == self.outfit:
+        mate_floor = random.Random(self.seed + 11).choice(UPPER)
+        for k, f in enumerate(FLOORS):
+            w = self.world_of(f)
+            self.roots[f] = Entity()
+            self.spots[f] = g.roommate.find_spots(w)
+            crowd = Crowd(g)
+            crowd.world = w
+            crowd.rng = random.Random(self.seed + 100 + k)
+            walkers, readers = CROWD[f]
+            crowd.spawn(w, (), walkers=walkers, readers=min(readers, max(0, len(self.spots[f]) - 3)))
+            self.crowds[f] = crowd
+            sitting = [n for n in crowd.npcs if n.mode == "read"]
+            walking = [n for n in crowd.npcs if n.mode == "walk"]
+            if self.mode == "hide":
+                for n in sitting[:LOOK_READERS] + walking[:LOOK_WALKERS]:
+                    dress_outfit(n, self.outfit)
+            elif f == mate_floor and sitting:   # 巡館：這層第一個坐著的就是 AI 室友，旁邊幾個穿得很像
+                mate = sitting[0]
+                dress_outfit(mate, self.outfit)
+                mate.timer = None
+                self.target = (f, crowd.npcs.index(mate))
+                for n in sitting[1:7]:
                     o = random_outfit(layout, avoid=self.outfit)
-                dress_outfit(n, o)
-                n.timer = None
-        self.spots = g.roommate.find_spots(world)
-        self.place_props(layout)
+                    j = layout.randrange(3)
+                    o = tuple(self.outfit[i] if i == j else o[i] for i in range(3))
+                    if o == self.outfit:
+                        o = random_outfit(layout, avoid=self.outfit)
+                    dress_outfit(n, o)
+                    n.timer = None
+            self.place_props(f, w, layout)
         av_rng = random.Random(self.seed + 7)
         remote = self.other_role()
         if remote == "librarian":       # 對方是館員：用館員的模型
@@ -175,15 +215,18 @@ class Versus:
         self.avatar.root.enabled = False
         self.avatar.net_pose = None
         g.place_player()
-        if self.role == "roommate":     # 室友一開始就坐在離樓梯口很遠的空位
-            start = g.player.position
-            free = [i for i in self.free_seats() if (self.spots[i][0] - start).length() > 14] or self.free_seats()
+        if self.role == "roommate":     # 室友一開始就坐在 2F–6F 隨便一層的空位
+            f = random.choice([f for f in UPPER if self.spots[f]] or UPPER)
+            self.go_to(f, "up")
+            free = self.free_seats()
             if free:
                 self.sit(random.choice(free))
         elif self.role == "librarian" and self.desk:
             g.player.position = cell_pos(*self.desk["cell"]) + Vec3(0, 0.1, 0)
+        self.set_view(self.floor)
         if self.mode == "hide" and self.role == "catcher":
             self.inv[0] = "ask"
+        self.built = True
         self.ready_me = True
         self.net.send({"t": "ready"})
         self.cover.enabled = self.cover_text.enabled = True
@@ -194,77 +237,71 @@ class Versus:
         a, b = MODES[self.mode]
         return b if self.role == a else a
 
-    def wall_cells(self):
-        """靠牆的走道格子，和「往牆的方向」。"""
-        w = self.g.world
-        out = []
-        for c, r in sorted(w.walkable):
-            for dc, dr in ((1, 0), (-1, 0), (0, 1), (0, -1)):
-                if w.char(c + dc, r + dr) in "#W":
-                    out.append(((c, r), Vec3(dc, 0, -dr)))
-                    break
-        return out
+    def prop(self, f, **kw):
+        e = Entity(parent=self.roots[f], **kw)
+        return e
 
-    def place_props(self, rng):
-        g, w = self.g, self.g.world
-        walls = self.wall_cells()
+    def place_props(self, f, w, rng):
+        walls = wall_cells(w)
         wall_of = dict(walls)
+        pickups = self.pickups[f] = []
         if self.mode == "hide":
-            for cell in spread([c for c, _ in walls], 3, rng):        # 飲水機：三台，彼此離很遠
+            for cell in spread([c for c, _ in walls], 1, rng):        # 飲水機：每層一台
                 d = wall_of[cell]
                 base = cell_pos(*cell) + d * (CELL / 2 - 0.3)
-                body = Entity(model="cube", position=base + Vec3(0, 0.65, 0), scale=(0.45, 1.3, 0.45),
-                              color=color.rgb32(28, 28, 30))
+                body = self.prop(f, model="cube", position=base + Vec3(0, 0.65, 0), scale=(0.45, 1.3, 0.45),
+                                 color=color.rgb32(28, 28, 30))
                 Entity(parent=body, model="cube", position=(0, 0.25, 0), scale=(1.02, 0.08, 1.02),
                        color=color.rgb(0.3, 1.2, 1.5))
-                self.props.append(body)
-                self.pickups.append(dict(kind="water", pos=cell_pos(*cell), look=base + Vec3(0, 0.9, 0), ent=None, cd=0))
+                pickups.append(dict(kind="water", pos=cell_pos(*cell), look=base + Vec3(0, 0.9, 0), ent=None, cd=0))
             tables = sorted(w.hides, key=lambda p: (p.x, p.z))
-            for p in rng.sample(tables, min(4, len(tables))):          # 腎上腺素：放在四張桌子上
-                can = Entity(model="cube", position=p + Vec3(rng.uniform(-0.3, 0.3), 0.86, rng.uniform(-0.15, 0.15)),
-                             scale=(0.09, 0.2, 0.09), color=color.rgb32(220, 40, 50))
+            for p in rng.sample(tables, min(2, len(tables))):          # 腎上腺素：每層兩張桌子上
+                can = self.prop(f, model="cube", scale=(0.09, 0.2, 0.09), color=color.rgb32(220, 40, 50),
+                                position=p + Vec3(rng.uniform(-0.3, 0.3), 0.86, rng.uniform(-0.15, 0.15)))
                 Entity(parent=can, model="cube", y=0.55, scale=(1.05, 0.1, 1.05), color=color.rgb32(240, 240, 240))
-                self.props.append(can)
-                self.pickups.append(dict(kind="boost", pos=p, look=can.position, ent=can, cd=0))
+                pickups.append(dict(kind="boost", pos=p, look=can.position, ent=can, cd=0))
             for run in w.shelf_runs.values():                         # 每排書櫃都可以拿書
                 for c, r in run[::2]:
                     p = cell_pos(c, r)
-                    self.pickups.append(dict(kind="book", pos=p, look=p + Vec3(0, 1.2, 0), ent=None, cd=0, shelf=True))
+                    pickups.append(dict(kind="book", pos=p, look=p + Vec3(0, 1.2, 0), ent=None, cd=0, shelf=True))
             self.book_screen.texture = w.book_tex[0]
-        else:
-            down = w.stairs.get("down")
-            start = to_cell(down["pos"]) if down else sorted(w.walkable)[0]
-            near = sorted([c for c, _ in walls], key=lambda c: abs(c[0] - start[0]) + abs(c[1] - start[1]))
-            desk_cell = next((c for c in near if abs(c[0] - start[0]) + abs(c[1] - start[1]) >= 3), near[0])
-            far = max([c for c, _ in walls], key=lambda c: abs(c[0] - start[0]) + abs(c[1] - start[1]))
-            for cell, kind in ((desk_cell, "desk"), (far, "toilet")):
-                d = wall_of[cell]
-                base = cell_pos(*cell) + d * (CELL / 2 - 0.35)
-                yaw = math.degrees(math.atan2(-d.x, -d.z))
-                if kind == "desk":     # 監控室：桌子加四個小螢幕
-                    root = Entity(position=base, rotation_y=yaw)
-                    Entity(parent=root, model="cube", y=0.38, scale=(1.4, 0.76, 0.6), color=color.rgb32(80, 70, 60))
-                    for i in range(4):
-                        Entity(parent=root, model="cube", position=(-0.48 + i * 0.32, 1.0, 0.1), scale=(0.3, 0.22, 0.04),
-                               color=color.rgb(0.25, 0.9, 0.45))
-                    self.desk = dict(cell=cell, look=base + Vec3(0, 1.0, 0))
-                else:                  # 廁所門：灰色的門加 WC 標誌
-                    root = Entity(position=base + d * 0.3, rotation_y=yaw)
-                    Entity(parent=root, model="cube", y=1.05, scale=(1.0, 2.1, 0.06), color=color.rgb32(150, 155, 160))
-                    Entity(parent=root, model="cube", position=(0, 1.75, -0.05), scale=(0.5, 0.25, 0.02),
-                           color=color.rgb32(40, 90, 170))
-                    Text(parent=root, text="WC 廁所", position=(0, 1.75, -0.07), origin=(0, 0), scale=6,
-                         color=color.white, billboard=False)
-                    self.toilet = dict(cell=cell, look=base + Vec3(0, 1.2, 0))
-                self.props.append(root)
-            # 監視器裝在靠牆的天花板角落，朝整層的中心往下看
-            mid = sum((cell_pos(*c) for c in w.walkable), Vec3(0, 0, 0)) / max(1, len(w.walkable))
-            for c in spread([c for c, _ in walls], 4, random.Random(self.seed + 5)):
-                pos = cell_pos(*c) + wall_of[c] * 0.6 + Vec3(0, 3.2, 0)
-                d = Vec3(mid.x - pos.x, 0, mid.z - pos.z)
-                yaw = math.degrees(math.atan2(d.x, d.z))
-                pitch = max(12.0, min(30.0, math.degrees(math.atan2(3.2, max(1.0, d.length() * 0.5)))))
-                self.cams.append((pos, (pitch, yaw)))
+            return
+        up = w.stairs.get("up") or w.stairs.get("down")
+        start = to_cell(up["pos"]) if up else sorted(w.walkable)[0]
+        cells = [c for c, _ in walls]
+        dist = lambda c: abs(c[0] - start[0]) + abs(c[1] - start[1])
+        far = max(cells, key=dist)
+        todo = [(far, "toilet")]
+        if f == "1F":       # 監控室在 1F 樓梯口旁邊
+            near = sorted(cells, key=dist)
+            todo.append((next((c for c in near if dist(c) >= 3), near[0]), "desk"))
+        for cell, kind in todo:
+            d = wall_of[cell]
+            base = cell_pos(*cell) + d * (CELL / 2 - 0.35)
+            yaw = math.degrees(math.atan2(-d.x, -d.z))
+            if kind == "desk":     # 監控室：桌子加四個小螢幕
+                root = self.prop(f, position=base, rotation_y=yaw)
+                Entity(parent=root, model="cube", y=0.38, scale=(1.4, 0.76, 0.6), color=color.rgb32(80, 70, 60))
+                for i in range(4):
+                    Entity(parent=root, model="cube", position=(-0.48 + i * 0.32, 1.0, 0.1), scale=(0.3, 0.22, 0.04),
+                           color=color.rgb(0.25, 0.9, 0.45))
+                self.desk = dict(cell=cell, look=base + Vec3(0, 1.0, 0))
+            else:                  # 廁所門：灰色的門加 WC 標誌
+                root = self.prop(f, position=base + d * 0.3, rotation_y=yaw)
+                Entity(parent=root, model="cube", y=1.05, scale=(1.0, 2.1, 0.06), color=color.rgb32(150, 155, 160))
+                Entity(parent=root, model="cube", position=(0, 1.75, -0.05), scale=(0.5, 0.25, 0.02),
+                       color=color.rgb32(40, 90, 170))
+                Text(parent=root, text="WC 廁所", position=(0, 1.75, -0.07), origin=(0, 0), scale=6,
+                     color=color.white, billboard=False)
+                self.toilets[f] = dict(cell=cell, look=base + Vec3(0, 1.2, 0))
+        # 監視器：每層兩支，裝在靠牆的天花板角落，朝整層的中心往下看
+        mid = sum((cell_pos(*c) for c in w.walkable), Vec3(0, 0, 0)) / max(1, len(w.walkable))
+        for c in spread(cells, 2, random.Random(self.seed + 5 + FLOORS.index(f))):
+            pos = cell_pos(*c) + wall_of[c] * 0.6 + Vec3(0, 3.2, 0)
+            d = Vec3(mid.x - pos.x, 0, mid.z - pos.z)
+            yaw = math.degrees(math.atan2(d.x, d.z))
+            pitch = max(12.0, min(30.0, math.degrees(math.atan2(3.2, max(1.0, d.length() * 0.5)))))
+            self.cams.append((f, pos, (pitch, yaw)))
 
     def check_go(self):
         if self.host and self.ready_me and self.ready_them and not self.started:
@@ -273,27 +310,68 @@ class Versus:
 
     def go(self):
         self.started = True
-        msg = {"roommate": "先找張椅子坐下，裝成在讀書的樣子。",
-               "catcher": "閉眼 10 秒，室友正在躲……" if self.mode == "hide" else "裝成普通同學，去認出室友！",
-               "librarian": "開館了。注意哪個同學怪怪的；監控室在你旁邊。"}[self.role]
+        msg = {"roommate": f"你在 {self.floor}。先找張椅子坐下，裝成在讀書的樣子。",
+               "catcher": "閉眼 10 秒，室友正在躲……" if self.mode == "hide" else "室友在 2F–6F 某一層。裝成普通同學，去認出他！",
+               "librarian": "開館了。注意哪個同學怪怪的；監控室就在你旁邊。"}[self.role]
         self.g.show_hint("開始！" + msg, 4)
+
+    # ---------- 換樓層 ----------
+    def set_view(self, f):
+        """畫面上顯示哪一層：那層的地圖、路人、道具打開，其他層的關掉。"""
+        if self.g.world is not self.world_of(f):
+            self.g.load_floor(f, came="up")
+        self.view = f
+        for k, crowd in self.crowds.items():
+            for n in crowd.npcs:
+                n.root.enabled = k == f
+        for k, root in self.roots.items():
+            root.enabled = k == f
+        for e in self.puddles.values():
+            e.enabled = e.floor == f
+        for b in self.books:
+            b.enabled = b.floor == f
+
+    def go_to(self, f, came):
+        """真的走到另一層（從樓梯口出來）。"""
+        g = self.g
+        g.load_floor(f, came=came)
+        self.floor = f
+        self.set_view(f)
+        g.place_player()
+
+    def take_stairs(self, direction):
+        g = self.g
+        stair = g.world.stairs[direction]
+        blocked = BLOCKED.get((self.floor, direction))
+        if blocked or not stair.get("target"):
+            g.show_hint(blocked or "這裡沒有路了。", 2)
+            return
+        g.play("step")
+        g.flash.color = color.rgba32(0, 0, 0, 255)
+        self.go_to(stair["target"], direction)
+        g.flash_fade()
+        g.show_hint(f"{self.floor}", 1.5)
 
     # ---------- 座位 ----------
     def free_seats(self):
-        npcs = [n.root.position for n in self.g.crowd.npcs]
+        npcs = [n.root.position for n in self.crowds[self.floor].npcs]
+        taken = self.remote_seat[1] if self.remote_seat and self.remote_seat[0] == self.floor else None
         out = []
-        for i, s in enumerate(self.spots):
-            if i == self.remote_seat:
+        for i, s in enumerate(self.spots[self.floor]):
+            if i == taken:
                 continue
             if all((s[0] - p).length() > 0.6 for p in npcs):
                 out.append(i)
         return out
 
-    def take_seat(self, i, taken):
-        """開房間那台的路人要知道哪個位子被真人坐走了，才不會坐到他身上。"""
-        if not self.host or i is None:
+    def take_seat(self, seat, taken):
+        """開房間那台的路人要知道哪個位子被真人坐走了，才不會坐到他身上。seat = (樓層, 索引)。"""
+        if not self.host or seat is None:
             return
-        crowd, spot = self.g.crowd, self.spots[i]
+        f, i = seat
+        if f not in self.crowds or not 0 <= i < len(self.spots[f]):
+            return
+        crowd, spot = self.crowds[f], self.spots[f][i]
         if taken:
             crowd.free = [s for s in crowd.free if (s[0] - spot[0]).length() > 0.5]
         elif all((s[0] - spot[0]).length() > 0.5 for s in crowd.free):
@@ -301,22 +379,26 @@ class Versus:
 
     def sit(self, i):
         p = self.g.player
-        spot = self.spots[i]
+        spot = self.spots[self.floor][i]
         self.seat = i
         p.rotation_y = spot[2]
         p.position = Vec3(spot[0].x, 0.1, spot[0].z) - p.forward * 0.15
         p.camera_pivot.rotation_x = 20
-        self.take_seat(i, True)
+        self.take_seat((self.floor, i), True)
 
     def stand_up(self):
         if self.seat is None:
             return
-        spot = self.spots[self.seat]
-        self.take_seat(self.seat, False)
+        spot = self.spots[self.floor][self.seat]
+        self.take_seat((self.floor, self.seat), False)
         self.seat = None
         self.g.player.position = cell_pos(*spot[1]) + Vec3(0, 0.1, 0)
 
     # ---------- 按 E ----------
+    def remote_here(self):
+        """對方的身體在我正在看的這層嗎？"""
+        return self.avatar is not None and self.avatar.root.enabled
+
     def targets(self):
         out = []
         g = self.g
@@ -326,51 +408,56 @@ class Versus:
             return out
         if self.role == "catcher" and self.mode == "hide" and self.time_left > self.round - HEADSTART:
             return out
-        a = self.avatar.root.position if self.avatar and self.avatar.root.enabled else None
+        a = self.avatar.root.position if self.remote_here() else None
+        npcs = self.crowds[self.floor].npcs
         if self.role == "catcher":
-            for i, n in enumerate(g.crowd.npcs):
+            for i, n in enumerate(npcs):
                 out.append((n.position + Vec3(0, 1.0, 0), n.position, "抓住他！", lambda i=i: self.grab(i)))
             if a is not None and self.mode == "hide":
                 out.append((a + Vec3(0, 1.0, 0), a, "抓住他！", lambda: self.grab(None)))
-            if self.toilet and self.toilet_left > 0:
-                out.append((self.toilet["look"], cell_pos(*self.toilet["cell"]),
-                            f"進廁所換衣服（剩 {self.toilet_left} 次）", self.enter_toilet))
+            t = self.toilets.get(self.floor)
+            if t and self.toilet_left > 0:
+                out.append((t["look"], cell_pos(*t["cell"]), f"進廁所換衣服（剩 {self.toilet_left} 次）", self.enter_toilet))
         elif self.role == "librarian":
-            for i, n in enumerate(g.crowd.npcs):
+            for i, n in enumerate(npcs):
                 out.append((n.position + Vec3(0, 1.2, 0), n.position, "盤查這位同學", lambda i=i: self.check(i)))
             if a is not None:
                 out.append((a + Vec3(0, 1.2, 0), a, "盤查這位同學", lambda: self.check(None)))
-            if self.desk:
-                out.append((self.desk["look"], cell_pos(*self.desk["cell"]), "看監視器", self.open_cctv))
-        elif self.seat is not None:
+            if self.desk and self.floor == "1F":
+                out.append((self.desk["look"], cell_pos(*self.desk["cell"]), "看全館監視器", self.open_cctv))
+        if self.role == "roommate" and self.seat is not None:
             p = g.player.position
             out.append((p + g.player.forward, p, "站起來", self.stand_up))
-        else:
+            return out
+        if self.role == "roommate":
             for i in self.free_seats():
-                s = self.spots[i]
+                s = self.spots[self.floor][i]
                 out.append((s[0] + Vec3(0, 0.8, 0), cell_pos(*s[1]), "坐下來假裝讀書", lambda i=i: self.sit(i)))
-        if None in self.inv and self.seat is None:
-            for k, pk in enumerate(self.pickups):
+        if None in self.inv:
+            for k, pk in enumerate(self.pickups.get(self.floor, [])):
                 if pk["cd"] > 0:
                     continue
                 label = {"water": "在飲水機裝一瓶水", "boost": "拿起腎上腺素", "book": "從書櫃拿一本書"}[pk["kind"]]
                 out.append((pk["look"], pk["pos"], label, lambda k=k: self.pick(k)))
+        for direction, stair in g.world.stairs.items():
+            out.append((stair["door"].position, stair["pos"], "上樓" if direction == "up" else "下樓",
+                        lambda d=direction: self.take_stairs(d)))
         return out
 
     def grab(self, i):
-        """抓人的按 E：i 是路人編號，None 是對方玩家（躲貓貓的室友）。"""
+        """抓人的按 E：i 是這層路人的編號，None 是對方玩家（躲貓貓的室友）。"""
         g = self.g
         if self.grab_cd > 0 or self.over:
             return
         self.grab_cd = 1.2
-        if i is None or (self.mode == "patrol" and i == self.target_npc):
+        if i is None or (self.mode == "patrol" and (self.floor, i) == self.target):
             g.play("punch")
             self.finish("catcher", "抓到了！就是他，在偷卷！")
             return
         self.warnings += 1
         g.play("shh")
-        pos = g.crowd.npcs[i].root.position
-        self.net.send({"t": "warn", "n": self.warnings, "x": round(pos.x, 1), "z": round(pos.z, 1)})
+        pos = self.crowds[self.floor].npcs[i].root.position
+        self.net.send({"t": "warn", "n": self.warnings, "f": self.floor, "x": round(pos.x, 1), "z": round(pos.z, 1)})
         if self.warnings >= WARN_LIMIT:
             self.finish(self.other_role(), "抓錯 3 次，被請出圖書館了。")
             return
@@ -396,22 +483,22 @@ class Versus:
 
     # ---------- 道具 ----------
     def pick(self, k):
-        pk = self.pickups[k]
+        pk = self.pickups[self.floor][k]
         if pk["cd"] > 0 or None not in self.inv:
             return
         self.inv[self.inv.index(None)] = pk["kind"]
         self.g.play("page")
         if pk["kind"] == "boost":
-            self.take_pickup(k)
-            self.net.send({"t": "pick", "i": k})
+            self.take_pickup(self.floor, k)
+            self.net.send({"t": "pick", "f": self.floor, "i": k})
         elif pk["kind"] == "water":
             pk["cd"] = 3
         else:
             pk["cd"] = 1
         self.g.show_hint(f"拿到{ITEM_NAME[pk['kind']]}（按 {self.inv.index(pk['kind']) + 1} 使用）", 2)
 
-    def take_pickup(self, k):
-        pk = self.pickups[k]
+    def take_pickup(self, f, k):
+        pk = self.pickups[f][k]
         pk["cd"] = 40
         if pk["ent"]:
             pk["ent"].enabled = False
@@ -428,8 +515,9 @@ class Versus:
             pos = p.position + p.forward * 0.8
             self.fx_id += 1
             pid = f"{'h' if self.host else 'c'}{self.fx_id}"
-            self.add_puddle(pid, pos.x, pos.z, mine=True)
-            self.net.send({"t": "fx", "k": "puddle", "id": pid, "x": round(pos.x, 2), "z": round(pos.z, 2)})
+            self.add_puddle(pid, self.floor, pos.x, pos.z, mine=True)
+            self.net.send({"t": "fx", "k": "puddle", "id": pid, "f": self.floor,
+                           "x": round(pos.x, 2), "z": round(pos.z, 2)})
             g.show_hint("你把水倒在地上。（自己踩到不會滑）", 2)
         elif kind == "boost":
             self.boost = 5.0
@@ -438,35 +526,39 @@ class Versus:
         elif kind == "book":
             eye = camera.world_position
             d = camera.forward
-            self.throw(eye, d, mine=True)
-            self.net.send({"t": "fx", "k": "book", "x": round(eye.x, 2), "y": round(eye.y, 2), "z": round(eye.z, 2),
+            self.throw(self.floor, eye, d, mine=True)
+            self.net.send({"t": "fx", "k": "book", "f": self.floor,
+                           "x": round(eye.x, 2), "y": round(eye.y, 2), "z": round(eye.z, 2),
                            "dx": round(d.x, 3), "dy": round(d.y, 3), "dz": round(d.z, 3)})
         elif kind == "ask":
             self.net.send({"t": "ask"})
             g.show_hint("你去問櫃臺的館員……", 2)
 
-    def add_puddle(self, pid, x, z, mine):
+    def add_puddle(self, pid, f, x, z, mine):
         e = Entity(model="circle", position=(x, 0.03, z), rotation_x=90, scale=1.6,
                    color=color.rgba32(150, 200, 255, 120))
-        e.mine, e.life = mine, 25.0
+        e.mine, e.life, e.floor = mine, 25.0, f
+        e.enabled = f == self.view
         self.puddles[pid] = e
 
-    def throw(self, eye, d, mine):
+    def throw(self, f, eye, d, mine):
         b = Entity(model="cube", position=eye + d * 0.5, scale=(0.18, 0.04, 0.25), color=color.rgb32(170, 60, 50))
-        b.vel, b.life, b.mine = Vec3(d) * 15, 1.4, mine
+        b.vel, b.life, b.mine, b.floor = Vec3(d) * 15, 1.4, mine, f
+        b.enabled = f == self.view
         self.books.append(b)
 
     def update_items(self, dt):
         g, p = self.g, self.g.player
-        for pk in self.pickups:
-            if pk["cd"] > 0:
-                pk["cd"] -= dt
-                if pk["cd"] <= 0 and pk["ent"]:
-                    pk["ent"].enabled = True
+        for f, pks in self.pickups.items():
+            for pk in pks:
+                if pk["cd"] > 0:
+                    pk["cd"] -= dt
+                    if pk["cd"] <= 0 and pk["ent"]:
+                        pk["ent"].enabled = True
         for pid, e in list(self.puddles.items()):
             e.life -= dt
             gone = e.life <= 0
-            if not gone and not e.mine and self.slip <= 0 and self.seat is None:
+            if not gone and not e.mine and e.floor == self.floor and self.slip <= 0 and self.seat is None:
                 d = Vec3(e.x - p.x, 0, e.z - p.z)
                 if d.length() < 0.85 and g.moving:
                     self.slip = 1.6
@@ -477,17 +569,26 @@ class Versus:
             if gone:
                 fastops.bulk_destroy([e])
                 del self.puddles[pid]
-        a = self.avatar.root.position if self.avatar and self.avatar.root.enabled else None
+        a = self.avatar.root.position if self.remote_here() else None
         for b in list(self.books):
             b.life -= dt
             b.vel.y -= 4 * dt
-            b.position += b.vel * dt
             b.rotation_y += 720 * dt
-            hit = b.mine and a is not None and (b.position - (a + Vec3(0, 1.3, 0))).length() < 0.75
+            steps = max(1, int(b.vel.length() * dt / 0.25) + 1)     # 一幀飛很遠時分小步檢查，才不會穿過去
+            for _ in range(steps):
+                b.position += b.vel * (dt / steps)
+                hit = b.mine and a is not None and (b.position - (a + Vec3(0, 1.3, 0))).length() < 0.75
+                npc = None if hit else self.book_blocker(b)
+                if hit or npc is not None:
+                    break
             if hit:
                 self.net.send({"t": "hit"})
                 g.show_hint("丟中了！", 1.5)
-            if hit or b.life <= 0 or b.y < 0.05:
+            # 使用者：書會穿過路人 → 撞到路人或牆就掉下來（兩台各自算，結果一樣）
+            if b.mine and npc is not None and npc is not True:
+                g.play("thud")
+                g.show_hint("砸到路人了！同學瞪了你一眼……", 2)
+            if hit or npc is not None or b.life <= 0 or b.y < 0.05:
                 fastops.bulk_destroy([b])
                 self.books.remove(b)
         if self.boost > 0:
@@ -502,27 +603,42 @@ class Versus:
         self.book_screen.enabled = self.blind > 0
         if self.ping_t > 0:
             self.ping_t -= dt
-            if self.ping_t <= 0:
-                g.minimap.mark(None)
+            on = self.ping_t > 0 and self.ping_at[0] == self.view
+            g.minimap.mark(self.ping_at[1] if on else None)
         for i, (bg, t) in enumerate(self.slots):
             on = self.mode == "hide"
             bg.enabled = t.enabled = on
             t.text = f"[{i + 1}] {ITEM_NAME[self.inv[i]]}" if self.inv[i] else f"[{i + 1}] （空）"
 
-    def ping(self, pos, seconds=6):
-        self.g.minimap.mark(Vec3(pos))
+    def book_blocker(self, b):
+        """飛行中的書撞到什麼：路人（回傳 NPC）、牆（True），沒撞到回傳 None。"""
+        crowd = self.crowds.get(b.floor)
+        for n in crowd.npcs if crowd else ():
+            d = b.position - n.root.position
+            if abs(d.y - 0.9) < 0.9 and math.hypot(d.x, d.z) < 0.4:
+                return n
+        w = self.world_of(b.floor)
+        if w.char(*to_cell(b.position)) in "#W":
+            return True
+        return None
+
+    def ping(self, f, pos, seconds=6):
+        """在小地圖上標驚嘆號（只有看著那一層時才畫出來）。"""
+        self.ping_at = (f, Vec3(pos))
         self.ping_t = seconds
 
     # ---------- 巡館：監視器、廁所 ----------
     def open_cctv(self):
         if not self.cams:
             return
-        self.cctv = 0
+        self.cctv = next((i for i, c in enumerate(self.cams) if c[0] == self.floor), 0)
         self.show_cam()
-        self.g.show_hint("A／D 切換監視器，E 離開", 3)
+        self.g.show_hint("A／D 切換監視器（每層兩支），E 離開", 3)
 
     def show_cam(self):
-        pos, (pitch, yaw) = self.cams[self.cctv]
+        f, pos, (pitch, yaw) = self.cams[self.cctv]
+        if f != self.view:
+            self.set_view(f)
         camera.parent = scene
         camera.position = pos
         camera.rotation = (pitch, yaw, 0)
@@ -533,6 +649,8 @@ class Versus:
 
     def close_cctv(self):
         self.cctv = None
+        if self.view != self.floor:
+            self.set_view(self.floor)
         camera.parent = self.g.player.camera_pivot
         camera.position = (0, 0, 0)
         camera.rotation = (0, 0, 0)
@@ -546,7 +664,7 @@ class Versus:
             return
         self.toilet_left -= 1
         self.changing = 4.0
-        self.net.send({"t": "toilet"})
+        self.net.send({"t": "toilet", "f": self.floor})
 
     def finish_change(self):
         rng = random.Random()
@@ -576,7 +694,7 @@ class Versus:
         g = self.g
         for m in self.net.poll():
             self.handle(m)
-        if not self.spots:         # 還在蓋 4F
+        if not self.built:         # 還在蓋樓
             return
         self.update_avatar()
         if self.over:
@@ -601,7 +719,8 @@ class Versus:
         elif self.changing > 0:
             self.cover_text.text = f"在廁所換衣服……　{int(self.changing) + 1}"
         if self.cctv is not None:
-            self.cctv_text.text = f"● REC　CAM {self.cctv + 1}/{len(self.cams)}　（A／D 切換，E 離開）"
+            self.cctv_text.text = (f"● REC　{self.cams[self.cctv][0]}　CAM {self.cctv + 1}/{len(self.cams)}"
+                                   "　（A／D 切換，E 離開）")
         sitting = self.seat is not None
         frozen = covered or self.cctv is not None or self.slip > 0
         if self.slip > 0:
@@ -617,9 +736,12 @@ class Versus:
         if sitting:
             g.player.camera_pivot.y = 1.15
         g.update_prompt(off=covered or self.cctv is not None)
-        g.minimap.update(g.player, _Far)
-        if self.host:
-            g.crowd.update()
+        if self.cctv is None:
+            g.minimap.update(g.player, _Far)
+        if self.host:               # 只算兩個人正在看的樓層，其他層的路人先停著
+            for f in {self.view, (self.remote or {}).get("v", self.view)}:
+                if f in self.crowds:
+                    self.crowds[f].update()
         else:
             self.apply_npcs()
         self.send_state()
@@ -639,24 +761,25 @@ class Versus:
             hidden = self.changing > 0
             self.net.send({"t": "s", "x": round(p.x, 2), "z": round(p.z, 2), "y": round(p.rotation_y, 1),
                            "p": round(p.camera_pivot.rotation_x, 1), "m": mode, "h": hidden,
+                           "f": self.floor, "v": self.view,
                            "seat": -1 if self.seat is None else self.seat})
-        if self.host:
+        if self.host and self.remote:
             self.npc_t -= time.dt
             if self.npc_t <= 0:
                 self.npc_t = 0.1
+                f = self.remote.get("v", "1F")
                 rows = []
-                for n in g.crowd.npcs:
+                for n in self.crowds[f].npcs:
                     pose = 2 if n.mode == "read" else 0 if n.pause > 0 or n.mode == "talk" else 1
                     rows.append([round(n.root.x, 2), round(n.root.z, 2), round(n.root.rotation_y), pose])
-                self.net.send({"t": "n", "a": rows, "time": round(self.time_left, 1)})
+                self.net.send({"t": "n", "f": f, "a": rows, "time": round(self.time_left, 1)})
 
     def apply_npcs(self):
         """加入的那台：路人照開房間那台傳來的位置走（中間平滑補上）。"""
-        rows = getattr(self, "npc_rows", None)
-        if not rows:
+        if not self.npc_rows or self.npc_rows[0] != self.view:
             return
         k = min(1.0, time.dt * 10)
-        for n, (x, z, yaw, pose) in zip(self.g.crowd.npcs, rows):
+        for n, (x, z, yaw, pose) in zip(self.crowds[self.view].npcs, self.npc_rows[1]):
             target = Vec3(x, 0, z)
             d = target - n.root.position
             n.root.position = target if d.length() > 3 else n.root.position + d * k
@@ -680,10 +803,15 @@ class Versus:
         s, a = self.remote, self.avatar
         if not s or not a:
             return
-        a.root.enabled = not s.get("h")         # 在廁所換衣服時看不到人
-        k = min(1.0, time.dt * 12)
-        if s["m"] == 4 and 0 <= s["seat"] < len(self.spots):
-            spot = self.spots[s["seat"]]
+        here = s.get("f", "1F") == self.view
+        was = a.root.enabled
+        a.root.enabled = here and not s.get("h")         # 不在這層、或在廁所換衣服時看不到人
+        if not a.root.enabled:
+            return
+        k = 1.0 if not was else min(1.0, time.dt * 12)
+        spots = self.spots.get(s.get("f", "1F"), [])
+        if s["m"] == 4 and 0 <= s["seat"] < len(spots):
+            spot = spots[s["seat"]]
             if a.net_pose != 4:
                 a.sit()
             a.root.position = spot[0]
@@ -712,21 +840,21 @@ class Versus:
             miss = f"抓人的抓錯 {self.their}/{WARN_LIMIT}"
         else:
             miss = f"{'抓錯' if self.role == 'catcher' else '盤查錯'} {self.warnings}/{WARN_LIMIT}"
-        g.clock_text.text = (f"{minutes // 60:02d}:{minutes % 60:02d}　雙人 4F　你是{ROLE_NAME[self.role]}　"
+        g.clock_text.text = (f"{minutes // 60:02d}:{minutes % 60:02d}　雙人 {self.floor}　你是{ROLE_NAME[self.role]}　"
                              f"剩 {left // 60}:{left % 60:02d}　{miss}")
         if self.mode == "hide":
             if self.role == "roommate":
-                g.goal_text.text = "目標：混進穿一樣的同學裡，別被抓到（E 坐下／站起來）"
-                g.look_text.text = f"你今天穿：{wear(self.outfit)}（還有 7 個人跟你一樣）"
+                g.goal_text.text = "目標：混進穿一樣的同學裡，別被抓到（E 坐下／站起來，樓梯可以換樓層）"
+                g.look_text.text = f"你今天穿：{wear(self.outfit)}（每層都有幾個人跟你一樣）"
             else:
-                g.goal_text.text = "目標：找出動作怪怪的那個人，靠近按 E 抓住他"
-                g.look_text.text = f"室友穿：{wear(self.outfit)}（有 8 個人穿這樣）"
+                g.goal_text.text = "目標：一層層找出動作怪怪的那個人，靠近按 E 抓住他"
+                g.look_text.text = f"室友穿：{wear(self.outfit)}（每層都有幾個人穿這樣）"
         elif self.role == "catcher":
-            g.goal_text.text = "目標：認出室友抓住他，但別讓館員發現你在找人"
-            g.look_text.text = f"室友穿：{wear(self.outfit)}（旁邊有人穿得很像）　廁所可以換衣服"
+            g.goal_text.text = "目標：室友在 2F–6F 某一層。認出他抓住他，但別讓館員發現你在找人"
+            g.look_text.text = f"室友穿：{wear(self.outfit)}（旁邊有人穿得很像）　每層都有廁所可以換衣服"
         else:
             g.goal_text.text = "目標：找出混在人群裡的抓人的，靠近按 E 盤查"
-            g.look_text.text = "監控室在樓梯口旁邊；有人抓錯人會在小地圖上標出來"
+            g.look_text.text = "1F 監控室可以看全館；有人抓錯人會告訴你在哪層"
 
     # ---------- 收訊息 ----------
     def handle(self, m):
@@ -734,13 +862,14 @@ class Versus:
         g = self.g
         if t == "s":
             seat = m.get("seat", -1)
-            if self.host and seat != (self.remote_seat if self.remote_seat is not None else -1):
+            seat = (m.get("f", "1F"), seat) if seat >= 0 else None
+            if seat != self.remote_seat:
                 self.take_seat(self.remote_seat, False)
-                self.take_seat(seat if seat >= 0 else None, True)
-            self.remote_seat = seat if seat >= 0 else None
+                self.take_seat(seat, True)
+            self.remote_seat = seat
             self.remote = m
         elif t == "n":
-            self.npc_rows = m["a"]
+            self.npc_rows = (m.get("f", "1F"), m["a"])
             self.time_left = m["time"]
         elif t == "ready":
             self.ready_them = True
@@ -749,40 +878,44 @@ class Versus:
             self.go()
         elif t == "warn":
             self.their = m["n"]
+            f = m.get("f")
             if self.role == "roommate":
-                g.show_hint(f"抓人的抓錯人了！（{self.their}/{WARN_LIMIT}）", 2.5)
+                g.show_hint(f"抓人的在 {f} 抓錯人了！（{self.their}/{WARN_LIMIT}）", 2.5)
             elif self.role == "librarian":
-                g.show_hint(f"有同學被騷擾！小地圖上標出位置了。（抓人的抓錯 {self.their}/{WARN_LIMIT}）", 3)
-                self.ping(Vec3(m.get("x", 0), 0, m.get("z", 0)))
+                g.show_hint(f"{f} 有同學被騷擾！（抓人的抓錯 {self.their}/{WARN_LIMIT}）", 3)
+                self.ping(f, Vec3(m.get("x", 0), 0, m.get("z", 0)))
             else:
                 g.show_hint(f"館員盤查錯人了。（{self.their}/{WARN_LIMIT}）", 2.5)
         elif t == "fx":
             if m["k"] == "puddle":
-                self.add_puddle(m["id"], m["x"], m["z"], mine=False)
-                self.puddles[m["id"]].mine = False
+                self.add_puddle(m["id"], m.get("f", "1F"), m["x"], m["z"], mine=False)
             elif m["k"] == "dry" and m["id"] in self.puddles:
                 fastops.bulk_destroy([self.puddles.pop(m["id"])])
             elif m["k"] == "book":
-                self.throw(Vec3(m["x"], m["y"], m["z"]), Vec3(m["dx"], m["dy"], m["dz"]), mine=False)
+                self.throw(m.get("f", "1F"), Vec3(m["x"], m["y"], m["z"]), Vec3(m["dx"], m["dy"], m["dz"]), mine=False)
         elif t == "hit":
             self.blind = 1.3
             g.play("thud")
             g.show_hint("一本書砸在你臉上！", 1.5)
         elif t == "pick":
-            if 0 <= m["i"] < len(self.pickups):
-                self.take_pickup(m["i"])
-        elif t == "ask":             # 對方（抓人的）問館員：室友這台把自己大概的位置傳回去
+            f = m.get("f", "1F")
+            if 0 <= m["i"] < len(self.pickups.get(f, [])):
+                self.take_pickup(f, m["i"])
+        elif t == "ask":             # 對方（抓人的）問館員：室友這台把自己在哪層、大概哪裡傳回去
             p = g.player.position
             r = random.Random()
-            self.net.send({"t": "near", "x": round(p.x + r.uniform(-5, 5), 1), "z": round(p.z + r.uniform(-5, 5), 1)})
+            self.net.send({"t": "near", "f": self.floor,
+                           "x": round(p.x + r.uniform(-5, 5), 1), "z": round(p.z + r.uniform(-5, 5), 1)})
         elif t == "near":
-            g.show_hint("館員：「穿這樣的同學？好像在那一帶。」（小地圖上的驚嘆號）", 4)
-            self.ping(Vec3(m["x"], 0, m["z"]), 8)
+            f = m.get("f", "1F")
+            g.show_hint(f"館員：「穿這樣的同學？好像在 {f} 那一帶。」（到 {f} 看小地圖上的驚嘆號）", 5)
+            self.ping(f, Vec3(m["x"], 0, m["z"]), 20)
         elif t == "toilet":
             if self.cctv is not None:
-                g.show_hint("（監視器）有人走進廁所了……", 3)
-                if self.toilet:
-                    self.ping(cell_pos(*self.toilet["cell"]), 6)
+                f = m.get("f", "1F")
+                g.show_hint(f"（監視器）有人走進 {f} 的廁所了……", 3)
+                if f in self.toilets:
+                    self.ping(f, cell_pos(*self.toilets[f]["cell"]), 6)
         elif t == "outfit":
             if self.avatar is not None and self.avatar is not g.librarian:
                 dress_outfit(self.avatar, tuple(m["o"]))
@@ -825,11 +958,14 @@ class Versus:
         if self.avatar and self.avatar is not g.librarian:
             fastops.bulk_destroy(fastops._descendants(self.avatar.root) + [self.avatar.root])
         self.avatar = None
+        for crowd in self.crowds.values():
+            crowd.clear()
+        self.crowds = {}
         doomed = []
-        for e in self.props + list(self.puddles.values()) + self.books:
+        for e in list(self.roots.values()) + list(self.puddles.values()) + self.books:
             doomed += fastops._descendants(e) + [e]
         fastops.bulk_destroy(doomed)
-        self.props, self.puddles, self.books = [], {}, []
+        self.roots, self.puddles, self.books = {}, {}, []
         for e in (self.cover, self.cover_text, self.book_screen, self.cctv_tint, self.cctv_text):
             e.enabled = False
         for bg, t in self.slots:
